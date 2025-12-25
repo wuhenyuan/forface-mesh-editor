@@ -1,0 +1,25 @@
+{
+  "name": "forface-mesh-editor",
+  "version": "1.0.0",
+  "description": "Vue 2 + Vite 项目",
+  "main": "index.js",
+  "dependencies": {
+    "npm": "^2.7.16",
+    "three": "^0.160.0",
+    "element-ui": "^2.15.14"
+  },
+  "devDependencies": {
+    "vite": "^7.3.0",
+    "vite-plugin-vue2": "^2.0.3",
+    "@vitejs/plugin-legacy": "^5.4.2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["vue", "vite", "mesh-editor"],
+  "author": "",
+  "license": "ISC",
+  "type": "module"
+}
