@@ -44,6 +44,45 @@
       </div>
     </div>
     
+    <!-- 文字工具控制面板 -->
+    <div v-if="isTextMode" class="text-tool-panel">
+      <div class="panel-header">
+        <h4>文字工具</h4>
+        <button @click="toggleTextMode" class="toggle-btn">
+          {{ isTextMode ? '退出' : '启用' }}
+        </button>
+      </div>
+      
+      <div class="panel-content">
+        <div class="text-info">
+          <p>文字模式: {{ isTextMode ? '启用' : '禁用' }}</p>
+          <p>文字数量: {{ textCount }}</p>
+          <p v-if="hasSelectedText" class="selected-text">
+            已选中: {{ getSelectedTextObject()?.content || '未知' }}
+          </p>
+        </div>
+        
+        <div class="text-instructions">
+          <p class="instruction">点击网格表面添加文字</p>
+          <p class="instruction">点击文字对象进行编辑</p>
+          <p class="instruction">按Escape键退出文字模式</p>
+          <p class="instruction">在右侧属性面板编辑文字属性</p>
+        </div>
+        
+        <div class="text-controls" v-if="hasSelectedText">
+          <button @click="deleteSelectedText" class="danger-btn">
+            删除选中文字
+          </button>
+        </div>
+        
+        <div class="text-stats" v-if="textCount > 0">
+          <p class="stats-title">文字统计</p>
+          <p class="stats-item">总数: {{ textCount }}</p>
+          <p class="stats-item">选中: {{ hasSelectedText ? 1 : 0 }}</p>
+        </div>
+      </div>
+    </div>
+    
     <!-- 快捷键提示 -->
     <div v-if="showShortcuts" class="shortcuts-panel">
       <h5>快捷键</h5>
@@ -63,6 +102,8 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { FacePicker, FacePickingUtils } from '../utils/facePicking/index.js'
+import { SurfaceTextManager, runAllTextSystemTests } from '../utils/surfaceText/index.js'
+import { debugFacePicking, testFacePicking } from '../utils/facePicking/debug-face-picking.js'
 
 export default {
   name: 'WorkspaceViewport',
@@ -88,6 +129,15 @@ export default {
     defaultHoverColor: {
       type: String,
       default: '#4fc3f7'
+    },
+    // 文字工具配置
+    enableTextTool: {
+      type: Boolean,
+      default: true
+    },
+    currentTool: {
+      type: String,
+      default: 'base' // 'base' | 'text' | 'ornament' | 'adjust'
     }
   },
   emits: [
@@ -95,7 +145,13 @@ export default {
     'faceDeselected', 
     'selectionCleared',
     'faceHover',
-    'facePickingToggled'
+    'facePickingToggled',
+    // 文字相关事件
+    'textCreated',
+    'textSelected',
+    'textDeselected',
+    'textDeleted',
+    'textModeToggled'
   ],
   setup(props, { emit }) {
     const root = ref(null)
@@ -107,6 +163,11 @@ export default {
     // 面拾取相关
     let facePicker = null
     const meshes = ref([])
+    
+    // 文字系统相关
+    let surfaceTextManager = null
+    const textObjects = ref([])
+    const selectedTextId = ref(null)
     
     // 响应式状态
     const facePickingState = reactive({
@@ -131,6 +192,14 @@ export default {
       }
     })
     
+    // 文字工具状态
+    const textState = reactive({
+      enabled: false,
+      mode: 'raised', // 'raised' | 'engraved'
+      currentTextId: null,
+      isTextMode: false
+    })
+    
     // 计算属性
     const facePickingEnabled = computed(() => facePickingState.enabled)
     const selectedFaceCount = computed(() => facePickingState.selectedFaces.length)
@@ -145,6 +214,11 @@ export default {
       set: (value) => { colorState.hover = value }
     })
     const performanceStats = computed(() => performanceState.stats)
+    
+    // 文字相关计算属性
+    const isTextMode = computed(() => textState.isTextMode)
+    const textCount = computed(() => textObjects.value.length)
+    const hasSelectedText = computed(() => !!selectedTextId.value)
     
     // 初始化Three.js场景
     const init = () => {
@@ -183,6 +257,11 @@ export default {
       // 初始化面拾取
       if (props.enableFacePicking) {
         initializeFacePicking()
+      }
+      
+      // 初始化文字系统
+      if (props.enableTextTool) {
+        initializeTextSystem()
       }
       
       // 开始渲染循环
@@ -225,12 +304,42 @@ export default {
         metalness: 0.1
       })
       const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial)
-      boxMesh.position.y = 0.5
+      boxMesh.position.set(0, 0.5, 0)
       boxMesh.name = 'TestBox'
       boxMesh.castShadow = true
       boxMesh.receiveShadow = true
       scene.add(boxMesh)
       meshes.value.push(boxMesh)
+      
+      // 创建测试圆柱体
+      const cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 16)
+      const cylinderMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x67c23a,
+        roughness: 0.6,
+        metalness: 0.2
+      })
+      const cylinderMesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial)
+      cylinderMesh.position.set(-2, 0.75, 0)
+      cylinderMesh.name = 'TestCylinder'
+      cylinderMesh.castShadow = true
+      cylinderMesh.receiveShadow = true
+      scene.add(cylinderMesh)
+      meshes.value.push(cylinderMesh)
+      
+      // 创建测试球体
+      const sphereGeometry = new THREE.SphereGeometry(0.6, 16, 12)
+      const sphereMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xe6a23c,
+        roughness: 0.5,
+        metalness: 0.3
+      })
+      const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial)
+      sphereMesh.position.set(2, 0.6, 0)
+      sphereMesh.name = 'TestSphere'
+      sphereMesh.castShadow = true
+      sphereMesh.receiveShadow = true
+      scene.add(sphereMesh)
+      meshes.value.push(sphereMesh)
       
       // 加载STL模型（如果存在）
       // loadSTLModel()
@@ -313,6 +422,14 @@ export default {
         facePickingState.enabled = true
         
         console.log('面拾取功能已启用，可拾取网格数量:', validMeshes.length)
+        
+        // 添加调试信息
+        debugFacePicking(facePicker, validMeshes)
+        
+        // 延迟测试，确保所有组件都已初始化
+        setTimeout(() => {
+          testFacePicking(facePicker, validMeshes)
+        }, 1000)
       } catch (error) {
         console.error('面拾取初始化失败:', error)
       }
@@ -471,6 +588,208 @@ export default {
     // 监听颜色变化
     watch([() => colorState.selection, () => colorState.hover], updateHighlightColors)
     
+    // ==================== 文字系统相关函数 ====================
+    
+    // 初始化文字系统
+    const initializeTextSystem = () => {
+      if (!scene || !camera || !renderer || !root.value || !facePicker) {
+        console.warn('Three.js组件或面拾取器未完全初始化，无法创建文字系统')
+        return
+      }
+      
+      try {
+        // 创建文字管理器
+        surfaceTextManager = new SurfaceTextManager(scene, camera, renderer, root.value, facePicker)
+        
+        // 设置事件监听器
+        setupTextSystemEvents()
+        
+        console.log('文字系统已初始化')
+        
+        // 运行测试（开发模式）
+        if (import.meta.env.DEV) {
+          setTimeout(() => {
+            runAllTextSystemTests().then(results => {
+              console.log('文字系统测试完成:', results)
+            })
+          }, 1000)
+        }
+        
+      } catch (error) {
+        console.error('文字系统初始化失败:', error)
+      }
+    }
+    
+    // 设置文字系统事件监听
+    const setupTextSystemEvents = () => {
+      if (!surfaceTextManager) return
+      
+      // 文字创建事件
+      surfaceTextManager.on('textCreated', (textObject) => {
+        textObjects.value.push(textObject)
+        emit('textCreated', textObject)
+        console.log('文字已创建:', textObject.content)
+      })
+      
+      // 文字选择事件
+      surfaceTextManager.on('textSelected', (textObject) => {
+        selectedTextId.value = textObject.id
+        textState.currentTextId = textObject.id
+        emit('textSelected', textObject)
+        console.log('文字已选中:', textObject.content)
+      })
+      
+      // 文字取消选择事件
+      surfaceTextManager.on('textDeselected', (textObject) => {
+        selectedTextId.value = null
+        textState.currentTextId = null
+        emit('textDeselected', textObject)
+        console.log('文字已取消选择:', textObject.content)
+      })
+      
+      // 文字删除事件
+      surfaceTextManager.on('textDeleted', ({ id, textObject }) => {
+        const index = textObjects.value.findIndex(obj => obj.id === id)
+        if (index !== -1) {
+          textObjects.value.splice(index, 1)
+        }
+        if (selectedTextId.value === id) {
+          selectedTextId.value = null
+          textState.currentTextId = null
+        }
+        emit('textDeleted', { id, textObject })
+        console.log('文字已删除:', textObject.content)
+      })
+      
+      // 文字模式切换事件
+      surfaceTextManager.on('textModeEnabled', () => {
+        textState.isTextMode = true
+        emit('textModeToggled', true)
+        console.log('文字添加模式已启用')
+      })
+      
+      surfaceTextManager.on('textModeDisabled', () => {
+        textState.isTextMode = false
+        emit('textModeToggled', false)
+        console.log('文字添加模式已禁用')
+      })
+      
+      // 错误处理
+      surfaceTextManager.on('error', (errorData) => {
+        console.error('文字系统错误:', errorData)
+      })
+    }
+    
+    // 启用文字添加模式
+    const enableTextMode = () => {
+      if (surfaceTextManager) {
+        surfaceTextManager.enableTextMode()
+      }
+    }
+    
+    // 禁用文字添加模式
+    const disableTextMode = () => {
+      if (surfaceTextManager) {
+        surfaceTextManager.disableTextMode()
+      }
+    }
+    
+    // 切换文字模式
+    const toggleTextMode = () => {
+      if (textState.isTextMode) {
+        disableTextMode()
+      } else {
+        enableTextMode()
+      }
+    }
+    
+    // 删除选中的文字
+    const deleteSelectedText = () => {
+      if (selectedTextId.value && surfaceTextManager) {
+        surfaceTextManager.deleteText(selectedTextId.value)
+      }
+    }
+    
+    // 获取选中的文字对象
+    const getSelectedTextObject = () => {
+      if (selectedTextId.value && surfaceTextManager) {
+        return surfaceTextManager.getSelectedTextObject()
+      }
+      return null
+    }
+    
+    // 更新文字内容
+    const updateTextContent = async (textId, newContent) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextContent(textId, newContent)
+        } catch (error) {
+          console.error('更新文字内容失败:', error)
+        }
+      }
+    }
+    
+    // 更新文字颜色
+    const updateTextColor = (textId, color) => {
+      if (surfaceTextManager) {
+        const colorHex = typeof color === 'string' ? parseInt(color.replace('#', ''), 16) : color
+        surfaceTextManager.updateTextColor(textId, colorHex)
+      }
+    }
+    
+    // 切换文字雕刻模式
+    const switchTextMode = async (textId, mode) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.switchTextMode(textId, mode)
+        } catch (error) {
+          console.error('切换文字模式失败:', error)
+        }
+      }
+    }
+    
+    // 更新文字字体
+    const updateTextFont = async (textId, font) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextConfig(textId, { font })
+        } catch (error) {
+          console.error('更新文字字体失败:', error)
+        }
+      }
+    }
+    
+    // 更新文字大小
+    const updateTextSize = async (textId, size) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextConfig(textId, { size })
+        } catch (error) {
+          console.error('更新文字大小失败:', error)
+        }
+      }
+    }
+    
+    // 更新文字厚度
+    const updateTextThickness = async (textId, thickness) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextConfig(textId, { thickness })
+        } catch (error) {
+          console.error('更新文字厚度失败:', error)
+        }
+      }
+    }
+    
+    // 监听当前工具变化
+    watch(() => props.currentTool, (newTool, oldTool) => {
+      if (newTool === 'text') {
+        enableTextMode()
+      } else if (oldTool === 'text') {
+        disableTextMode()
+      }
+    })
+    
     // 组件挂载
     onMounted(() => {
       init()
@@ -518,7 +837,7 @@ export default {
       root,
       canvas,
       
-      // 状态
+      // 面拾取状态
       facePickingEnabled,
       selectedFaceCount,
       selectionMode,
@@ -527,11 +846,31 @@ export default {
       hoverColor,
       performanceStats,
       
-      // 方法
+      // 文字系统状态
+      isTextMode,
+      textCount,
+      hasSelectedText,
+      textObjects,
+      selectedTextId,
+      
+      // 面拾取方法
       toggleFacePicking,
       clearSelection,
       toggleSelectionMode,
-      updateHighlightColors
+      updateHighlightColors,
+      
+      // 文字系统方法
+      toggleTextMode,
+      enableTextMode,
+      disableTextMode,
+      deleteSelectedText,
+      getSelectedTextObject,
+      updateTextContent,
+      updateTextColor,
+      switchTextMode,
+      updateTextFont,
+      updateTextSize,
+      updateTextThickness
     }
   }
 }
@@ -712,8 +1051,110 @@ canvas {
 
 /* 动画效果 */
 .face-picking-panel,
-.shortcuts-panel {
+.shortcuts-panel,
+.text-tool-panel {
   animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 文字工具面板 */
+.text-tool-panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 200px;
+  max-width: 280px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+.text-info p {
+  margin: 2px 0;
+  color: #666;
+  font-size: 11px;
+}
+
+.text-instructions {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.instruction {
+  margin: 2px 0;
+  color: #0369a1;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.text-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.danger-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid #f56565;
+  background: #f56565;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.danger-btn:hover {
+  background: #e53e3e;
+}
+
+.danger-btn:disabled {
+  background: #cbd5e0;
+  border-color: #cbd5e0;
+  cursor: not-allowed;
+}
+
+.selected-text {
+  color: #409eff !important;
+  font-weight: bold;
+}
+
+.text-stats {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 8px;
+}
+
+.stats-title {
+  margin: 0 0 4px 0;
+  font-weight: bold;
+  color: #495057;
+  font-size: 11px;
+}
+
+.stats-item {
+  margin: 2px 0;
+  color: #6c757d;
+  font-size: 10px;
 }
 
 @keyframes fadeIn {

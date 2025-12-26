@@ -9,7 +9,7 @@ export default {
     status: 'editable',  // editable, printable
     // 版本标识 通过拼接属性字符串判定当前已经保存在后端用于打印的模型和当前编辑过后的模型是否需要更新，是否需要重新导出
     /**examples
-     * 
+     * 您有X个修改尚未上传，包括文字位置调整和底座大小更改,是否需要进行更改和更新
      */
     propIdentifier: '',
     // 导出的模型的属性

@@ -207,14 +207,22 @@ export class EventHandler {
    * @param {MouseEvent} event - 鼠标事件
    */
   handleClick(event) {
+    console.log('EventHandler.handleClick 被调用', {
+      enabled: this.isEnabled,
+      isDragging: this.mouseState.isDragging,
+      button: event.button
+    })
+    
     if (!this.isEnabled) return
     
     // 如果刚刚完成拖拽，忽略点击事件
     if (this.mouseState.isDragging) {
+      console.log('忽略点击事件，因为正在拖拽')
       return
     }
     
     // 委托给FacePicker处理面选择逻辑
+    console.log('委托给FacePicker处理点击')
     this.facePicker.handleClick(event)
     
     // 发出点击事件

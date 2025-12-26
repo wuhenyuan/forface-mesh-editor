@@ -3,6 +3,8 @@
  * 提供3D网格面级拾取和选择功能
  */
 
+import { RaycastManager } from './RaycastManager.js'
+
 export { FacePicker } from './FacePicker.js'
 export { RaycastManager } from './RaycastManager.js'
 export { SelectionManager } from './SelectionManager.js'
@@ -36,7 +38,36 @@ export const FacePickingUtils = {
    * @returns {boolean} 是否有效
    */
   validateMesh(mesh) {
-    return RaycastManager.validateMesh(mesh)
+    // 直接实现验证逻辑，避免循环依赖
+    if (!mesh || !mesh.geometry) {
+      return false
+    }
+    
+    if (!mesh.visible) {
+      return false
+    }
+    
+    const geometry = mesh.geometry
+    
+    if (geometry.isBufferGeometry) {
+      const positionAttribute = geometry.getAttribute('position')
+      if (!positionAttribute || positionAttribute.count === 0) {
+        return false
+      }
+      
+      const indexAttribute = geometry.getIndex()
+      const faceCount = indexAttribute 
+        ? indexAttribute.count / 3 
+        : positionAttribute.count / 3
+      
+      return faceCount >= 1
+    }
+    
+    if (geometry.isGeometry) {
+      return geometry.vertices?.length > 0 && geometry.faces?.length > 0
+    }
+    
+    return false
   },
   
   /**
@@ -104,7 +135,32 @@ export const FacePickingUtils = {
       return null
     }
     
-    const compatibility = RaycastManager.checkGeometryCompatibility(mesh.geometry)
+    // 直接实现兼容性检查，避免循环依赖
+    const geometry = mesh.geometry
+    const compatibility = {
+      isCompatible: false,
+      type: 'unknown',
+      faceCount: 0,
+      hasIndices: false,
+      warnings: []
+    }
+    
+    if (geometry.isBufferGeometry) {
+      compatibility.type = 'BufferGeometry'
+      const positionAttribute = geometry.getAttribute('position')
+      if (positionAttribute) {
+        const indexAttribute = geometry.getIndex()
+        compatibility.faceCount = indexAttribute 
+          ? indexAttribute.count / 3 
+          : positionAttribute.count / 3
+        compatibility.hasIndices = !!indexAttribute
+        compatibility.isCompatible = compatibility.faceCount > 0
+      }
+    } else if (geometry.isGeometry) {
+      compatibility.type = 'Geometry'
+      compatibility.faceCount = geometry.faces ? geometry.faces.length : 0
+      compatibility.isCompatible = compatibility.faceCount > 0
+    }
     
     return {
       name: mesh.name || 'Unnamed Mesh',

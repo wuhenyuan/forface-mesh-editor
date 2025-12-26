@@ -5,9 +5,24 @@
       <feature-panel v-model="feature" />
       <feature-menu :feature="feature" />
       <div class="workspace">
-        <workspace-viewport />
+        <workspace-viewport 
+          :current-tool="feature"
+          @textSelected="onTextSelected"
+          @textDeselected="onTextDeselected"
+          ref="workspaceRef"
+        />
       </div>
-      <property-panel />
+      <property-panel 
+        :selectedTextObject="selectedTextObject"
+        @updateTextContent="onUpdateTextContent"
+        @updateTextColor="onUpdateTextColor"
+        @updateTextMode="onUpdateTextMode"
+        @updateTextFont="onUpdateTextFont"
+        @updateTextSize="onUpdateTextSize"
+        @updateTextThickness="onUpdateTextThickness"
+        @deleteSelectedText="onDeleteSelectedText"
+        @duplicateText="onDuplicateText"
+      />
     </div>
   </div>
 </template>
@@ -30,7 +45,89 @@ export default {
   },
   setup() {
     const feature = ref('base')
-    return { feature }
+    const selectedTextObject = ref(null)
+    const workspaceRef = ref(null)
+    
+    // 文字选择事件处理
+    const onTextSelected = (textObject) => {
+      selectedTextObject.value = textObject
+      console.log('编辑器：文字已选中', textObject.content)
+    }
+    
+    const onTextDeselected = () => {
+      selectedTextObject.value = null
+      console.log('编辑器：文字已取消选择')
+    }
+    
+    // 文字属性更新事件处理
+    const onUpdateTextContent = async (textId, newContent) => {
+      if (workspaceRef.value) {
+        await workspaceRef.value.updateTextContent(textId, newContent)
+      }
+    }
+    
+    const onUpdateTextColor = (textId, newColor) => {
+      if (workspaceRef.value) {
+        workspaceRef.value.updateTextColor(textId, newColor)
+      }
+    }
+    
+    const onUpdateTextMode = async (textId, newMode) => {
+      if (workspaceRef.value) {
+        await workspaceRef.value.switchTextMode(textId, newMode)
+      }
+    }
+    
+    const onUpdateTextFont = async (textId, newFont) => {
+      if (workspaceRef.value && selectedTextObject.value) {
+        // 更新字体需要重新生成几何体
+        selectedTextObject.value.config.font = newFont
+        await workspaceRef.value.updateTextContent(textId, selectedTextObject.value.content)
+      }
+    }
+    
+    const onUpdateTextSize = async (textId, newSize) => {
+      if (workspaceRef.value && selectedTextObject.value) {
+        // 更新大小需要重新生成几何体
+        selectedTextObject.value.config.size = newSize
+        await workspaceRef.value.updateTextContent(textId, selectedTextObject.value.content)
+      }
+    }
+    
+    const onUpdateTextThickness = async (textId, newThickness) => {
+      if (workspaceRef.value && selectedTextObject.value) {
+        // 更新厚度需要重新生成几何体
+        selectedTextObject.value.config.thickness = newThickness
+        await workspaceRef.value.updateTextContent(textId, selectedTextObject.value.content)
+      }
+    }
+    
+    const onDeleteSelectedText = () => {
+      if (workspaceRef.value) {
+        workspaceRef.value.deleteSelectedText()
+      }
+    }
+    
+    const onDuplicateText = () => {
+      // TODO: 实现文字复制功能
+      console.log('复制文字功能待实现')
+    }
+    
+    return { 
+      feature,
+      selectedTextObject,
+      workspaceRef,
+      onTextSelected,
+      onTextDeselected,
+      onUpdateTextContent,
+      onUpdateTextColor,
+      onUpdateTextMode,
+      onUpdateTextFont,
+      onUpdateTextSize,
+      onUpdateTextThickness,
+      onDeleteSelectedText,
+      onDuplicateText
+    }
   }
 }
 </script>

@@ -381,28 +381,45 @@ export class FacePicker {
    * @param {MouseEvent} event - 鼠标事件
    */
   handleClick(event) {
-    if (!this.enabled) return
+    console.log('FacePicker.handleClick 被调用', {
+      enabled: this.enabled,
+      meshCount: this.meshes.length,
+      eventType: event.type,
+      clientX: event.clientX,
+      clientY: event.clientY
+    })
+    
+    if (!this.enabled) {
+      console.log('面拾取未启用，跳过处理')
+      return
+    }
     
     const startTime = performance.now()
     
     try {
       // 计算鼠标位置
       const rect = this.domElement.getBoundingClientRect()
+      console.log('DOM元素边界:', rect)
+      
       const mousePosition = this.raycastManager.screenToNDC(
         event.clientX, 
         event.clientY, 
         rect
       )
+      console.log('标准化鼠标位置:', mousePosition)
       
       // 执行射线投射
       const intersection = this.raycastManager.intersectFaces(mousePosition, this.meshes)
+      console.log('射线投射结果:', intersection)
       
       if (intersection) {
         // 检查是否为多选模式（Ctrl键）
         const isMultiSelect = event.ctrlKey || event.metaKey
+        console.log('检测到面，选择面:', intersection.mesh.name, intersection.faceIndex)
         this.selectFace(intersection, isMultiSelect)
       } else {
         // 点击空白区域，清除选择
+        console.log('未检测到面，清除选择')
         this.clearSelection()
       }
       
@@ -410,6 +427,7 @@ export class FacePicker {
       this.recordPerformance('click', performance.now() - startTime)
       
     } catch (error) {
+      console.error('handleClick 错误:', error)
       this.handleError('handleClick', error)
     }
   }
