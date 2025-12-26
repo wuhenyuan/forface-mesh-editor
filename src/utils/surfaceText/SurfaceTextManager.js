@@ -52,8 +52,8 @@ export class SurfaceTextManager {
     // 启用面拾取
     this.facePicker.enable()
     
-    // 监听面拾取事件
-    this.facePicker.on('faceSelected', this.handleFaceSelected.bind(this))
+    // 注意：不再直接监听面拾取事件，而是通过WorkspaceViewport转发
+    // 这样可以确保原始鼠标事件被正确传递
     
     console.log('文字添加模式已启用')
     this.emit('textModeEnabled')
@@ -67,8 +67,7 @@ export class SurfaceTextManager {
     
     this.isTextMode = false
     
-    // 移除面拾取事件监听
-    this.facePicker.off('faceSelected', this.handleFaceSelected.bind(this))
+    // 注意：不再直接移除面拾取事件监听，因为我们没有直接监听
     
     // 隐藏输入覆盖层
     this.inputOverlay.hide()
@@ -80,8 +79,9 @@ export class SurfaceTextManager {
   /**
    * 处理面选择事件
    * @param {Object} faceInfo - 面信息
+   * @param {MouseEvent} originalEvent - 原始鼠标事件
    */
-  async handleFaceSelected(faceInfo) {
+  async handleFaceSelected(faceInfo, originalEvent = null) {
     if (!this.isTextMode) return
     
     try {
@@ -93,8 +93,20 @@ export class SurfaceTextManager {
         return
       }
       
-      // 计算输入框位置
-      const screenPosition = this.calculateScreenPosition(faceInfo.point)
+      // 计算输入框位置 - 使用全局鼠标坐标
+      let screenPosition
+      if (originalEvent && originalEvent.clientX !== undefined && originalEvent.clientY !== undefined) {
+        // 使用原始鼠标事件的全局坐标
+        screenPosition = {
+          x: originalEvent.clientX,
+          y: originalEvent.clientY
+        }
+        console.log('使用鼠标事件坐标:', screenPosition)
+      } else {
+        // 备用方案：从3D点计算屏幕坐标
+        screenPosition = this.calculateScreenPosition(faceInfo.point)
+        console.log('使用计算的屏幕坐标:', screenPosition)
+      }
       
       // 显示输入覆盖层
       const textContent = await this.inputOverlay.show(screenPosition.x, screenPosition.y)
@@ -218,9 +230,9 @@ export class SurfaceTextManager {
     const vector = worldPosition.clone()
     vector.project(this.camera)
     
-    const rect = this.domElement.getBoundingClientRect()
-    const x = (vector.x * 0.5 + 0.5) * rect.width + rect.left
-    const y = (vector.y * -0.5 + 0.5) * rect.height + rect.top
+    // 转换为全屏坐标（不是相对于DOM元素）
+    const x = (vector.x * 0.5 + 0.5) * window.innerWidth
+    const y = (vector.y * -0.5 + 0.5) * window.innerHeight
     
     return { x, y }
   }
@@ -429,9 +441,27 @@ export class SurfaceTextManager {
     const textObject = this.textObjects.get(textId)
     const oldColor = textObject.material.color.getHex()
     
+    // 更新原始材质颜色
     textObject.material.color.setHex(color)
     textObject.config.color = color
     textObject.modified = Date.now()
+    
+    // 如果文字当前被选中，需要更新高亮材质的颜色
+    if (this.selectedTextId === textId) {
+      const mesh = textObject.mesh
+      // 检查是否有高亮材质
+      if (mesh.userData.originalMaterial) {
+        // 更新原始材质颜色
+        mesh.userData.originalMaterial.color.setHex(color)
+        
+        // 重新创建高亮材质以反映新颜色
+        const highlightMaterial = mesh.userData.originalMaterial.clone()
+        highlightMaterial.emissive.setHex(0x444444) // 添加发光效果
+        highlightMaterial.emissiveIntensity = 0.3
+        
+        mesh.material = highlightMaterial
+      }
+    }
     
     console.log(`文字颜色已更新: ${textId}`, { oldColor, newColor: color })
     this.emit('textColorUpdated', { textObject, oldColor, newColor: color })
@@ -641,14 +671,14 @@ export class SurfaceTextManager {
   getDefaultTextConfig() {
     return {
       font: 'helvetiker',
-      size: 1,
-      thickness: 0.1,
+      size: 3, // 字体大小设置为3
+      thickness: 0.5, // 深度设置为0.5
       color: 0x333333,
       mode: 'raised', // 'raised' | 'engraved'
       curveSegments: 12,
       bevelEnabled: false,
-      bevelThickness: 0.02,
-      bevelSize: 0.01,
+      bevelThickness: 0.02, // 倒角厚度
+      bevelSize: 0.01, // 倒角大小
       bevelOffset: 0,
       bevelSegments: 5
     }

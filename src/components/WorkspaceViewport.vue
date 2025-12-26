@@ -44,6 +44,68 @@
       </div>
     </div>
     
+    <!-- 物体选择控制面板 -->
+    <div v-if="objectSelectionEnabled" class="object-selection-panel">
+      <div class="panel-header">
+        <h4>物体选择</h4>
+        <button @click="toggleObjectSelection" class="toggle-btn">
+          {{ objectSelectionEnabled ? '禁用' : '启用' }}
+        </button>
+      </div>
+      
+      <div class="panel-content">
+        <div class="selection-info">
+          <p>选择模式: 物体选择</p>
+          <p v-if="hasSelectedObject">
+            已选中: {{ selectedObject?.name || '未命名物体' }}
+          </p>
+          <p v-else>未选中物体</p>
+          <p v-if="isObjectDragging" class="dragging-status">
+            🔄 正在拖拽...
+          </p>
+        </div>
+        
+        <div class="transform-controls" v-if="hasSelectedObject">
+          <h5>变换模式</h5>
+          <div class="transform-buttons">
+            <button 
+              @click="setTransformMode('translate')" 
+              :class="{ active: currentTransformMode === 'translate' }"
+              class="transform-btn"
+            >
+              移动
+            </button>
+            <button 
+              @click="setTransformMode('rotate')" 
+              :class="{ active: currentTransformMode === 'rotate' }"
+              class="transform-btn"
+            >
+              旋转
+            </button>
+            <button 
+              @click="setTransformMode('scale')" 
+              :class="{ active: currentTransformMode === 'scale' }"
+              class="transform-btn"
+            >
+              缩放
+            </button>
+          </div>
+        </div>
+        
+        <div class="object-controls" v-if="hasSelectedObject">
+          <button @click="clearObjectSelection" class="clear-btn">
+            清除选择
+          </button>
+        </div>
+        
+        <div class="object-instructions">
+          <p class="instruction">点击物体进行选择</p>
+          <p class="instruction">拖拽箭头改变物体位置</p>
+          <p class="instruction">拖拽时相机控制自动禁用</p>
+        </div>
+      </div>
+    </div>
+    
     <!-- 文字工具控制面板 -->
     <div v-if="isTextMode" class="text-tool-panel">
       <div class="panel-header">
@@ -103,6 +165,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { FacePicker, FacePickingUtils } from '../utils/facePicking/index.js'
 import { SurfaceTextManager, runAllTextSystemTests } from '../utils/surfaceText/index.js'
+import { ObjectSelectionManager } from '../utils/objectSelection/index.js'
 import { debugFacePicking, testFacePicking } from '../utils/facePicking/debug-face-picking.js'
 
 export default {
@@ -164,6 +227,10 @@ export default {
     let facePicker = null
     const meshes = ref([])
     
+    // 物体选择相关
+    let objectSelectionManager = null
+    const selectedObject = ref(null)
+    
     // 文字系统相关
     let surfaceTextManager = null
     const textObjects = ref([])
@@ -200,6 +267,14 @@ export default {
       isTextMode: false
     })
     
+    // 物体选择状态
+    const objectSelectionState = reactive({
+      enabled: false,
+      selectedObject: null,
+      transformMode: 'translate', // 'translate' | 'rotate' | 'scale'
+      isDragging: false
+    })
+    
     // 计算属性
     const facePickingEnabled = computed(() => facePickingState.enabled)
     const selectedFaceCount = computed(() => facePickingState.selectedFaces.length)
@@ -219,6 +294,12 @@ export default {
     const isTextMode = computed(() => textState.isTextMode)
     const textCount = computed(() => textObjects.value.length)
     const hasSelectedText = computed(() => !!selectedTextId.value)
+    
+    // 物体选择相关计算属性
+    const objectSelectionEnabled = computed(() => objectSelectionState.enabled)
+    const hasSelectedObject = computed(() => !!objectSelectionState.selectedObject)
+    const currentTransformMode = computed(() => objectSelectionState.transformMode)
+    const isObjectDragging = computed(() => objectSelectionState.isDragging)
     
     // 初始化Three.js场景
     const init = () => {
@@ -241,7 +322,7 @@ export default {
       
       // 创建相机
       camera = new THREE.PerspectiveCamera(60, rect.width / rect.height, 0.1, 1000)
-      camera.position.set(3, 3, 6)
+      camera.position.set(30, 30, 60)
       
       // 创建控制器
       controls = new OrbitControls(camera, renderer.domElement)
@@ -263,6 +344,9 @@ export default {
       if (props.enableTextTool) {
         initializeTextSystem()
       }
+      
+      // 初始化物体选择系统
+      initializeObjectSelection()
       
       // 开始渲染循环
       animate()
@@ -296,15 +380,17 @@ export default {
       const grid = new THREE.GridHelper(20, 20, 0xcccccc, 0xeeeeee)
       scene.add(grid)
       
+      const lenth = 20;
+
       // 创建测试立方体
-      const boxGeometry = new THREE.BoxGeometry(1, 1, 1)
+      const boxGeometry = new THREE.BoxGeometry(lenth, lenth, lenth);
       const boxMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x409eff,
         roughness: 0.7,
         metalness: 0.1
       })
       const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial)
-      boxMesh.position.set(0, 0.5, 0)
+      boxMesh.position.set(0, 0.5*length, 0);
       boxMesh.name = 'TestBox'
       boxMesh.castShadow = true
       boxMesh.receiveShadow = true
@@ -312,14 +398,14 @@ export default {
       meshes.value.push(boxMesh)
       
       // 创建测试圆柱体
-      const cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 16)
+      const cylinderGeometry = new THREE.CylinderGeometry(5, 5, 15, 16)
       const cylinderMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x67c23a,
         roughness: 0.6,
         metalness: 0.2
       })
       const cylinderMesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial)
-      cylinderMesh.position.set(-2, 0.75, 0)
+      cylinderMesh.position.set(-20, 7.5, 0)
       cylinderMesh.name = 'TestCylinder'
       cylinderMesh.castShadow = true
       cylinderMesh.receiveShadow = true
@@ -327,14 +413,14 @@ export default {
       meshes.value.push(cylinderMesh)
       
       // 创建测试球体
-      const sphereGeometry = new THREE.SphereGeometry(0.6, 16, 12)
-      const sphereMaterial = new THREE.MeshStandardMaterial({ 
+      const sphereGeometry = new THREE.SphereGeometry(6, 16, 12)
+      const sphereMaterial = new THREE.MeshStandardMaterial({
         color: 0xe6a23c,
         roughness: 0.5,
         metalness: 0.3
       })
       const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial)
-      sphereMesh.position.set(2, 0.6, 0)
+      sphereMesh.position.set(20, 6, 0)
       sphereMesh.name = 'TestSphere'
       sphereMesh.castShadow = true
       sphereMesh.receiveShadow = true
@@ -440,10 +526,15 @@ export default {
       if (!facePicker) return
       
       // 面选择事件
-      facePicker.on('faceSelected', (faceInfo) => {
+      facePicker.on('faceSelected', (faceInfo, originalEvent) => {
         facePickingState.selectedFaces = facePicker.getSelectedFaces()
         emit('faceSelected', faceInfo)
         console.log('面被选中:', faceInfo.mesh.name, faceInfo.faceIndex)
+        
+        // 如果文字系统已初始化且处于文字模式，转发事件
+        if (surfaceTextManager && textState.isTextMode) {
+          surfaceTextManager.handleFaceSelected(faceInfo, originalEvent)
+        }
       })
       
       facePicker.on('faceDeselected', (faceInfo) => {
@@ -542,11 +633,27 @@ export default {
       }
       
       if (facePickingState.enabled) {
+        // 禁用面拾取
         facePicker.disable()
         facePickingState.enabled = false
+        
+        // 启用物体选择
+        if (objectSelectionManager) {
+          objectSelectionManager.enable()
+          objectSelectionState.enabled = true
+          console.log('面拾取已禁用，物体选择已启用')
+        }
       } else {
+        // 启用面拾取
         facePicker.enable()
         facePickingState.enabled = true
+        
+        // 禁用物体选择
+        if (objectSelectionManager) {
+          objectSelectionManager.disable()
+          objectSelectionState.enabled = false
+          console.log('面拾取已启用，物体选择已禁用')
+        }
       }
       
       emit('facePickingToggled', facePickingState.enabled)
@@ -781,6 +888,134 @@ export default {
       }
     }
     
+    // ==================== 物体选择系统相关函数 ====================
+    
+    // 初始化物体选择系统
+    const initializeObjectSelection = () => {
+      if (!scene || !camera || !renderer || !root.value) {
+        console.warn('Three.js组件未完全初始化，无法创建物体选择系统')
+        return
+      }
+      
+      try {
+        // 创建物体选择管理器
+        objectSelectionManager = new ObjectSelectionManager(scene, camera, renderer, root.value)
+        
+        // 设置可选择的物体（排除网格地面）
+        const selectableObjects = meshes.value.filter(mesh => mesh.name !== 'GridHelper')
+        objectSelectionManager.setSelectableObjects(selectableObjects)
+        
+        // 设置事件监听器
+        setupObjectSelectionEvents()
+        
+        console.log('物体选择系统已初始化，可选择物体数量:', selectableObjects.length)
+        
+      } catch (error) {
+        console.error('物体选择系统初始化失败:', error)
+      }
+    }
+    
+    // 设置物体选择系统事件监听
+    const setupObjectSelectionEvents = () => {
+      if (!objectSelectionManager) return
+      
+      // 物体选择事件
+      objectSelectionManager.on('objectSelected', (object) => {
+        objectSelectionState.selectedObject = object
+        selectedObject.value = object
+        emit('objectSelected', object)
+        console.log('物体已选中:', object.name || object.uuid)
+      })
+      
+      objectSelectionManager.on('objectDeselected', (object) => {
+        objectSelectionState.selectedObject = null
+        selectedObject.value = null
+        emit('objectDeselected', object)
+        console.log('物体已取消选择')
+      })
+      
+      objectSelectionManager.on('selectionCleared', () => {
+        objectSelectionState.selectedObject = null
+        selectedObject.value = null
+        emit('selectionCleared')
+        console.log('物体选择已清除')
+      })
+      
+      // 拖拽状态变化事件（用于禁用/启用相机控制）
+      objectSelectionManager.on('draggingChanged', (isDragging) => {
+        objectSelectionState.isDragging = isDragging
+        
+        if (controls) {
+          controls.enabled = !isDragging
+          console.log(isDragging ? '开始拖拽，相机控制已禁用' : '结束拖拽，相机控制已启用')
+        }
+      })
+      
+      // 物体变换事件
+      objectSelectionManager.on('objectTransformed', (data) => {
+        emit('objectTransformed', data)
+      })
+      
+      objectSelectionManager.on('dragStart', (data) => {
+        emit('dragStart', data)
+        console.log('开始拖拽物体:', data.object.name || data.object.uuid)
+      })
+      
+      objectSelectionManager.on('dragEnd', (data) => {
+        emit('dragEnd', data)
+        console.log('结束拖拽物体:', data.object.name || data.object.uuid)
+      })
+      
+      // 变换模式变化
+      objectSelectionManager.on('transformModeChanged', (mode) => {
+        objectSelectionState.transformMode = mode
+        emit('transformModeChanged', mode)
+        console.log('变换模式已切换为:', mode)
+      })
+    }
+    
+    // 选择物体
+    const selectObject = (object) => {
+      if (objectSelectionManager) {
+        objectSelectionManager.selectObject(object)
+      }
+    }
+    
+    // 清除物体选择
+    const clearObjectSelection = () => {
+      if (objectSelectionManager) {
+        objectSelectionManager.clearSelection()
+      }
+    }
+    
+    // 设置变换模式
+    const setTransformMode = (mode) => {
+      if (objectSelectionManager) {
+        objectSelectionManager.setTransformMode(mode)
+      }
+    }
+    
+    // 获取当前选中的物体
+    const getSelectedObject = () => {
+      return objectSelectionManager ? objectSelectionManager.getSelectedObject() : null
+    }
+    
+    // 切换物体选择功能
+    const toggleObjectSelection = () => {
+      if (!objectSelectionManager) {
+        initializeObjectSelection()
+        return
+      }
+      
+      if (objectSelectionState.enabled) {
+        objectSelectionManager.disable()
+        objectSelectionState.enabled = false
+      } else {
+        objectSelectionManager.enable()
+        objectSelectionState.enabled = true
+      }
+    }
+    
     // 监听当前工具变化
     watch(() => props.currentTool, (newTool, oldTool) => {
       if (newTool === 'text') {
@@ -808,6 +1043,11 @@ export default {
       // 清理面拾取器
       if (facePicker) {
         facePicker.destroy()
+      }
+      
+      // 清理物体选择管理器
+      if (objectSelectionManager) {
+        objectSelectionManager.destroy()
       }
       
       // 清理Three.js资源
@@ -853,11 +1093,25 @@ export default {
       textObjects,
       selectedTextId,
       
+      // 物体选择状态
+      objectSelectionEnabled,
+      hasSelectedObject,
+      currentTransformMode,
+      isObjectDragging,
+      selectedObject,
+      
       // 面拾取方法
       toggleFacePicking,
       clearSelection,
       toggleSelectionMode,
       updateHighlightColors,
+      
+      // 物体选择方法
+      selectObject,
+      clearObjectSelection,
+      setTransformMode,
+      getSelectedObject,
+      toggleObjectSelection,
       
       // 文字系统方法
       toggleTextMode,
@@ -1185,5 +1439,111 @@ canvas {
 
 .face-picking-panel.active .panel-header::before {
   opacity: 0.3;
+}
+
+/* 物体选择面板样式 */
+.object-selection-panel {
+  position: absolute;
+  top: 10px;
+  right: 220px; /* 在面拾取面板左侧 */
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 200px;
+  max-width: 280px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+.transform-controls {
+  margin: 10px 0;
+}
+
+.transform-controls h5 {
+  margin: 0 0 6px 0;
+  font-size: 11px;
+  color: #666;
+}
+
+.transform-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.transform-btn {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 10px;
+  border: 1px solid #ddd;
+  background: #f5f5f5;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.transform-btn:hover {
+  background: #e6f7ff;
+  border-color: #409eff;
+}
+
+.transform-btn.active {
+  background: #409eff;
+  color: white;
+  border-color: #409eff;
+}
+
+.object-controls {
+  margin: 10px 0;
+}
+
+.clear-btn {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 11px;
+  border: 1px solid #f56565;
+  background: #f56565;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-btn:hover {
+  background: #e53e3e;
+}
+
+.object-instructions {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.dragging-status {
+  color: #f56c6c !important;
+  font-weight: bold;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 响应式设计 - 物体选择面板 */
+@media (max-width: 768px) {
+  .object-selection-panel {
+    top: 5px;
+    right: 170px;
+    min-width: 160px;
+    font-size: 11px;
+  }
 }
 </style>

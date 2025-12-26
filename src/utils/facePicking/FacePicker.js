@@ -140,8 +140,9 @@ export class FacePicker {
    * 选择面
    * @param {Object} faceInfo - 面信息对象
    * @param {boolean} additive - 是否为多选模式
+   * @param {MouseEvent} originalEvent - 原始鼠标事件
    */
-  selectFace(faceInfo, additive = false) {
+  selectFace(faceInfo, additive = false, originalEvent = null) {
     if (!faceInfo) return
     
     const monitor = debugLogger.createPerformanceMonitor('selectFace')
@@ -155,11 +156,11 @@ export class FacePicker {
       if (wasSelected) {
         this.selectionManager.removeFace(faceInfo)
         debugLogger.logFacePickingEvent('面取消选择', faceInfo)
-        this.emit('faceDeselected', faceInfo)
+        this.emit('faceDeselected', faceInfo, originalEvent)
       } else {
         this.selectionManager.addFace(faceInfo)
         debugLogger.logFacePickingEvent('面选择 (多选)', faceInfo)
-        this.emit('faceSelected', faceInfo)
+        this.emit('faceSelected', faceInfo, originalEvent)
       }
     } else {
       // 单选模式：替换当前选择
@@ -170,13 +171,13 @@ export class FacePicker {
       
       // 发出取消选择事件
       previousSelection.forEach(face => {
-        this.emit('faceDeselected', face)
+        this.emit('faceDeselected', face, originalEvent)
       })
       
       // 选择新面
       this.selectionManager.addFace(faceInfo)
       debugLogger.logFacePickingEvent('面选择 (单选)', faceInfo)
-      this.emit('faceSelected', faceInfo)
+      this.emit('faceSelected', faceInfo, originalEvent)
     }
     
     // 发出选择变化事件
@@ -416,7 +417,7 @@ export class FacePicker {
         // 检查是否为多选模式（Ctrl键）
         const isMultiSelect = event.ctrlKey || event.metaKey
         console.log('检测到面，选择面:', intersection.mesh.name, intersection.faceIndex)
-        this.selectFace(intersection, isMultiSelect)
+        this.selectFace(intersection, isMultiSelect, event)
       } else {
         // 点击空白区域，清除选择
         console.log('未检测到面，清除选择')
