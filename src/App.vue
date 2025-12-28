@@ -15,6 +15,7 @@ export default {
 <style>
 html, body, #app {
   height: 100%;
+  overflow: hidden;
 }
 body {
   margin: 0;

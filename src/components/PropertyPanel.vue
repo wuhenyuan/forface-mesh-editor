@@ -1,7 +1,8 @@
 <template>
   <div class="property-panel">
     <div class="title">工艺信息</div>
-    <el-collapse v-model="activeNames">
+    <div class="panel-body">
+      <el-collapse v-model="activeNames">
       <!-- 文字属性面板 -->
       <el-collapse-item v-if="selectedTextObject" title="文字属性" name="text">
         <div class="row">
@@ -106,7 +107,8 @@
           <el-input size="mini" v-model="form.objectName"></el-input>
         </div>
       </el-collapse-item>
-    </el-collapse>
+      </el-collapse>
+    </div>
     <div class="price">
       <div class="text">预计价格</div>
       <div class="value">￥{{ price }}</div>
@@ -268,6 +270,13 @@ export default {
   background: #fff;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 .title {
   padding: 10px 12px;

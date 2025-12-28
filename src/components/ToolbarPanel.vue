@@ -36,6 +36,7 @@ export default {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   height: var(--header-height);
+  box-sizing: border-box;
   padding: 0 12px;
   border-bottom: 1px solid #ebeef5;
   background: #fff;

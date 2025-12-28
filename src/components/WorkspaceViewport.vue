@@ -2,48 +2,6 @@
   <div class="viewport" ref="root">
     <canvas ref="canvas"></canvas>
     
-    <!-- 面拾取控制面板 -->
-    <div v-if="showFacePickingPanel" class="face-picking-panel">
-      <div class="panel-header">
-        <h4>面拾取</h4>
-        <button @click="toggleFacePicking" class="toggle-btn">
-          {{ facePickingEnabled ? '禁用' : '启用' }}
-        </button>
-      </div>
-      
-      <div class="panel-content">
-        <div class="selection-info">
-          <p>选择模式: {{ selectionMode }}</p>
-          <p>选中面数: {{ selectedFaceCount }}</p>
-          <p v-if="hoverFace">悬停: {{ hoverFace.mesh.name }}[{{ hoverFace.faceIndex }}]</p>
-          <p v-if="performanceStats.totalOperations > 0" class="performance-info">
-            性能: {{ performanceStats.performanceGrade }} 
-            ({{ performanceStats.averageResponseTime }}ms)
-          </p>
-        </div>
-        
-        <div class="controls">
-          <button @click="clearSelection" :disabled="selectedFaceCount === 0">
-            清除选择
-          </button>
-          <button @click="toggleSelectionMode">
-            切换到{{ selectionMode === 'single' ? '多选' : '单选' }}
-          </button>
-        </div>
-        
-        <div class="color-controls">
-          <label>
-            选择颜色:
-            <input type="color" v-model="selectionColor" @change="updateHighlightColors">
-          </label>
-          <label>
-            悬停颜色:
-            <input type="color" v-model="hoverColor" @change="updateHighlightColors">
-          </label>
-        </div>
-      </div>
-    </div>
-    
     <!-- 物体选择控制面板 -->
     <div v-if="objectSelectionEnabled" class="object-selection-panel">
       <div class="panel-header">
@@ -326,19 +284,16 @@ export default {
       
       // 创建控制器
       controls = new OrbitControls(camera, renderer.domElement)
-      controls.enableDamping = true
+      // 只在按下鼠标拖拽时交互，避免“松手后还在转”的惯性效果
+      controls.enableDamping = false
       controls.dampingFactor = 0.05
+      controls.autoRotate = false
       
       // 添加光照
       setupLighting()
       
       // 添加网格和对象
       setupScene()
-      
-      // 初始化面拾取
-      if (props.enableFacePicking) {
-        initializeFacePicking()
-      }
       
       // 初始化文字系统
       if (props.enableTextTool) {
@@ -696,22 +651,71 @@ export default {
     watch([() => colorState.selection, () => colorState.hover], updateHighlightColors)
     
     // ==================== 文字系统相关函数 ====================
+
+    // 初始化时创建默认可编辑文字
+    const createInitialEditableText = async () => {
+      if (!surfaceTextManager || !camera || !scene) return
+      if (textObjects.value.length > 0) return
+
+      try {
+        // 确保矩阵已更新，方便射线投射
+        scene.updateMatrixWorld(true)
+        camera.updateMatrixWorld(true)
+
+        // 直接用 Three.js Raycaster 从视口中心射线投射
+        const raycaster = new THREE.Raycaster()
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera)
+        const intersects = raycaster.intersectObjects(meshes.value, false)
+        
+        if (intersects.length === 0) {
+          console.warn('创建默认文字失败：未找到可用的面信息')
+          return
+        }
+        
+        const hit = intersects[0]
+        const faceInfo = {
+          mesh: hit.object,
+          faceIndex: hit.faceIndex,
+          face: hit.face,
+          point: hit.point,
+          distance: hit.distance,
+          uv: hit.uv
+        }
+
+        await surfaceTextManager.createTextObject('我是字体', faceInfo)
+      } catch (error) {
+        console.error('创建默认文字失败:', error)
+      }
+    }
     
     // 初始化文字系统
     const initializeTextSystem = () => {
-      if (!scene || !camera || !renderer || !root.value || !facePicker) {
-        console.warn('Three.js组件或面拾取器未完全初始化，无法创建文字系统')
+      if (!scene || !camera || !renderer || !root.value) {
+        console.warn('Three.js组件未完全初始化，无法创建文字系统')
         return
       }
       
       try {
-        // 创建文字管理器
-        surfaceTextManager = new SurfaceTextManager(scene, camera, renderer, root.value, facePicker)
+        // 创建文字管理器（不再依赖 facePicker）
+        surfaceTextManager = new SurfaceTextManager(scene, camera, renderer, root.value, null)
+        
+        // 设置目标网格（可以被点击添加文字的网格）
+        surfaceTextManager.setTargetMeshes(meshes.value)
+        
+        // 启用点击监听（始终监听，用于选择文字）
+        surfaceTextManager.enableClickListener()
         
         // 设置事件监听器
         setupTextSystemEvents()
         
-        console.log('文字系统已初始化')
+        // 默认启用文字模式（可以创建新文字）
+        surfaceTextManager.enableTextMode()
+        textState.isTextMode = true
+        
+        console.log('文字系统已初始化，文字模式已启用')
+
+        // 初始化时创建一个可编辑的默认文字，便于字体功能开发
+        void createInitialEditableText()
         
         // 运行测试（开发模式）
         if (import.meta.env.DEV) {
@@ -785,6 +789,15 @@ export default {
       surfaceTextManager.on('error', (errorData) => {
         console.error('文字系统错误:', errorData)
       })
+
+      // 拖动文字变换箭头时禁用 OrbitControls，避免与相机旋转冲突（官方示例做法）
+      if (surfaceTextManager.transformControls) {
+        surfaceTextManager.transformControls.on('dragging-changed', (isDragging) => {
+          if (controls) {
+            controls.enabled = !isDragging && !objectSelectionState.isDragging
+          }
+        })
+      }
     }
     
     // 启用文字添加模式
@@ -899,7 +912,8 @@ export default {
       
       try {
         // 创建物体选择管理器
-        objectSelectionManager = new ObjectSelectionManager(scene, camera, renderer, root.value)
+        // Keep TransformControls and OrbitControls on the same domElement (official pattern)
+        objectSelectionManager = new ObjectSelectionManager(scene, camera, renderer, renderer.domElement)
         
         // 设置可选择的物体（排除网格地面）
         const selectableObjects = meshes.value.filter(mesh => mesh.name !== 'GridHelper')
@@ -952,6 +966,15 @@ export default {
       })
       
       // 物体变换事件
+      // Disable OrbitControls as soon as the transform gizmo is engaged.
+      objectSelectionManager.on('controlMouseDown', () => {
+        if (controls) controls.enabled = false
+      })
+
+      objectSelectionManager.on('controlMouseUp', () => {
+        if (controls) controls.enabled = !objectSelectionState.isDragging
+      })
+
       objectSelectionManager.on('objectTransformed', (data) => {
         emit('objectTransformed', data)
       })

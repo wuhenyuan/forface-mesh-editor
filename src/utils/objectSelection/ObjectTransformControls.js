@@ -41,6 +41,9 @@ export class ObjectTransformControls {
     
     // 绑定事件
     this.setupEvents()
+    
+    // Align underlying TransformControls state with wrapper (disabled by default)
+    this.transformControls.enabled = false
   }
   
   /**

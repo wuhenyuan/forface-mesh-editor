@@ -95,6 +95,14 @@ export class ObjectSelectionManager {
     this.transformControls.on('modeChanged', (mode) => {
       this.emit('transformModeChanged', mode)
     })
+
+    this.transformControls.on('controlMouseDown', () => {
+      this.emit('controlMouseDown')
+    })
+
+    this.transformControls.on('controlMouseUp', () => {
+      this.emit('controlMouseUp')
+    })
   }
   
   /**

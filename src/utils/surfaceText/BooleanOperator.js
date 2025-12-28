@@ -1,301 +1,406 @@
 /**
  * 布尔操作器
- * 处理文字几何体与表面的布尔运算
+ * 使用 three-bvh-csg 库处理文字几何体与表面的布尔运算
  */
+import * as THREE from 'three'
+import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
+
 export class BooleanOperator {
   constructor() {
+    this.evaluator = null
     this.isLibraryLoaded = false
-    this.csgLibrary = null
-    
-    // 尝试加载布尔操作库
-    this.loadCSGLibrary()
+    this._initPromise = null
+
+    // 初始化
+    this._init()
   }
-  
+
   /**
-   * 加载CSG库
+   * 初始化CSG评估器
    */
-  async loadCSGLibrary() {
+  _init () {
     try {
-      // 尝试加载three-bvh-csg库
-      // 注意：这个库需要单独安装
-      // npm install three-bvh-csg
-      
-      // 暂时使用模拟实现，实际项目中需要安装真实的库
-      console.warn('布尔操作库未安装，使用模拟实现')
+      this.evaluator = new Evaluator()
+      // 启用材质组，保留来源信息
+      this.evaluator.useGroups = true
       this.isLibraryLoaded = true
-      
-      // 实际代码应该是：
-      // const { ADDITION, SUBTRACTION, INTERSECTION, Brush, Evaluator } = await import('three-bvh-csg')
-      // this.csgLibrary = { ADDITION, SUBTRACTION, INTERSECTION, Brush, Evaluator }
-      // this.isLibraryLoaded = true
-      
+      console.log('three-bvh-csg 布尔操作库已加载，useGroups 已启用')
     } catch (error) {
-      console.error('加载布尔操作库失败:', error)
+      console.error('three-bvh-csg 初始化失败:', error)
       this.isLibraryLoaded = false
     }
   }
-  
+
   /**
    * 检查库是否已加载
    * @returns {boolean} 是否已加载
    */
-  isReady() {
-    return this.isLibraryLoaded
+  isReady () {
+    return this.isLibraryLoaded && this.evaluator !== null
   }
-  
+
   /**
-   * 执行布尔减法操作（内嵌模式）
-   * @param {THREE.BufferGeometry} targetGeometry - 目标几何体
-   * @param {THREE.BufferGeometry} textGeometry - 文字几何体
-   * @param {THREE.Matrix4} textMatrix - 文字变换矩阵
-   * @returns {Promise<THREE.BufferGeometry|null>} 操作结果
+   * 创建 Brush 对象
+   * @param {THREE.BufferGeometry} geometry - 几何体
+   * @param {THREE.Material} [material] - 可选的材质（用于标识来源）
+   * @param {THREE.Matrix4} [matrix] - 可选的变换矩阵
+   * @returns {Brush} Brush 对象
    */
-  async subtract(targetGeometry, textGeometry, textMatrix) {
+  createBrush (geometry, material = null, matrix = null) {
+    // 确保几何体有索引
+    let processedGeometry = geometry
+    if (!geometry.index) {
+      processedGeometry = geometry.clone()
+      processedGeometry.setIndex([...Array(processedGeometry.attributes.position.count).keys()])
+    }
+
+    const brush = new Brush(processedGeometry, material)
+
+    if (matrix) {
+      brush.applyMatrix4(matrix)
+    }
+
+    brush.updateMatrixWorld()
+    return brush
+  }
+
+  /**
+   * 执行布尔减法操作（内嵌/雕刻模式）
+   * 返回的几何体会包含材质组信息，可以区分原始表面和雕刻区域
+   * @param {THREE.BufferGeometry} targetGeometry - 目标几何体（被减的）
+   * @param {THREE.BufferGeometry} toolGeometry - 工具几何体（用来减的）
+   * @param {THREE.Matrix4} [toolMatrix] - 工具几何体的变换矩阵
+   * @param {Object} [options] - 选项
+   * @param {string} [options.textId] - 文字ID，用于标识
+   * @returns {Promise<{geometry: THREE.BufferGeometry, materials: THREE.Material[]}>} 操作结果
+   */
+  async subtract (targetGeometry, toolGeometry, toolMatrix = null, options = {}) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪')
     }
-    
+
     try {
-      console.log('开始执行布尔减法操作')
-      
-      // 模拟布尔操作（实际实现需要使用真实的CSG库）
-      const result = await this.simulateSubtraction(targetGeometry, textGeometry, textMatrix)
-      
-      console.log('布尔减法操作完成')
-      return result
-      
+      console.log('开始执行布尔减法操作 (SUBTRACTION)')
+      const startTime = performance.now()
+
+      // 创建材质用于标识来源
+      // 材质0: 原始表面
+      // 材质1: 雕刻区域（来自文字几何体的切割面）
+      const targetMaterial = new THREE.MeshStandardMaterial({
+        color: 0x409eff,
+        name: 'original_surface'
+      })
+      const toolMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff0000,
+        name: options.textId ? `engraved_${options.textId}` : 'engraved_text'
+      })
+      // 存储 textId 到材质的 userData
+      toolMaterial.userData = { textId: options.textId, isEngravedText: true }
+
+      // 创建 Brush 对象，带材质
+      const targetBrush = this.createBrush(targetGeometry, targetMaterial)
+      const toolBrush = this.createBrush(toolGeometry, toolMaterial, toolMatrix)
+
+      // 执行布尔减法
+      const resultBrush = this.evaluator.evaluate(targetBrush, toolBrush, SUBTRACTION)
+
+      // 获取结果几何体
+      const resultGeometry = resultBrush.geometry
+      resultGeometry.computeVertexNormals()
+      resultGeometry.computeBoundingBox()
+      resultGeometry.computeBoundingSphere()
+
+      const endTime = performance.now()
+      console.log(`布尔减法操作完成，耗时: ${(endTime - startTime).toFixed(2)}ms`)
+      console.log(`结果几何体有 ${resultGeometry.groups?.length || 0} 个材质组`)
+
+      // 清理临时对象
+      targetBrush.geometry.dispose()
+      toolBrush.geometry.dispose()
+
+      return {
+        geometry: resultGeometry,
+        materials: [targetMaterial, toolMaterial]
+      }
+
     } catch (error) {
       console.error('布尔减法操作失败:', error)
       throw error
     }
   }
-  
+
   /**
-   * 执行布尔加法操作（合并）
+   * 执行布尔加法操作（合并/联合）
    * @param {THREE.BufferGeometry} geometry1 - 几何体1
    * @param {THREE.BufferGeometry} geometry2 - 几何体2
-   * @param {THREE.Matrix4} matrix2 - 几何体2的变换矩阵
-   * @returns {Promise<THREE.BufferGeometry|null>} 操作结果
+   * @param {THREE.Matrix4} [matrix2] - 几何体2的变换矩阵
+   * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async union(geometry1, geometry2, matrix2) {
+  async union (geometry1, geometry2, matrix2 = null) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪')
     }
-    
+
     try {
-      console.log('开始执行布尔加法操作')
-      
-      // 模拟布尔操作
-      const result = await this.simulateUnion(geometry1, geometry2, matrix2)
-      
-      console.log('布尔加法操作完成')
-      return result
-      
+      console.log('开始执行布尔加法操作 (ADDITION)')
+      const startTime = performance.now()
+
+      // 创建 Brush 对象
+      const brush1 = this.createBrush(geometry1)
+      const brush2 = this.createBrush(geometry2, matrix2)
+
+      // 执行布尔加法
+      const resultBrush = this.evaluator.evaluate(brush1, brush2, ADDITION)
+
+      // 获取结果几何体
+      const resultGeometry = resultBrush.geometry
+      resultGeometry.computeVertexNormals()
+      resultGeometry.computeBoundingBox()
+      resultGeometry.computeBoundingSphere()
+
+      const endTime = performance.now()
+      console.log(`布尔加法操作完成，耗时: ${(endTime - startTime).toFixed(2)}ms`)
+
+      // 清理临时对象
+      brush1.geometry.dispose()
+      brush2.geometry.dispose()
+
+      return resultGeometry
+
     } catch (error) {
       console.error('布尔加法操作失败:', error)
       throw error
     }
   }
-  
+
   /**
    * 执行布尔交集操作
    * @param {THREE.BufferGeometry} geometry1 - 几何体1
    * @param {THREE.BufferGeometry} geometry2 - 几何体2
-   * @param {THREE.Matrix4} matrix2 - 几何体2的变换矩阵
-   * @returns {Promise<THREE.BufferGeometry|null>} 操作结果
+   * @param {THREE.Matrix4} [matrix2] - 几何体2的变换矩阵
+   * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async intersect(geometry1, geometry2, matrix2) {
+  async intersect (geometry1, geometry2, matrix2 = null) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪')
     }
-    
+
     try {
-      console.log('开始执行布尔交集操作')
-      
-      // 模拟布尔操作
-      const result = await this.simulateIntersection(geometry1, geometry2, matrix2)
-      
-      console.log('布尔交集操作完成')
-      return result
-      
+      console.log('开始执行布尔交集操作 (INTERSECTION)')
+      const startTime = performance.now()
+
+      // 创建 Brush 对象
+      const brush1 = this.createBrush(geometry1)
+      const brush2 = this.createBrush(geometry2, matrix2)
+
+      // 执行布尔交集
+      const resultBrush = this.evaluator.evaluate(brush1, brush2, INTERSECTION)
+
+      // 获取结果几何体
+      const resultGeometry = resultBrush.geometry
+      resultGeometry.computeVertexNormals()
+      resultGeometry.computeBoundingBox()
+      resultGeometry.computeBoundingSphere()
+
+      const endTime = performance.now()
+      console.log(`布尔交集操作完成，耗时: ${(endTime - startTime).toFixed(2)}ms`)
+
+      // 清理临时对象
+      brush1.geometry.dispose()
+      brush2.geometry.dispose()
+
+      return resultGeometry
+
     } catch (error) {
       console.error('布尔交集操作失败:', error)
       throw error
     }
   }
-  
+
   /**
-   * 模拟布尔减法操作
-   * @param {THREE.BufferGeometry} targetGeometry - 目标几何体
-   * @param {THREE.BufferGeometry} textGeometry - 文字几何体
-   * @param {THREE.Matrix4} textMatrix - 文字变换矩阵
-   * @returns {Promise<THREE.BufferGeometry>} 模拟结果
+   * 批量执行布尔操作（性能优化）
+   * @param {THREE.BufferGeometry} baseGeometry - 基础几何体
+   * @param {Array<{geometry: THREE.BufferGeometry, matrix?: THREE.Matrix4, operation: string}>} operations - 操作列表
+   * @returns {Promise<THREE.BufferGeometry>} 最终结果几何体
    */
-  async simulateSubtraction(targetGeometry, textGeometry, textMatrix) {
-    // 这是一个模拟实现，实际项目中需要使用真实的CSG库
-    
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // 返回原始几何体的副本作为模拟结果
-        const result = targetGeometry.clone()
-        
-        // 添加标记表示这是模拟结果
-        result.userData = {
-          ...result.userData,
-          isSimulatedCSG: true,
-          operation: 'subtract',
-          timestamp: Date.now()
+  async batchOperation (baseGeometry, operations) {
+    if (!this.isReady()) {
+      throw new Error('布尔操作库未准备就绪')
+    }
+
+    if (!operations || operations.length === 0) {
+      return baseGeometry.clone()
+    }
+
+    try {
+      console.log(`开始批量布尔操作，共 ${operations.length} 个操作`)
+      const startTime = performance.now()
+
+      let currentBrush = this.createBrush(baseGeometry)
+
+      for (let i = 0; i < operations.length; i++) {
+        const op = operations[i]
+        const toolBrush = this.createBrush(op.geometry, op.matrix)
+
+        let operationType
+        switch (op.operation) {
+          case 'subtract':
+            operationType = SUBTRACTION
+            break
+          case 'union':
+            operationType = ADDITION
+            break
+          case 'intersect':
+            operationType = INTERSECTION
+            break
+          default:
+            console.warn(`未知操作类型: ${op.operation}，跳过`)
+            toolBrush.geometry.dispose()
+            continue
         }
-        
-        console.warn('使用模拟布尔减法操作，实际项目需要安装three-bvh-csg库')
-        resolve(result)
-      }, 100) // 模拟异步操作
-    })
+
+        const resultBrush = this.evaluator.evaluate(currentBrush, toolBrush, operationType)
+
+        // 清理上一个 brush
+        currentBrush.geometry.dispose()
+        toolBrush.geometry.dispose()
+
+        currentBrush = resultBrush
+      }
+
+      // 获取最终结果
+      const resultGeometry = currentBrush.geometry
+      resultGeometry.computeVertexNormals()
+      resultGeometry.computeBoundingBox()
+      resultGeometry.computeBoundingSphere()
+
+      const endTime = performance.now()
+      console.log(`批量布尔操作完成，耗时: ${(endTime - startTime).toFixed(2)}ms`)
+
+      return resultGeometry
+
+    } catch (error) {
+      console.error('批量布尔操作失败:', error)
+      throw error
+    }
   }
-  
-  /**
-   * 模拟布尔加法操作
-   * @param {THREE.BufferGeometry} geometry1 - 几何体1
-   * @param {THREE.BufferGeometry} geometry2 - 几何体2
-   * @param {THREE.Matrix4} matrix2 - 几何体2的变换矩阵
-   * @returns {Promise<THREE.BufferGeometry>} 模拟结果
-   */
-  async simulateUnion(geometry1, geometry2, matrix2) {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const result = geometry1.clone()
-        result.userData = {
-          ...result.userData,
-          isSimulatedCSG: true,
-          operation: 'union',
-          timestamp: Date.now()
-        }
-        
-        console.warn('使用模拟布尔加法操作，实际项目需要安装three-bvh-csg库')
-        resolve(result)
-      }, 100)
-    })
-  }
-  
-  /**
-   * 模拟布尔交集操作
-   * @param {THREE.BufferGeometry} geometry1 - 几何体1
-   * @param {THREE.BufferGeometry} geometry2 - 几何体2
-   * @param {THREE.Matrix4} matrix2 - 几何体2的变换矩阵
-   * @returns {Promise<THREE.BufferGeometry>} 模拟结果
-   */
-  async simulateIntersection(geometry1, geometry2, matrix2) {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const result = geometry1.clone()
-        result.userData = {
-          ...result.userData,
-          isSimulatedCSG: true,
-          operation: 'intersect',
-          timestamp: Date.now()
-        }
-        
-        console.warn('使用模拟布尔交集操作，实际项目需要安装three-bvh-csg库')
-        resolve(result)
-      }, 100)
-    })
-  }
-  
+
   /**
    * 验证几何体是否适合布尔操作
    * @param {THREE.BufferGeometry} geometry - 几何体
    * @returns {Object} 验证结果
    */
-  validateGeometry(geometry) {
+  validateGeometry (geometry) {
     const errors = []
     const warnings = []
-    
+
     if (!geometry) {
       errors.push('几何体不能为空')
       return { isValid: false, errors, warnings }
     }
-    
+
     if (!geometry.isBufferGeometry) {
-      errors.push('只支持BufferGeometry')
+      errors.push('只支持 BufferGeometry')
     }
-    
+
     const positionAttribute = geometry.getAttribute('position')
     if (!positionAttribute) {
       errors.push('几何体缺少位置属性')
     } else if (positionAttribute.count < 3) {
       errors.push('几何体顶点数量不足')
     }
-    
+
     const indexAttribute = geometry.getIndex()
     if (!indexAttribute) {
-      warnings.push('几何体没有索引，可能影响性能')
+      warnings.push('几何体没有索引，将自动生成')
     }
-    
+
     // 检查几何体复杂度
-    const faceCount = indexAttribute ? indexAttribute.count / 3 : positionAttribute.count / 3
-    if (faceCount > 10000) {
-      warnings.push('几何体过于复杂，布尔操作可能很慢')
+    const vertexCount = positionAttribute ? positionAttribute.count : 0
+    const faceCount = indexAttribute ? indexAttribute.count / 3 : vertexCount / 3
+
+    if (faceCount > 50000) {
+      warnings.push('几何体非常复杂（>50000面），布尔操作可能较慢')
+    } else if (faceCount > 10000) {
+      warnings.push('几何体较复杂（>10000面），布尔操作可能需要一些时间')
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors,
       warnings,
       faceCount,
-      vertexCount: positionAttribute ? positionAttribute.count : 0
+      vertexCount
     }
   }
-  
+
   /**
    * 优化几何体以提高布尔操作性能
    * @param {THREE.BufferGeometry} geometry - 几何体
    * @returns {THREE.BufferGeometry} 优化后的几何体
    */
-  optimizeGeometry(geometry) {
+  optimizeGeometry (geometry) {
     if (!geometry) return geometry
-    
-    // 合并顶点
-    geometry.mergeVertices()
-    
+
+    const optimized = geometry.clone()
+
+    // 确保有索引
+    if (!optimized.index) {
+      const indices = [...Array(optimized.attributes.position.count).keys()]
+      optimized.setIndex(indices)
+    }
+
+    // 合并顶点（如果方法存在）
+    if (typeof optimized.mergeVertices === 'function') {
+      optimized.mergeVertices()
+    }
+
     // 计算法向量
-    geometry.computeVertexNormals()
-    
-    // 计算边界框
-    geometry.computeBoundingBox()
-    geometry.computeBoundingSphere()
-    
+    optimized.computeVertexNormals()
+
+    // 计算边界
+    optimized.computeBoundingBox()
+    optimized.computeBoundingSphere()
+
     console.log('几何体已优化，用于布尔操作')
-    return geometry
+    return optimized
   }
-  
+
   /**
    * 获取操作统计信息
    * @returns {Object} 统计信息
    */
-  getStats() {
+  getStats () {
     return {
       libraryLoaded: this.isLibraryLoaded,
-      libraryName: this.isLibraryLoaded ? 'three-bvh-csg (模拟)' : 'none',
+      libraryName: 'three-bvh-csg',
+      libraryVersion: '0.0.17',
       supportedOperations: ['subtract', 'union', 'intersect'],
-      isSimulated: true // 当前是模拟实现
+      isSimulated: false
     }
   }
-  
+
   /**
-   * 设置操作参数
-   * @param {Object} options - 参数选项
+   * 设置评估器选项
+   * @param {Object} options - 选项
    */
-  setOptions(options = {}) {
-    // 这里可以设置CSG库的各种参数
-    console.log('设置布尔操作参数:', options)
+  setOptions (options = {}) {
+    if (!this.evaluator) return
+
+    // three-bvh-csg Evaluator 的可配置选项
+    if (options.useGroups !== undefined) {
+      this.evaluator.useGroups = options.useGroups
+    }
+
+    console.log('布尔操作参数已更新:', options)
   }
-  
+
   /**
    * 销毁操作器，清理资源
    */
-  destroy() {
+  destroy () {
+    this.evaluator = null
     this.isLibraryLoaded = false
-    this.csgLibrary = null
     console.log('布尔操作器已销毁')
   }
 }
