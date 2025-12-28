@@ -337,10 +337,42 @@ export class SurfaceTextManager {
     if (textObject.originalTargetGeometry) {
       textObject.targetMesh.geometry.dispose()
       textObject.targetMesh.geometry = textObject.originalTargetGeometry.clone()
+
+      // 恢复原始材质（原始几何体没有材质组，不能用多材质数组）
+      if (textObject.originalTargetMaterial) {
+        textObject.targetMesh.material = textObject.originalTargetMaterial
+      }
+
+      console.log('[DEBUG] 已恢复原始几何体和材质')
+    } else {
+      console.warn('[DEBUG] 原始几何体不存在!')
     }
 
-    // 显示文字网格
+    // 显示文字网格，并调整到内嵌位置
     textObject.mesh.visible = true
+
+    // 计算内嵌偏移：文字需要往表面内部移动
+    // 获取表面法向量
+    if (textObject.faceInfo && textObject.faceInfo.face) {
+      const normal = textObject.faceInfo.face.normal.clone()
+      normal.transformDirection(textObject.targetMesh.matrixWorld)
+      normal.normalize()
+
+      // 获取文字深度（thickness）
+      const depth = textObject.config.thickness || 0.5
+
+      // 保存原始位置（用于退出编辑模式时恢复）
+      if (!textObject.originalPosition) {
+        textObject.originalPosition = textObject.mesh.position.clone()
+      }
+
+      // 将文字往内部移动（沿法向量反方向移动 depth 距离）
+      const engravedPosition = textObject.originalPosition.clone()
+      engravedPosition.add(normal.multiplyScalar(-depth))
+      textObject.mesh.position.copy(engravedPosition)
+
+      console.log('[DEBUG] 文字已移动到内嵌位置，偏移深度:', depth)
+    }
 
     // 选中文字
     this.selectText(textId)
@@ -364,6 +396,24 @@ export class SurfaceTextManager {
     console.log(`退出编辑模式: ${this.selectedTextId}, 应用更改: ${applyChanges}`)
 
     try {
+      // 在重新应用布尔操作前，需要将文字位置恢复到表面位置
+      // 因为布尔操作需要文字在正确的"凸起"位置才能正确计算
+      if (textObject.faceInfo && textObject.faceInfo.face) {
+        const normal = textObject.faceInfo.face.normal.clone()
+        normal.transformDirection(textObject.targetMesh.matrixWorld)
+        normal.normalize()
+
+        const depth = textObject.config.thickness || 0.5
+
+        // 将文字从内嵌位置移回表面位置
+        const currentPos = textObject.mesh.position.clone()
+        currentPos.add(normal.multiplyScalar(depth))
+        textObject.mesh.position.copy(currentPos)
+
+        // 更新原始位置为新位置
+        textObject.originalPosition = textObject.mesh.position.clone()
+      }
+
       if (applyChanges) {
         // 重新执行布尔操作
         await this.reapplyEngraving(textObject)
@@ -654,12 +704,17 @@ export class SurfaceTextManager {
       mesh.userData.originalMaterial = mesh.material
     }
 
-    // 创建高亮材质
-    const highlightMaterial = mesh.material.clone()
-    highlightMaterial.emissive.setHex(0x444444) // 添加发光效果
-    highlightMaterial.emissiveIntensity = 0.3
+    // 创建透明高亮材质
+    const highlightMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00, // 绿色高亮
+      transparent: true,
+      opacity: 0.5,
+      depthTest: false, // 不进行深度测试，不被遮挡
+      depthWrite: false // 不写入深度缓冲
+    })
 
     mesh.material = highlightMaterial
+    mesh.renderOrder = 999 // 确保最后渲染，显示在最上层
   }
 
   /**
@@ -671,6 +726,7 @@ export class SurfaceTextManager {
     if (mesh.userData.originalMaterial) {
       mesh.material = mesh.userData.originalMaterial
       delete mesh.userData.originalMaterial
+      mesh.renderOrder = 0 // 恢复默认渲染顺序
     }
   }
 
@@ -898,10 +954,16 @@ export class SurfaceTextManager {
     const textObject = this.textObjects.get(textId)
     const oldColor = textObject.material.color.getHex()
 
-    // 更新原始材质颜色
+    // 更新原始材质颜色（用于凸起模式）
     textObject.material.color.setHex(color)
     textObject.config.color = color
     textObject.modified = Date.now()
+
+    // 如果是内嵌模式，更新雕刻材质颜色
+    if (textObject.mode === 'engraved' && textObject.engravedMaterial) {
+      textObject.engravedMaterial.color.setHex(color)
+      console.log(`内嵌文字颜色已更新: ${textId}`)
+    }
 
     // 如果文字当前被选中，需要更新高亮材质的颜色
     if (this.selectedTextId === textId) {
@@ -977,6 +1039,14 @@ export class SurfaceTextManager {
       textObject.originalTargetMaterial = Array.isArray(textObject.targetMesh.material)
         ? textObject.targetMesh.material[0]
         : textObject.targetMesh.material
+
+      console.log('[DEBUG] 保存原始几何体:', {
+        vertexCount: textObject.originalTargetGeometry.attributes.position?.count,
+        hasIndex: !!textObject.originalTargetGeometry.index,
+        materialType: typeof textObject.originalTargetMaterial
+      })
+    } else {
+      console.log('[DEBUG] 原始几何体已存在，跳过保存')
     }
 
     try {
@@ -1010,7 +1080,10 @@ export class SurfaceTextManager {
         // 隐藏文字网格（因为已经雕刻到目标网格中）
         textObject.mesh.visible = false
 
-        console.log('内嵌模式应用成功，材质组数量:', result.geometry.groups?.length || 0)
+        console.log('[DEBUG] 内嵌模式应用成功:', {
+          resultVertexCount: result.geometry.attributes.position?.count,
+          groupsCount: result.geometry.groups?.length || 0
+        })
       } else {
         throw new Error('布尔操作返回空结果')
       }
@@ -1233,7 +1306,36 @@ export class SurfaceTextManager {
           // 如果是编辑模式下的内嵌文字，重新应用布尔操作
           if (this.isEditing && textObject.mode === 'engraved') {
             try {
+              // 拖动结束后，文字在内嵌位置，需要先移回表面位置再做布尔操作
+              if (textObject.faceInfo && textObject.faceInfo.face) {
+                const normal = textObject.faceInfo.face.normal.clone()
+                normal.transformDirection(textObject.targetMesh.matrixWorld)
+                normal.normalize()
+
+                const depth = textObject.config.thickness || 0.5
+
+                // 将文字从内嵌位置移回表面位置
+                const surfacePos = textObject.mesh.position.clone()
+                surfacePos.add(normal.multiplyScalar(depth))
+                textObject.mesh.position.copy(surfacePos)
+              }
+
               await this.reapplyEngraving(textObject)
+
+              // 布尔操作完成后，再把文字移回内嵌位置（因为还在编辑模式）
+              if (textObject.faceInfo && textObject.faceInfo.face) {
+                const normal = textObject.faceInfo.face.normal.clone()
+                normal.transformDirection(textObject.targetMesh.matrixWorld)
+                normal.normalize()
+
+                const depth = textObject.config.thickness || 0.5
+
+                // 将文字移回内嵌位置
+                const engravedPos = textObject.mesh.position.clone()
+                engravedPos.add(normal.multiplyScalar(-depth))
+                textObject.mesh.position.copy(engravedPos)
+              }
+
               console.log('拖动结束，布尔操作已重新应用')
             } catch (error) {
               console.error('重新应用布尔操作失败:', error)

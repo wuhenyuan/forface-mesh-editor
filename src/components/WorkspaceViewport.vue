@@ -708,11 +708,11 @@ export default {
         // 设置事件监听器
         setupTextSystemEvents()
         
-        // 默认启用文字模式（可以创建新文字）
-        surfaceTextManager.enableTextMode()
-        textState.isTextMode = true
+        // 默认不启用文字模式，需要用户手动开启
+        // surfaceTextManager.enableTextMode()
+        // textState.isTextMode = true
         
-        console.log('文字系统已初始化，文字模式已启用')
+        console.log('文字系统已初始化')
 
         // 初始化时创建一个可编辑的默认文字，便于字体功能开发
         void createInitialEditableText()
