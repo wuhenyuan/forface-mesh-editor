@@ -3,74 +3,101 @@
     <div class="title">工艺信息</div>
     <div class="panel-body">
       <el-collapse v-model="activeNames">
-      <!-- 文字属性面板 -->
-      <el-collapse-item v-if="selectedTextObject" title="文字属性" name="text">
-        <div class="row">
-          <span>文字内容</span>
-          <el-input 
-            size="mini" 
-            v-model="textForm.content" 
-            @change="updateTextContent"
-            placeholder="输入文字内容"
-          ></el-input>
-        </div>
-        <div class="row">
-          <span>文字颜色</span>
-          <el-color-picker 
-            v-model="textForm.color" 
-            size="small"
-            @change="updateTextColor"
-          ></el-color-picker>
-        </div>
-        <div class="row">
-          <span>雕刻模式</span>
-          <el-select 
-            v-model="textForm.mode" 
-            size="mini"
-            @change="updateTextMode"
+      
+      <!-- 文字列表面板 - 常驻显示 -->
+      <el-collapse-item title="文字属性" name="text">
+        <div class="text-list" v-if="textList.length > 0">
+          <div 
+            v-for="(text, index) in textList" 
+            :key="text.id"
+            class="text-item"
+            :class="{ active: selectedTextObject && selectedTextObject.id === text.id }"
+            @click="selectTextItem(text)"
           >
-            <el-option label="凸起" value="raised"></el-option>
-            <el-option label="内嵌" value="engraved"></el-option>
-          </el-select>
+            <span class="text-name">{{ text.displayName }}</span>
+            <span class="text-content">{{ text.content }}</span>
+            <el-button 
+              type="text" 
+              size="mini" 
+              icon="el-icon-delete"
+              @click.stop="deleteTextItem(text.id)"
+            ></el-button>
+          </div>
         </div>
-        <div class="row">
-          <span>字体</span>
-          <el-select 
-            v-model="textForm.font" 
-            size="mini"
-            @change="updateTextFont"
-          >
-            <el-option label="Helvetiker" value="helvetiker"></el-option>
-            <el-option label="Helvetiker Bold" value="helvetiker_bold"></el-option>
-            <el-option label="Optimer" value="optimer"></el-option>
-            <el-option label="Optimer Bold" value="optimer_bold"></el-option>
-          </el-select>
+        <div v-else class="empty-text">
+          <span>暂无文字，点击模型表面添加</span>
         </div>
-        <div class="row">
-          <span>大小</span>
-          <el-input-number 
-            v-model="textForm.size" 
-            :min="0.1" 
-            :max="10" 
-            :step="0.1"
-            size="mini"
-            @change="updateTextSize"
-          ></el-input-number>
-        </div>
-        <div class="row">
-          <span>厚度</span>
-          <el-input-number 
-            v-model="textForm.thickness" 
-            :min="0.01" 
-            :max="2" 
-            :step="0.01"
-            size="mini"
-            @change="updateTextThickness"
-          ></el-input-number>
-        </div>
-        <div class="text-actions">
-          <el-button size="mini" @click="deleteSelectedText" type="danger">删除文字</el-button>
-          <el-button size="mini" @click="duplicateText">复制文字</el-button>
+        
+        <!-- 选中文字的属性编辑 -->
+        <div v-if="selectedTextObject" class="text-properties">
+          <div class="properties-title">{{ currentTextDisplayName }} 属性</div>
+          <div class="row">
+            <span>文字内容</span>
+            <el-input 
+              size="mini" 
+              v-model="textForm.content" 
+              @change="updateTextContent"
+              placeholder="输入文字内容"
+            ></el-input>
+          </div>
+          <div class="row">
+            <span>文字颜色</span>
+            <el-color-picker 
+              v-model="textForm.color" 
+              size="small"
+              @change="updateTextColor"
+            ></el-color-picker>
+          </div>
+          <div class="row">
+            <span>雕刻模式</span>
+            <el-select 
+              v-model="textForm.mode" 
+              size="mini"
+              @change="updateTextMode"
+            >
+              <el-option label="凸起" value="raised"></el-option>
+              <el-option label="内嵌" value="engraved"></el-option>
+            </el-select>
+          </div>
+          <div class="row">
+            <span>字体</span>
+            <el-select 
+              v-model="textForm.font" 
+              size="mini"
+              @change="updateTextFont"
+            >
+              <el-option label="Helvetiker" value="helvetiker"></el-option>
+              <el-option label="Helvetiker Bold" value="helvetiker_bold"></el-option>
+              <el-option label="Optimer" value="optimer"></el-option>
+              <el-option label="Optimer Bold" value="optimer_bold"></el-option>
+            </el-select>
+          </div>
+          <div class="row">
+            <span>大小</span>
+            <el-input-number 
+              v-model="textForm.size" 
+              :min="0.1" 
+              :max="10" 
+              :step="0.1"
+              size="mini"
+              @change="updateTextSize"
+            ></el-input-number>
+          </div>
+          <div class="row">
+            <span>厚度</span>
+            <el-input-number 
+              v-model="textForm.thickness" 
+              :min="0.01" 
+              :max="2" 
+              :step="0.01"
+              size="mini"
+              @change="updateTextThickness"
+            ></el-input-number>
+          </div>
+          <div class="text-actions">
+            <el-button size="mini" @click="deleteSelectedText" type="danger">删除文字</el-button>
+            <el-button size="mini" @click="duplicateText">复制文字</el-button>
+          </div>
         </div>
       </el-collapse-item>
       
@@ -121,13 +148,17 @@
 </template>
 
 <script>
-import { ref, computed, watch, inject } from 'vue'
+import { ref, computed, watch } from 'vue'
 export default {
   name: 'PropertyPanel',
   props: {
     selectedTextObject: {
       type: Object,
       default: null
+    },
+    textList: {
+      type: Array,
+      default: () => []
     }
   },
   emits: [
@@ -138,10 +169,12 @@ export default {
     'updateTextSize',
     'updateTextThickness',
     'deleteSelectedText',
+    'deleteText',
+    'selectText',
     'duplicateText'
   ],
   setup(props, { emit }) {
-    const activeNames = ref(['base', 'color', 'design'])
+    const activeNames = ref(['text', 'base', 'color', 'design'])
     
     // 基本表单
     const form = ref({
@@ -165,6 +198,13 @@ export default {
       thickness: 0.1
     })
     
+    // 当前选中文字的显示名称
+    const currentTextDisplayName = computed(() => {
+      if (!props.selectedTextObject) return ''
+      const textItem = props.textList.find(t => t.id === props.selectedTextObject.id)
+      return textItem ? textItem.displayName : '文字'
+    })
+    
     // 监听选中的文字对象变化
     watch(() => props.selectedTextObject, (newTextObject) => {
       if (newTextObject) {
@@ -177,23 +217,22 @@ export default {
           size: newTextObject.config.size || 1,
           thickness: newTextObject.config.thickness || 0.1
         }
-        
-        // 确保文字属性面板展开
-        if (!activeNames.value.includes('text')) {
-          activeNames.value.unshift('text')
-        }
-      } else {
-        // 移除文字属性面板
-        const textIndex = activeNames.value.indexOf('text')
-        if (textIndex !== -1) {
-          activeNames.value.splice(textIndex, 1)
-        }
       }
     }, { immediate: true })
     
     const price = computed(() =>
       (Math.round(form.value.thickness * 128 * form.value.scale * 100) / 100).toFixed(2)
     )
+    
+    // 选择文字项
+    const selectTextItem = (text) => {
+      emit('selectText', text.id)
+    }
+    
+    // 删除文字项
+    const deleteTextItem = (textId) => {
+      emit('deleteText', textId)
+    }
     
     // 文字属性更新方法
     const updateTextContent = () => {
@@ -249,6 +288,9 @@ export default {
       form, 
       textForm,
       price,
+      currentTextDisplayName,
+      selectTextItem,
+      deleteTextItem,
       updateTextContent,
       updateTextColor,
       updateTextMode,
@@ -311,6 +353,70 @@ export default {
   display: flex;
   gap: 8px;
   border-top: 1px solid #ebeef5;
+}
+
+/* 文字列表样式 */
+.text-list {
+  margin-bottom: 12px;
+}
+
+.text-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.text-item:hover {
+  background: #e6f0ff;
+}
+
+.text-item.active {
+  background: #409eff;
+  color: #fff;
+}
+
+.text-item.active .text-content {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.text-name {
+  font-weight: 500;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.text-content {
+  flex: 1;
+  color: #909399;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-text {
+  padding: 20px;
+  text-align: center;
+  color: #909399;
+  font-size: 12px;
+}
+
+/* 文字属性编辑区域 */
+.text-properties {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #ebeef5;
+}
+
+.properties-title {
+  font-weight: 500;
+  margin-bottom: 10px;
+  color: #409eff;
 }
 
 .text-actions {

@@ -823,6 +823,20 @@ export default {
       }
     }
     
+    // 选择指定文字
+    const selectText = (textId) => {
+      if (surfaceTextManager) {
+        surfaceTextManager.selectText(textId)
+      }
+    }
+    
+    // 删除指定文字
+    const deleteText = (textId) => {
+      if (surfaceTextManager) {
+        surfaceTextManager.deleteText(textId)
+      }
+    }
+    
     // 删除选中的文字
     const deleteSelectedText = () => {
       if (selectedTextId.value && surfaceTextManager) {
@@ -1140,6 +1154,8 @@ export default {
       toggleTextMode,
       enableTextMode,
       disableTextMode,
+      selectText,
+      deleteText,
       deleteSelectedText,
       getSelectedTextObject,
       updateTextContent,
