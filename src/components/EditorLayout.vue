@@ -3,7 +3,15 @@
     <toolbar-panel />
     <div class="editor-body">
       <feature-panel v-model="feature" />
-      <feature-menu v-if="feature === 'base'" :feature="feature" />
+      <feature-menu 
+        v-if="feature === 'base'" 
+        :feature="feature"
+        :items="menuItems"
+        :loading="menuLoading"
+        :remote-search="true"
+        @search="onMenuSearch"
+        @select="onMenuSelect"
+      />
       <div class="workspace" :class="{ 'no-menu': feature !== 'base' }">
         <workspace-viewport 
           :current-tool="feature"
@@ -53,20 +61,66 @@ export default {
     const selectedTextObject = ref(null)
     const workspaceRef = ref(null)
     
-    // 文字列表管理（带显示名称）
-    const textListRaw = ref([]) // { id, content, displayName }
+    // ========== 功能菜单数据管理 ==========
+    // 这部分数据和逻辑可以由上层应用传入
+    const menuLoading = ref(false)
+    const menuItems = ref([
+      { id: 'b1', name: '圆形底座', thumbnail: '' },
+      { id: 'b2', name: '方形底座', thumbnail: '' },
+      { id: 'b3', name: '心形底座', thumbnail: '' },
+      { id: 'b4', name: '星形底座', thumbnail: '' }
+    ])
+    
+    // 模拟的全部数据（实际应用中这会是后端 API）
+    const allMenuData = [
+      { id: 'b1', name: '圆形底座', thumbnail: '' },
+      { id: 'b2', name: '方形底座', thumbnail: '' },
+      { id: 'b3', name: '心形底座', thumbnail: '' },
+      { id: 'b4', name: '星形底座', thumbnail: '' },
+      { id: 'b5', name: '六边形底座', thumbnail: '' },
+      { id: 'b6', name: '椭圆底座', thumbnail: '' }
+    ]
+    
+    // 搜索处理（上层控制搜索逻辑）
+    const onMenuSearch = async (keyword, featureType) => {
+      console.log('搜索:', keyword, '功能类型:', featureType)
+      
+      // 模拟远程搜索
+      menuLoading.value = true
+      
+      // 模拟网络延迟
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      if (!keyword) {
+        // 空关键词，显示全部
+        menuItems.value = allMenuData.slice(0, 4)
+      } else {
+        // 过滤匹配的数据
+        menuItems.value = allMenuData.filter(item => 
+          item.name.includes(keyword)
+        )
+      }
+      
+      menuLoading.value = false
+    }
+    
+    // 选择菜单项
+    const onMenuSelect = (item, featureType) => {
+      console.log('选中菜单项:', item, '功能类型:', featureType)
+      // TODO: 根据选中的底座类型加载对应的 3D 模型
+    }
+    
+    // ========== 文字列表管理 ==========
+    const textListRaw = ref([])
     let textCounter = 0
     
-    // 计算属性：带显示名称的文字列表
     const textList = computed(() => textListRaw.value)
     
-    // 生成文字显示名称
     const generateTextDisplayName = () => {
       textCounter++
       return `文字${textCounter}`
     }
     
-    // 文字创建事件
     const onTextCreated = (textObject) => {
       const displayName = generateTextDisplayName()
       textListRaw.value.push({
@@ -77,7 +131,6 @@ export default {
       console.log('编辑器：文字已创建', displayName, textObject.content)
     }
     
-    // 文字删除事件
     const onTextDeleted = ({ id }) => {
       const index = textListRaw.value.findIndex(t => t.id === id)
       if (index !== -1) {
@@ -86,10 +139,8 @@ export default {
       console.log('编辑器：文字已删除', id)
     }
     
-    // 文字选择事件处理
     const onTextSelected = (textObject) => {
       selectedTextObject.value = textObject
-      // 同步更新文字列表中的内容
       const textItem = textListRaw.value.find(t => t.id === textObject.id)
       if (textItem) {
         textItem.content = textObject.content
@@ -102,25 +153,21 @@ export default {
       console.log('编辑器：文字已取消选择')
     }
     
-    // 从工艺信息面板选择文字
     const onSelectText = (textId) => {
       if (workspaceRef.value) {
         workspaceRef.value.selectText(textId)
       }
     }
     
-    // 从工艺信息面板删除文字
     const onDeleteText = (textId) => {
       if (workspaceRef.value) {
         workspaceRef.value.deleteText(textId)
       }
     }
     
-    // 文字属性更新事件处理
     const onUpdateTextContent = async (textId, newContent) => {
       if (workspaceRef.value) {
         await workspaceRef.value.updateTextContent(textId, newContent)
-        // 同步更新文字列表中的内容
         const textItem = textListRaw.value.find(t => t.id === textId)
         if (textItem) {
           textItem.content = newContent
@@ -142,7 +189,6 @@ export default {
     
     const onUpdateTextFont = async (textId, newFont) => {
       if (workspaceRef.value && selectedTextObject.value) {
-        // 更新字体需要重新生成几何体
         selectedTextObject.value.config.font = newFont
         await workspaceRef.value.updateTextContent(textId, selectedTextObject.value.content)
       }
@@ -150,7 +196,6 @@ export default {
     
     const onUpdateTextSize = async (textId, newSize) => {
       if (workspaceRef.value && selectedTextObject.value) {
-        // 更新大小需要重新生成几何体
         selectedTextObject.value.config.size = newSize
         await workspaceRef.value.updateTextContent(textId, selectedTextObject.value.content)
       }
@@ -158,7 +203,6 @@ export default {
     
     const onUpdateTextThickness = async (textId, newThickness) => {
       if (workspaceRef.value && selectedTextObject.value) {
-        // 更新厚度需要重新生成几何体
         selectedTextObject.value.config.thickness = newThickness
         await workspaceRef.value.updateTextContent(textId, selectedTextObject.value.content)
       }
@@ -171,7 +215,6 @@ export default {
     }
     
     const onDuplicateText = () => {
-      // TODO: 实现文字复制功能
       console.log('复制文字功能待实现')
     }
     
@@ -180,6 +223,12 @@ export default {
       selectedTextObject,
       workspaceRef,
       textList,
+      // 功能菜单
+      menuItems,
+      menuLoading,
+      onMenuSearch,
+      onMenuSelect,
+      // 文字事件
       onTextSelected,
       onTextDeselected,
       onTextCreated,
