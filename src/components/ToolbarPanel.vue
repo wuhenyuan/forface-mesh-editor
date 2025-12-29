@@ -15,6 +15,14 @@
       <el-divider direction="vertical"></el-divider>
       <el-button 
         size="mini" 
+        type="success"
+        @click="testSurfaceIdentifier"
+        :loading="testingIdentifier"
+      >
+        测试表面标识
+      </el-button>
+      <el-button 
+        size="mini" 
         type="warning"
         @click="checkIntersection"
         :loading="checkingIntersection"
@@ -37,9 +45,97 @@ export default {
   setup() {
     const projectName = ref('人物模型编辑器')
     const checkingIntersection = ref(false)
+    const testingIdentifier = ref(false)
     
     // 注入工作区引用，用于获取文字和几何体信息
     const workspaceRef = inject('workspaceRef', null)
+    
+    /**
+     * 测试表面标识功能
+     */
+    const testSurfaceIdentifier = async () => {
+      if (testingIdentifier.value) return
+      
+      try {
+        testingIdentifier.value = true
+        console.log('========== 测试表面标识功能 ==========')
+        
+        // 获取调试数据
+        const debugData = window.debugTextData
+        if (!debugData) {
+          console.error('❌ 未找到调试数据')
+          return
+        }
+        
+        const textObjects = debugData.textObjects || []
+        const surfaceTextManager = debugData.surfaceTextManager
+        
+        if (textObjects.length === 0) {
+          console.warn('⚠️ 没有文字对象可测试')
+          return
+        }
+        
+        console.log('📝 找到文字对象数量:', textObjects.length)
+        
+        // 测试导出配置
+        console.log('\n--- 测试导出配置 ---')
+        const textConfig = surfaceTextManager.exportTextConfig()
+        console.log('导出的文字配置:', textConfig)
+        
+        const surfaceConfig = surfaceTextManager.exportSurfaceConfig()
+        console.log('导出的表面配置:', surfaceConfig)
+        
+        // 测试表面标识
+        console.log('\n--- 测试表面标识 ---')
+        textObjects.forEach((textObject, index) => {
+          console.log(`文字对象 ${index + 1}:`)
+          console.log('  内容:', textObject.content)
+          console.log('  表面标识:', textObject.surfaceId)
+          console.log('  目标面索引:', textObject.targetFace)
+          console.log('  位置:', textObject.mesh.position.toArray())
+        })
+        
+        // 测试配置格式转换
+        console.log('\n--- 测试配置格式转换 ---')
+        if (textConfig.length > 0) {
+          const firstText = textConfig[0]
+          console.log('转换后的配置格式:')
+          console.log('  id:', firstText.id)
+          console.log('  index:', firstText.index)
+          console.log('  text:', firstText.text)
+          console.log('  size:', firstText.size, 'mm')
+          console.log('  depth:', firstText.depth, 'mm')
+          console.log('  effect:', firstText.effect)
+          console.log('  color:', firstText.color)
+          console.log('  position:', firstText.position)
+          console.log('  attachmentSurface:', firstText.attachmentSurface)
+        }
+        
+        // 测试完整配置导出
+        console.log('\n--- 测试完整配置导出 ---')
+        const { createConfigManager } = await import('../utils/surfaceText/ConfigManager.js')
+        const configManager = createConfigManager(surfaceTextManager)
+        const fullConfig = configManager.exportConfig()
+        
+        console.log('完整配置结构:')
+        console.log('  状态:', fullConfig.status)
+        console.log('  属性标识:', fullConfig.propIdentifier)
+        console.log('  文字数量:', fullConfig.texts.length)
+        console.log('  表面数据:', Object.keys(fullConfig.lookupTable.faces || {}).length, '个面')
+        console.log('  网格数据:', Object.keys(fullConfig.lookupTable.meshes || {}).length, '个网格')
+        
+        // 保存到 window 供手动检查
+        window.exportedConfig = fullConfig
+        console.log('\n✅ 配置已导出到 window.exportedConfig，可在控制台查看')
+        
+        console.log('\n🎉 表面标识功能测试完成！')
+        
+      } catch (error) {
+        console.error('❌ 表面标识测试失败:', error)
+      } finally {
+        testingIdentifier.value = false
+      }
+    }
     
     /**
      * 执行相交检查
@@ -203,7 +299,9 @@ export default {
     return { 
       projectName,
       checkingIntersection,
-      checkIntersection
+      testingIdentifier,
+      checkIntersection,
+      testSurfaceIdentifier
     }
   }
 }

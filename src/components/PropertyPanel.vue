@@ -59,6 +59,56 @@
               <el-option label="内嵌" value="engraved"></el-option>
             </el-select>
           </div>
+          
+          <!-- 圆柱面特有属性 -->
+          <div v-if="isSelectedTextOnCylinder" class="cylinder-properties">
+            <div class="properties-subtitle">圆柱面属性</div>
+            <div class="row">
+              <span>环绕方向</span>
+              <el-select 
+                v-model="textForm.direction" 
+                size="mini"
+                @change="updateTextDirection"
+              >
+                <el-option label="顺时针" :value="1"></el-option>
+                <el-option label="逆时针" :value="-1"></el-option>
+              </el-select>
+            </div>
+            <div class="row">
+              <span>字符间距</span>
+              <el-input-number 
+                v-model="textForm.letterSpacing" 
+                :min="0" 
+                :max="2" 
+                :step="0.1"
+                size="mini"
+                @change="updateLetterSpacing"
+              ></el-input-number>
+            </div>
+            <div class="row">
+              <span>弯曲强度</span>
+              <el-input-number 
+                v-model="textForm.curvingStrength" 
+                :min="0" 
+                :max="2" 
+                :step="0.1"
+                size="mini"
+                @change="updateCurvingStrength"
+              ></el-input-number>
+            </div>
+            <div class="row">
+              <span>起始角度</span>
+              <el-input-number 
+                v-model="textForm.startAngle" 
+                :min="-180" 
+                :max="180" 
+                :step="5"
+                size="mini"
+                @change="updateStartAngle"
+              ></el-input-number>
+            </div>
+          </div>
+          
           <div class="row">
             <span>字体</span>
             <el-select 
@@ -168,6 +218,10 @@ export default {
     'updateTextFont',
     'updateTextSize',
     'updateTextThickness',
+    'updateTextDirection',
+    'updateLetterSpacing',
+    'updateCurvingStrength',
+    'updateStartAngle',
     'deleteSelectedText',
     'deleteText',
     'selectText',
@@ -195,7 +249,19 @@ export default {
       mode: 'raised',
       font: 'helvetiker',
       size: 1,
-      thickness: 0.1
+      thickness: 0.1,
+      // 圆柱面特有属性
+      direction: 1,
+      letterSpacing: 0.1,
+      curvingStrength: 1.0,
+      startAngle: 0
+    })
+    
+    // 检查选中文字是否在圆柱面上
+    const isSelectedTextOnCylinder = computed(() => {
+      return props.selectedTextObject && 
+             props.selectedTextObject.mesh &&
+             props.selectedTextObject.mesh.userData.surfaceType === 'cylinder'
     })
     
     // 当前选中文字的显示名称
@@ -215,7 +281,12 @@ export default {
           mode: newTextObject.mode || 'raised',
           font: newTextObject.config.font || 'helvetiker',
           size: newTextObject.config.size || 1,
-          thickness: newTextObject.config.thickness || 0.1
+          thickness: newTextObject.config.thickness || 0.1,
+          // 圆柱面特有属性
+          direction: newTextObject.config.direction || 1,
+          letterSpacing: newTextObject.config.letterSpacing || 0.1,
+          curvingStrength: newTextObject.config.curvingStrength || 1.0,
+          startAngle: newTextObject.config.startAngle || 0
         }
       }
     }, { immediate: true })
@@ -283,12 +354,38 @@ export default {
       }
     }
     
+    // 圆柱面特有属性更新方法
+    const updateTextDirection = () => {
+      if (props.selectedTextObject) {
+        emit('updateTextDirection', props.selectedTextObject.id, textForm.value.direction)
+      }
+    }
+    
+    const updateLetterSpacing = () => {
+      if (props.selectedTextObject) {
+        emit('updateLetterSpacing', props.selectedTextObject.id, textForm.value.letterSpacing)
+      }
+    }
+    
+    const updateCurvingStrength = () => {
+      if (props.selectedTextObject) {
+        emit('updateCurvingStrength', props.selectedTextObject.id, textForm.value.curvingStrength)
+      }
+    }
+    
+    const updateStartAngle = () => {
+      if (props.selectedTextObject) {
+        emit('updateStartAngle', props.selectedTextObject.id, textForm.value.startAngle)
+      }
+    }
+    
     return { 
       activeNames, 
       form, 
       textForm,
       price,
       currentTextDisplayName,
+      isSelectedTextOnCylinder,
       selectTextItem,
       deleteTextItem,
       updateTextContent,
@@ -297,6 +394,10 @@ export default {
       updateTextFont,
       updateTextSize,
       updateTextThickness,
+      updateTextDirection,
+      updateLetterSpacing,
+      updateCurvingStrength,
+      updateStartAngle,
       deleteSelectedText,
       duplicateText
     }
@@ -426,5 +527,26 @@ export default {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed #ebeef5;
+}
+
+/* 圆柱面属性样式 */
+.cylinder-properties {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e4e7ed;
+}
+
+.properties-subtitle {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.properties-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #303133;
 }
 </style>

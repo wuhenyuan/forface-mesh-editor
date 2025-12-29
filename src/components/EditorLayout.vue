@@ -31,6 +31,10 @@
         @updateTextFont="onUpdateTextFont"
         @updateTextSize="onUpdateTextSize"
         @updateTextThickness="onUpdateTextThickness"
+        @updateTextDirection="onUpdateTextDirection"
+        @updateLetterSpacing="onUpdateLetterSpacing"
+        @updateCurvingStrength="onUpdateCurvingStrength"
+        @updateStartAngle="onUpdateStartAngle"
         @deleteSelectedText="onDeleteSelectedText"
         @deleteText="onDeleteText"
         @selectText="onSelectText"
@@ -220,6 +224,35 @@ export default {
         await workspaceRef.value.updateTextContent(textId, selectedTextObject.value.content)
       }
     }
+
+    // 圆柱面专用属性更新方法
+    const onUpdateTextDirection = async (textId, newDirection) => {
+      if (workspaceRef.value && selectedTextObject.value) {
+        selectedTextObject.value.config.direction = newDirection
+        await workspaceRef.value.updateTextDirection(textId, newDirection)
+      }
+    }
+
+    const onUpdateLetterSpacing = async (textId, newLetterSpacing) => {
+      if (workspaceRef.value && selectedTextObject.value) {
+        selectedTextObject.value.config.letterSpacing = newLetterSpacing
+        await workspaceRef.value.updateLetterSpacing(textId, newLetterSpacing)
+      }
+    }
+
+    const onUpdateCurvingStrength = async (textId, newCurvingStrength) => {
+      if (workspaceRef.value && selectedTextObject.value) {
+        selectedTextObject.value.config.curvingStrength = newCurvingStrength
+        await workspaceRef.value.updateCurvingStrength(textId, newCurvingStrength)
+      }
+    }
+
+    const onUpdateStartAngle = async (textId, newStartAngle) => {
+      if (workspaceRef.value && selectedTextObject.value) {
+        selectedTextObject.value.config.startAngle = newStartAngle
+        await workspaceRef.value.updateStartAngle(textId, newStartAngle)
+      }
+    }
     
     const onDeleteSelectedText = () => {
       if (workspaceRef.value) {
@@ -254,6 +287,10 @@ export default {
       onUpdateTextFont,
       onUpdateTextSize,
       onUpdateTextThickness,
+      onUpdateTextDirection,
+      onUpdateLetterSpacing,
+      onUpdateCurvingStrength,
+      onUpdateStartAngle,
       onDeleteSelectedText,
       onDuplicateText
     }

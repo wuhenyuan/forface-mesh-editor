@@ -12,8 +12,13 @@ export { TextTransformControls } from './TextTransformControls.js'
 export { BooleanOperator } from './BooleanOperator.js'
 export { TextPropertyPanel } from './TextPropertyPanel.js'
 
+// 圆柱面文字相关模块
+export { CylinderSurfaceHelper, cylinderSurfaceHelper } from './CylinderSurfaceHelper.js'
+export { CurvedTextGeometry, curvedTextGeometry } from './CurvedTextGeometry.js'
+
 // 测试工具
 export { runAllTextSystemTests } from './test-text-system.js'
+export { CylinderTextTester, cylinderTextTester } from './test-cylinder-text.js'
 
 /**
  * 创建表面文字管理器的便捷函数

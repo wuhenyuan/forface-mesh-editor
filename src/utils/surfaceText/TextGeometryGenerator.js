@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
+import { cylinderSurfaceHelper } from './CylinderSurfaceHelper.js'
+import { curvedTextGeometry } from './CurvedTextGeometry.js'
 
 /**
  * 文字几何体生成器
@@ -117,12 +119,13 @@ export class TextGeometryGenerator {
   }
 
   /**
-   * 生成文字几何体
+   * 生成文字几何体（支持平面和圆柱面）
    * @param {string} text - 文字内容
    * @param {Object} config - 配置参数
-   * @returns {Promise<THREE.TextGeometry>} 文字几何体
+   * @param {Object} surfaceInfo - 表面信息（可选，用于圆柱面拟合）
+   * @returns {Promise<THREE.BufferGeometry>} 文字几何体
    */
-  async generate (text, config = {}) {
+  async generate (text, config = {}, surfaceInfo = null) {
     if (!text || typeof text !== 'string') {
       throw new Error('无效的文字内容')
     }
@@ -141,6 +144,14 @@ export class TextGeometryGenerator {
       ...config
     }
 
+    // 检查表面信息
+    if (surfaceInfo) {
+      console.log('🎯 检测到表面信息:', {
+        surfaceType: surfaceInfo.surfaceType,
+        hasCylinderInfo: !!surfaceInfo.cylinderInfo
+      })
+    }
+
     // 自动检测中文，切换到中文字体
     // 暂时禁用自动切换，因为中文字体文件还未准备好
     // if (this.containsChinese(text) && finalConfig.font === 'helvetiker') {
@@ -149,47 +160,29 @@ export class TextGeometryGenerator {
     // }
 
     try {
+      // 检查字体加载状态
+      if (!this.defaultFont) {
+        console.log('⏳ 等待默认字体加载...')
+        await this.loadDefaultFont()
+      }
+
       // 获取字体
       const font = await this.getFont(finalConfig.font)
 
       if (!font) {
+        console.warn('⚠️ 字体加载失败，使用备用几何体')
         // 如果没有字体，创建备用几何体
         return this.createFallbackGeometry(text, finalConfig)
       }
 
-      // 创建文字几何体参数
-      const geometryParams = {
-        font: font,
-        size: finalConfig.size,
-        height: finalConfig.thickness, // Three.js中使用height表示厚度
-        curveSegments: finalConfig.curveSegments,
-        bevelEnabled: finalConfig.bevelEnabled,
-        bevelThickness: finalConfig.bevelThickness,
-        bevelSize: finalConfig.bevelSize,
-        bevelOffset: finalConfig.bevelOffset,
-        bevelSegments: finalConfig.bevelSegments
+      // 检查是否需要圆柱面拟合
+      if (surfaceInfo && surfaceInfo.surfaceType === 'cylinder') {
+        console.log('🔄 生成圆柱面拟合文字')
+        return this.generateCylinderText(text, font, surfaceInfo, finalConfig)
+      } else {
+        console.log('📝 生成平面文字')
+        return this.generateFlatText(text, font, finalConfig)
       }
-
-      // 生成文字几何体
-      const geometry = new TextGeometry(text, geometryParams)
-
-      // 计算边界框并居中
-      geometry.computeBoundingBox()
-      const boundingBox = geometry.boundingBox
-
-      const centerOffsetX = -0.5 * (boundingBox.max.x - boundingBox.min.x)
-      const centerOffsetY = -0.5 * (boundingBox.max.y - boundingBox.min.y)
-      const centerOffsetZ = -0.5 * (boundingBox.max.z - boundingBox.min.z)
-
-      geometry.translate(centerOffsetX, centerOffsetY, centerOffsetZ)
-
-      console.log(`文字几何体生成成功: "${text}"`, {
-        config: finalConfig,
-        boundingBox: boundingBox,
-        vertices: geometry.attributes.position.count
-      })
-
-      return geometry
 
     } catch (error) {
       console.error('生成文字几何体失败:', error)
@@ -202,6 +195,82 @@ export class TextGeometryGenerator {
         throw new Error(`文字几何体生成完全失败: ${error.message}`)
       }
     }
+  }
+
+  /**
+   * 生成圆柱面拟合文字
+   * @param {string} text - 文字内容
+   * @param {THREE.Font} font - 字体
+   * @param {Object} surfaceInfo - 表面信息
+   * @param {Object} config - 配置
+   * @returns {THREE.BufferGeometry} 圆柱面文字几何体
+   */
+  generateCylinderText(text, font, surfaceInfo, config) {
+    const { cylinderInfo, attachPoint } = surfaceInfo
+
+    console.log(`生成圆柱面文字: "${text}"`, {
+      cylinderInfo,
+      attachPoint,
+      config
+    })
+
+    // 使用弧形文字生成器
+    const geometry = curvedTextGeometry.generateCylinderText(
+      text,
+      font,
+      cylinderInfo,
+      attachPoint,
+      config
+    )
+
+    console.log(`圆柱面文字几何体生成成功: "${text}"`, {
+      vertices: geometry.attributes.position?.count || 0
+    })
+
+    return geometry
+  }
+
+  /**
+   * 生成平面文字
+   * @param {string} text - 文字内容
+   * @param {THREE.Font} font - 字体
+   * @param {Object} config - 配置
+   * @returns {THREE.BufferGeometry} 平面文字几何体
+   */
+  generateFlatText(text, font, config) {
+    // 创建文字几何体参数
+    const geometryParams = {
+      font: font,
+      size: config.size,
+      height: config.thickness, // Three.js中使用height表示厚度
+      curveSegments: config.curveSegments,
+      bevelEnabled: config.bevelEnabled,
+      bevelThickness: config.bevelThickness,
+      bevelSize: config.bevelSize,
+      bevelOffset: config.bevelOffset,
+      bevelSegments: config.bevelSegments
+    }
+
+    // 生成文字几何体
+    const geometry = new TextGeometry(text, geometryParams)
+
+    // 计算边界框并居中
+    geometry.computeBoundingBox()
+    const boundingBox = geometry.boundingBox
+
+    const centerOffsetX = -0.5 * (boundingBox.max.x - boundingBox.min.x)
+    const centerOffsetY = -0.5 * (boundingBox.max.y - boundingBox.min.y)
+    const centerOffsetZ = -0.5 * (boundingBox.max.z - boundingBox.min.z)
+
+    geometry.translate(centerOffsetX, centerOffsetY, centerOffsetZ)
+
+    console.log(`平面文字几何体生成成功: "${text}"`, {
+      config: config,
+      boundingBox: boundingBox,
+      vertices: geometry.attributes.position.count
+    })
+
+    return geometry
   }
 
   /**

@@ -353,7 +353,7 @@ export default {
       meshes.value.push(boxMesh)
       
       // 创建测试圆柱体
-      const cylinderGeometry = new THREE.CylinderGeometry(5, 5, 15, 16)
+      const cylinderGeometry = new THREE.CylinderGeometry(5, 5, 15, 256)
       const cylinderMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x67c23a,
         roughness: 0.6,
@@ -925,6 +925,47 @@ export default {
         }
       }
     }
+
+    // 圆柱面专用属性更新方法
+    const updateTextDirection = async (textId, direction) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextConfig(textId, { direction })
+        } catch (error) {
+          console.error('更新文字方向失败:', error)
+        }
+      }
+    }
+
+    const updateLetterSpacing = async (textId, letterSpacing) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextConfig(textId, { letterSpacing })
+        } catch (error) {
+          console.error('更新字符间距失败:', error)
+        }
+      }
+    }
+
+    const updateCurvingStrength = async (textId, curvingStrength) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextConfig(textId, { curvingStrength })
+        } catch (error) {
+          console.error('更新弯曲强度失败:', error)
+        }
+      }
+    }
+
+    const updateStartAngle = async (textId, startAngle) => {
+      if (surfaceTextManager) {
+        try {
+          await surfaceTextManager.updateTextConfig(textId, { startAngle })
+        } catch (error) {
+          console.error('更新起始角度失败:', error)
+        }
+      }
+    }
     
     // ==================== 物体选择系统相关函数 ====================
     
@@ -1175,7 +1216,12 @@ export default {
       switchTextMode,
       updateTextFont,
       updateTextSize,
-      updateTextThickness
+      updateTextThickness,
+      // 圆柱面专用方法
+      updateTextDirection,
+      updateLetterSpacing,
+      updateCurvingStrength,
+      updateStartAngle
     }
   }
 }

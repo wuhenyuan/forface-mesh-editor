@@ -1,15 +1,22 @@
 /**
  * 面拾取工具包
  * 提供3D网格面级拾取和选择功能
+ * 包含优化的 BVH + Feature 预处理系统
  */
 
 import { RaycastManager } from './RaycastManager.js'
 
+// 核心组件
 export { FacePicker } from './FacePicker.js'
 export { RaycastManager } from './RaycastManager.js'
 export { SelectionManager } from './SelectionManager.js'
 export { HighlightRenderer } from './HighlightRenderer.js'
 export { EventHandler } from './EventHandler.js'
+
+// 优化组件
+export { OptimizedFacePicker } from './OptimizedFacePicker.js'
+export { FeatureDetector } from './FeatureDetector.js'
+export { FeaturePool } from './FeaturePool.js'
 
 // 调试和测试工具
 export { DebugLogger, debugLogger } from './DebugLogger.js'
@@ -26,6 +33,19 @@ export { runFinalValidation } from './final-validation.js'
  */
 export function createFacePicker(scene, camera, renderer, domElement) {
   return new FacePicker(scene, camera, renderer, domElement)
+}
+
+/**
+ * 创建优化面拾取器的便捷函数
+ * @param {THREE.Scene} scene - Three.js场景
+ * @param {THREE.Camera} camera - Three.js相机
+ * @param {THREE.WebGLRenderer} renderer - Three.js渲染器
+ * @param {HTMLElement} domElement - DOM元素
+ * @returns {Promise<OptimizedFacePicker>} 优化面拾取器实例
+ */
+export async function createOptimizedFacePicker(scene, camera, renderer, domElement) {
+  const { OptimizedFacePicker } = await import('./OptimizedFacePicker.js')
+  return new OptimizedFacePicker(scene, camera, renderer, domElement)
 }
 
 /**
