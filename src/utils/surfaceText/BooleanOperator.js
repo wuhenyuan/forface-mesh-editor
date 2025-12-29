@@ -83,25 +83,74 @@ export class BooleanOperator {
       throw new Error('布尔操作库未准备就绪')
     }
 
+    // 🔧 添加详细的几何体信息日志
+    console.log('[DEBUG] 布尔减法操作 - 输入几何体信息:')
+
+    targetGeometry.computeBoundingBox()
+    toolGeometry.computeBoundingBox()
+
+    const targetBox = targetGeometry.boundingBox
+    const toolBox = toolGeometry.boundingBox.clone()
+    if (toolMatrix) {
+      toolBox.applyMatrix4(toolMatrix)
+    }
+
+    console.log('[DEBUG] 目标几何体边界框:', {
+      min: `(${targetBox.min.x.toFixed(2)}, ${targetBox.min.y.toFixed(2)}, ${targetBox.min.z.toFixed(2)})`,
+      max: `(${targetBox.max.x.toFixed(2)}, ${targetBox.max.y.toFixed(2)}, ${targetBox.max.z.toFixed(2)})`,
+      vertexCount: targetGeometry.attributes.position?.count || 0
+    })
+
+    console.log('[DEBUG] 工具几何体边界框:', {
+      min: `(${toolBox.min.x.toFixed(2)}, ${toolBox.min.y.toFixed(2)}, ${toolBox.min.z.toFixed(2)})`,
+      max: `(${toolBox.max.x.toFixed(2)}, ${toolBox.max.y.toFixed(2)}, ${toolBox.max.z.toFixed(2)})`,
+      vertexCount: toolGeometry.attributes.position?.count || 0
+    })
+
     // 预检查几何体相交性（使用综合检测）
     const intersectionCheck = this.checkIntersectionComprehensive(targetGeometry, toolGeometry, toolMatrix, {
       useBVH: true,
       fastOnly: false
     })
-    
+
+    console.log('[DEBUG] 相交检测结果:', {
+      finalResult: intersectionCheck.finalResult,
+      confidence: intersectionCheck.confidence,
+      method: intersectionCheck.method || 'unknown',
+      boundingBoxIntersects: intersectionCheck.boundingBoxCheck?.intersects,
+      bvhIntersects: intersectionCheck.bvhCheck?.intersects
+    })
+
     if (!intersectionCheck.finalResult) {
       const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒'
-      console.warn(`几何体不相交 (${method}检测):`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason)
+      console.warn(`⚠️ 几何体不相交 (${method}检测):`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason)
+
+      // 🔧 即使检测到不相交，仍然尝试执行布尔操作
+      // 因为检测可能有误差，特别是对于复杂的弯曲几何体
+      console.log('[DEBUG] 尽管检测到不相交，仍将尝试执行布尔操作...')
+
       if (options.strictMode) {
         throw new Error(`几何体不相交: ${intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason}`)
       }
     } else if (intersectionCheck.confidence === 'high') {
-      console.log(`几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)`)
+      console.log(`✅ 几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)`)
     }
 
     try {
       console.log('开始执行布尔减法操作 (SUBTRACTION)')
       const startTime = performance.now()
+
+      // 🔧 调试：打印输入几何体的详细信息
+      console.log('[DEBUG] 目标几何体详情:', {
+        vertexCount: targetGeometry.attributes.position?.count,
+        hasIndex: !!targetGeometry.index,
+        indexCount: targetGeometry.index?.count
+      })
+      console.log('[DEBUG] 工具几何体详情:', {
+        vertexCount: toolGeometry.attributes.position?.count,
+        hasIndex: !!toolGeometry.index,
+        indexCount: toolGeometry.index?.count
+      })
 
       // 创建材质用于标识来源
       // 材质0: 原始表面
@@ -121,8 +170,18 @@ export class BooleanOperator {
       const targetBrush = this.createBrush(targetGeometry, targetMaterial)
       const toolBrush = this.createBrush(toolGeometry, toolMaterial, toolMatrix)
 
+      console.log('[DEBUG] Brush 创建完成:', {
+        targetBrushValid: !!targetBrush,
+        toolBrushValid: !!toolBrush
+      })
+
       // 执行布尔减法
       const resultBrush = this.evaluator.evaluate(targetBrush, toolBrush, SUBTRACTION)
+
+      console.log('[DEBUG] 布尔操作执行完成，resultBrush:', {
+        valid: !!resultBrush,
+        hasGeometry: !!(resultBrush && resultBrush.geometry)
+      })
 
       // 获取结果几何体
       const resultGeometry = resultBrush.geometry
@@ -133,6 +192,15 @@ export class BooleanOperator {
       const endTime = performance.now()
       console.log(`布尔减法操作完成，耗时: ${(endTime - startTime).toFixed(2)}ms`)
       console.log(`结果几何体有 ${resultGeometry.groups?.length || 0} 个材质组`)
+
+      // 🔧 调试：打印结果几何体的详细信息
+      console.log('[DEBUG] 结果几何体详情:', {
+        vertexCount: resultGeometry.attributes.position?.count,
+        hasIndex: !!resultGeometry.index,
+        indexCount: resultGeometry.index?.count,
+        groupsCount: resultGeometry.groups?.length || 0,
+        groups: resultGeometry.groups
+      })
 
       // 清理临时对象
       targetBrush.geometry.dispose()
@@ -167,7 +235,7 @@ export class BooleanOperator {
       useBVH: true,
       fastOnly: false
     })
-    
+
     if (!intersectionCheck.finalResult) {
       const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒'
       console.info(`几何体不相交 (${method}检测)，将执行简单合并:`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason)
@@ -225,7 +293,7 @@ export class BooleanOperator {
       useBVH: true,
       fastOnly: false
     })
-    
+
     if (!intersectionCheck.finalResult) {
       const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒'
       console.warn(`几何体不相交 (${method}检测)，交集操作将返回空结果:`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason)
@@ -359,7 +427,7 @@ export class BooleanOperator {
 
       // 检查边界盒是否相交
       const intersects = box1.intersectsBox(box2)
-      
+
       if (!intersects) {
         // 计算距离
         const center1 = new THREE.Vector3()
@@ -367,7 +435,7 @@ export class BooleanOperator {
         box1.getCenter(center1)
         box2.getCenter(center2)
         const distance = center1.distanceTo(center2)
-        
+
         return {
           intersects: false,
           reason: `边界盒不相交，距离: ${distance.toFixed(2)}`,
@@ -462,11 +530,11 @@ export class BooleanOperator {
   createTempMesh (geometry, matrix = null) {
     const material = new THREE.MeshBasicMaterial()
     const mesh = new THREE.Mesh(geometry, material)
-    
+
     if (matrix) {
       mesh.applyMatrix4(matrix)
     }
-    
+
     mesh.updateMatrixWorld()
     return mesh
   }
@@ -484,7 +552,7 @@ export class BooleanOperator {
 
     // 第一步：快速边界盒检测
     const boundingBoxCheck = this.checkGeometryIntersection(geometry1, geometry2, matrix2)
-    
+
     if (!boundingBoxCheck.intersects) {
       // 边界盒都不相交，肯定不相交
       return {
@@ -509,9 +577,9 @@ export class BooleanOperator {
     try {
       const mesh1 = this.createTempMesh(geometry1)
       const mesh2 = this.createTempMesh(geometry2, matrix2)
-      
+
       const bvhCheck = this.checkMeshIntersectionBVH(mesh1, mesh2)
-      
+
       // 清理临时网格
       mesh1.geometry = null // 避免清理原始几何体
       mesh2.geometry = null

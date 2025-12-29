@@ -1,11 +1,11 @@
 import * as THREE from 'three'
 import { BooleanOperator } from './BooleanOperator.js'
+import { cylinderSurfaceHelper } from './CylinderSurfaceHelper.js'
+import { simpleCylinderDetector } from './SimpleCylinderDetector.js'
+import { surfaceIdentifier } from './SurfaceIdentifier.js'
 import { TextGeometryGenerator } from './TextGeometryGenerator.js'
 import { TextInputOverlay } from './TextInputOverlay.js'
 import { TextTransformControls } from './TextTransformControls.js'
-import { surfaceIdentifier } from './SurfaceIdentifier.js'
-import { cylinderSurfaceHelper } from './CylinderSurfaceHelper.js'
-import { simpleCylinderDetector } from './SimpleCylinderDetector.js'
 
 /**
  * 表面文字管理器主控制器
@@ -66,12 +66,12 @@ export class SurfaceTextManager {
    */
   setTargetMeshes (meshes) {
     this.targetMeshes = meshes.filter(m => m && m.isMesh)
-    
+
     // 注册所有网格到表面标识器
     this.targetMeshes.forEach(mesh => {
       surfaceIdentifier.registerMesh(mesh)
     })
-    
+
     console.log('已设置目标网格数量:', this.targetMeshes.length)
   }
 
@@ -463,22 +463,46 @@ export class SurfaceTextManager {
 
         // 创建一个用于布尔操作的文字几何体副本
         const textGeometryForCSG = textObj.geometry.clone()
-        
+
         // 🔧 关键修复：检测是否是圆柱面文字
         const isCylinderText = textObj.surfaceInfo?.surfaceType === 'cylinder'
-        
+
         if (isCylinderText) {
           // 🔧 圆柱面文字：几何体已经在世界坐标系
-          // 需要先向内偏移（在世界坐标系中），然后再转换到目标网格的局部坐标系
           const cylinderInfo = textObj.surfaceInfo.cylinderInfo
-          if (cylinderInfo) {
-            // 在世界坐标系中向内偏移
-            this.offsetCylinderTextInward(textGeometryForCSG, cylinderInfo, textObj.config.thickness || 0.5)
-          }
-          
-          // 转换到目标网格的局部坐标系
+
+          // 🔧 调试：打印变换前的几何体边界框
+          textGeometryForCSG.computeBoundingBox()
+          const bboxBefore = textGeometryForCSG.boundingBox
+          console.log('[DEBUG] 文字几何体边界框（世界坐标，变换前）:', {
+            min: `(${bboxBefore.min.x.toFixed(2)}, ${bboxBefore.min.y.toFixed(2)}, ${bboxBefore.min.z.toFixed(2)})`,
+            max: `(${bboxBefore.max.x.toFixed(2)}, ${bboxBefore.max.y.toFixed(2)}, ${bboxBefore.max.z.toFixed(2)})`
+          })
+
+          // 🔧 关键修复：先将文字几何体转换到局部坐标系
           const targetInverseMatrix = new THREE.Matrix4().copy(textObj.targetMesh.matrixWorld).invert()
           textGeometryForCSG.applyMatrix4(targetInverseMatrix)
+
+          // � 调试：试打印转换到局部坐标系后的边界框
+          textGeometryForCSG.computeBoundingBox()
+          const bboxLocal = textGeometryForCSG.boundingBox
+          console.log('[DEBUG] 文字几何体边界框（局部坐标，转换后）:', {
+            min: `(${bboxLocal.min.x.toFixed(2)}, ${bboxLocal.min.y.toFixed(2)}, ${bboxLocal.min.z.toFixed(2)})`,
+            max: `(${bboxLocal.max.x.toFixed(2)}, ${bboxLocal.max.y.toFixed(2)}, ${bboxLocal.max.z.toFixed(2)})`
+          })
+
+          // 🔧 调试：打印目标几何体的边界框
+          currentGeometry.computeBoundingBox()
+          const targetBbox = currentGeometry.boundingBox
+          console.log('[DEBUG] 目标几何体边界框（局部坐标）:', {
+            min: `(${targetBbox.min.x.toFixed(2)}, ${targetBbox.min.y.toFixed(2)}, ${targetBbox.min.z.toFixed(2)})`,
+            max: `(${targetBbox.max.x.toFixed(2)}, ${targetBbox.max.y.toFixed(2)}, ${targetBbox.max.z.toFixed(2)})`
+          })
+
+          if (cylinderInfo) {
+            // 不做偏移
+            console.log('[DEBUG] reapply: 不做偏移')
+          }
         } else {
           // 平面文字：先应用网格变换到世界坐标系，再转换到目标网格的局部坐标系
           textGeometryForCSG.applyMatrix4(textObj.mesh.matrixWorld)
@@ -540,10 +564,10 @@ export class SurfaceTextManager {
     try {
       // 检测表面类型
       const surfaceInfo = this.analyzeSurface(faceInfo)
-      
+
       // 生成文字几何体（根据表面类型选择生成方式）
       const geometry = await this.geometryGenerator.generate(
-        content, 
+        content,
         this.config.defaultTextConfig,
         surfaceInfo
       )
@@ -619,38 +643,38 @@ export class SurfaceTextManager {
    * @param {Object} faceInfo - 面信息
    * @returns {Object|null} 表面信息
    */
-  analyzeSurface(faceInfo) {
+  analyzeSurface (faceInfo) {
     const { mesh } = faceInfo
-    
+
     console.log('🔍 开始表面分析:', {
       meshName: mesh.name || 'Unnamed',
       geometryType: mesh.geometry.type,
       vertexCount: mesh.geometry.attributes.position?.count || 0
     })
-    
+
     // 🚀 使用简单可靠的检测器
     // 🔧 关键修复：传递mesh对象以获取世界坐标转换
     console.log('🚀 尝试简单圆柱检测器...')
     const simpleCylinderInfo = simpleCylinderDetector.detectCylinder(mesh.geometry, mesh)
-    
+
     if (simpleCylinderInfo && simpleCylinderDetector.quickValidate(simpleCylinderInfo)) {
       console.log('✅ 简单检测器成功识别圆柱面!', {
         confidence: (simpleCylinderInfo.confidence * 100).toFixed(1) + '%',
         radius: simpleCylinderInfo.radius.toFixed(2),
         height: simpleCylinderInfo.height.toFixed(2)
       })
-      
+
       return {
         surfaceType: 'cylinder',
         cylinderInfo: simpleCylinderInfo,
         attachPoint: faceInfo.point.clone()
       }
     }
-    
+
     // 🔄 备用：使用原来的复杂检测器
     console.log('🔄 简单检测器失败，尝试复杂检测器...')
     const cylinderInfo = cylinderSurfaceHelper.detectCylinder(mesh.geometry)
-    
+
     if (cylinderInfo) {
       console.log('圆柱面检测结果:', {
         confidence: (cylinderInfo.confidence * 100).toFixed(1) + '%',
@@ -658,11 +682,11 @@ export class SurfaceTextManager {
         height: cylinderInfo.height.toFixed(2),
         passThreshold: cylinderInfo.confidence > 0.3
       })
-      
+
       // 使用更低的阈值
       if (cylinderInfo.confidence > 0.3) {
         console.log('✅ 复杂检测器识别圆柱面')
-        
+
         return {
           surfaceType: 'cylinder',
           cylinderInfo: cylinderInfo,
@@ -674,7 +698,7 @@ export class SurfaceTextManager {
     } else {
       console.log('❌ 复杂检测器也未检测到圆柱面')
     }
-    
+
     // 默认为平面
     console.log('📝 使用平面模式')
     return {
@@ -689,17 +713,17 @@ export class SurfaceTextManager {
    * @param {Object} faceInfo - 面信息
    * @param {Object} surfaceInfo - 表面信息
    */
-  positionTextOnCylinder(textMesh, faceInfo, surfaceInfo) {
+  positionTextOnCylinder (textMesh, faceInfo, surfaceInfo) {
     console.log('🎯 圆柱面文字定位')
-    
+
     // 🔧 重要：对于圆柱面文字，几何体变换已在 CurvedTextGeometry 中完成
     // 几何体已经被变换到正确的世界坐标位置
     // 这里只需要将网格放在原点，不需要额外的位置或旋转变换
-    
+
     textMesh.position.set(0, 0, 0)
     textMesh.rotation.set(0, 0, 0)
     textMesh.scale.set(1, 1, 1)
-    
+
     console.log('✅ 圆柱面文字定位完成 - 网格位置归零（几何体已包含位置信息）')
   }
 
@@ -709,64 +733,130 @@ export class SurfaceTextManager {
    * @param {Object} cylinderInfo - 圆柱信息
    * @param {number} distance - 向内移动的距离
    */
-  moveVerticesInward(geometry, cylinderInfo, distance) {
+  moveVerticesInward (geometry, cylinderInfo, distance) {
     const { center, axis } = cylinderInfo
     const positions = geometry.attributes.position
     const positionArray = positions.array
-    
+
     console.log('[DEBUG] moveVerticesInward 开始:', {
       center: `(${center.x}, ${center.y}, ${center.z})`,
       axis: `(${axis.x}, ${axis.y}, ${axis.z})`,
       distance: distance,
       vertexCount: positionArray.length / 3
     })
-    
+
     // 打印前3个顶点的原始位置
     console.log('[DEBUG] 移动前顶点示例:', {
       v0: `(${positionArray[0].toFixed(2)}, ${positionArray[1].toFixed(2)}, ${positionArray[2].toFixed(2)})`,
       v1: `(${positionArray[3].toFixed(2)}, ${positionArray[4].toFixed(2)}, ${positionArray[5].toFixed(2)})`,
       v2: `(${positionArray[6].toFixed(2)}, ${positionArray[7].toFixed(2)}, ${positionArray[8].toFixed(2)})`
     })
-    
+
     let movedCount = 0
-    
+
     for (let i = 0; i < positionArray.length; i += 3) {
       const x = positionArray[i]
       const y = positionArray[i + 1]
       const z = positionArray[i + 2]
-      
+
       const vertex = new THREE.Vector3(x, y, z)
       const toVertex = vertex.clone().sub(center)
       const axialComponent = toVertex.dot(axis)
       const radialVector = toVertex.clone().sub(axis.clone().multiplyScalar(axialComponent))
       const radialLength = radialVector.length()
-      
+
       if (radialLength > 0.001) {
         // 径向单位向量
         const radialDir = radialVector.clone().normalize()
-        
+
         // 向内移动（沿径向反方向）
         const offset = radialDir.clone().multiplyScalar(distance)
-        
+
         positionArray[i] = x - offset.x
         positionArray[i + 1] = y - offset.y
         positionArray[i + 2] = z - offset.z
-        
+
         movedCount++
       }
     }
-    
+
     positions.needsUpdate = true
-    
+
     // 打印前3个顶点的新位置
     console.log('[DEBUG] 移动后顶点示例:', {
       v0: `(${positionArray[0].toFixed(2)}, ${positionArray[1].toFixed(2)}, ${positionArray[2].toFixed(2)})`,
       v1: `(${positionArray[3].toFixed(2)}, ${positionArray[4].toFixed(2)}, ${positionArray[5].toFixed(2)})`,
       v2: `(${positionArray[6].toFixed(2)}, ${positionArray[7].toFixed(2)}, ${positionArray[8].toFixed(2)})`
     })
-    
+
     console.log('[DEBUG] moveVerticesInward 完成, 移动了', movedCount, '个顶点')
-    
+
+    geometry.computeVertexNormals()
+    geometry.computeBoundingBox()
+    geometry.computeBoundingSphere()
+  }
+
+  /**
+   * 将文字几何体沿XZ平面径向向外偏移（假设圆柱轴是Y轴）
+   * @param {THREE.BufferGeometry} geometry - 几何体（局部坐标系）
+   * @param {number} distance - 偏移距离
+   */
+  moveTextOutwardXZ (geometry, distance) {
+    const positions = geometry.attributes.position
+    const positionArray = positions.array
+
+    for (let i = 0; i < positionArray.length; i += 3) {
+      const x = positionArray[i]
+      const z = positionArray[i + 2]
+
+      // 计算XZ平面上的径向距离
+      const radialDist = Math.sqrt(x * x + z * z)
+
+      if (radialDist > 0.001) {
+        // 沿径向向外偏移
+        const scale = (radialDist + distance) / radialDist
+        positionArray[i] = x * scale
+        positionArray[i + 2] = z * scale
+      }
+    }
+
+    positions.needsUpdate = true
+    geometry.computeVertexNormals()
+    geometry.computeBoundingBox()
+  }
+
+  /**
+   * 将文字几何体沿径向移动（向外为正，向内为负）
+   * @param {THREE.BufferGeometry} geometry - 几何体（局部坐标系）
+   * @param {Object} cylinderInfo - 圆柱信息（局部坐标系）
+   * @param {number} distance - 移动距离（正值向外，负值向内）
+   */
+  moveTextRadially (geometry, cylinderInfo, distance) {
+    const { center, axis } = cylinderInfo
+    const positions = geometry.attributes.position
+    const positionArray = positions.array
+
+    for (let i = 0; i < positionArray.length; i += 3) {
+      const x = positionArray[i]
+      const y = positionArray[i + 1]
+      const z = positionArray[i + 2]
+
+      const vertex = new THREE.Vector3(x, y, z)
+      const toVertex = vertex.clone().sub(center)
+      const axialComponent = toVertex.dot(axis)
+      const radialVector = toVertex.clone().sub(axis.clone().multiplyScalar(axialComponent))
+      const radialLength = radialVector.length()
+
+      if (radialLength > 0.001) {
+        const radialDir = radialVector.clone().normalize()
+        // 向外移动（正值）或向内移动（负值）
+        positionArray[i] = x + radialDir.x * distance
+        positionArray[i + 1] = y + radialDir.y * distance
+        positionArray[i + 2] = z + radialDir.z * distance
+      }
+    }
+
+    positions.needsUpdate = true
     geometry.computeVertexNormals()
     geometry.computeBoundingBox()
     geometry.computeBoundingSphere()
@@ -775,21 +865,20 @@ export class SurfaceTextManager {
   /**
    * 将圆柱面文字几何体扩展用于内嵌布尔操作
    * 内嵌模式需要文字从圆柱表面向内延伸
+   * 
+   * 🔧 修复说明：
+   * 原来的方法试图通过顶点到圆柱轴的距离来区分内外表面，但这在弯曲文字几何体上不可靠。
+   * 新方法：直接将文字几何体沿径向"拉伸"，使其从圆柱外表面穿透到内部。
+   * 
    * @param {THREE.BufferGeometry} geometry - 文字几何体（世界坐标系）
    * @param {Object} cylinderInfo - 圆柱信息（世界坐标系）
    * @param {number} depth - 内嵌深度
    */
-  offsetCylinderTextInward(geometry, cylinderInfo, depth) {
+  offsetCylinderTextInward (geometry, cylinderInfo, depth) {
     const { center, axis, radius } = cylinderInfo
     const positions = geometry.attributes.position
     const positionArray = positions.array
-    
-    // 统计信息
-    let outerCount = 0
-    let innerCount = 0
-    let minRadius = Infinity
-    let maxRadius = -Infinity
-    
+
     console.log('[DEBUG] 圆柱面文字内嵌扩展 - 开始:', {
       center: `(${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`,
       axis: `(${axis.x.toFixed(2)}, ${axis.y.toFixed(2)}, ${axis.z.toFixed(2)})`,
@@ -797,102 +886,112 @@ export class SurfaceTextManager {
       depth: depth,
       vertexCount: positionArray.length / 3
     })
-    
+
     // 首先分析所有顶点的径向分布
+    let minRadius = Infinity
+    let maxRadius = -Infinity
+
     for (let i = 0; i < positionArray.length; i += 3) {
       const x = positionArray[i]
       const y = positionArray[i + 1]
       const z = positionArray[i + 2]
-      
+
       const vertex = new THREE.Vector3(x, y, z)
       const toVertex = vertex.clone().sub(center)
       const axialComponent = toVertex.dot(axis)
       const radialVector = toVertex.clone().sub(axis.clone().multiplyScalar(axialComponent))
       const currentRadius = radialVector.length()
-      
+
       minRadius = Math.min(minRadius, currentRadius)
       maxRadius = Math.max(maxRadius, currentRadius)
     }
-    
+
+    const textThickness = maxRadius - minRadius
+
     console.log('[DEBUG] 顶点径向分布:', {
       minRadius: minRadius.toFixed(3),
       maxRadius: maxRadius.toFixed(3),
       cylinderRadius: radius.toFixed(3),
-      textThickness: (maxRadius - minRadius).toFixed(3)
+      textThickness: textThickness.toFixed(3)
     })
-    
-    // 计算阈值：使用最大和最小半径的中点来区分内外表面
-    const radiusThreshold = (minRadius + maxRadius) / 2
-    
+
+    // 🔧 新策略：将文字几何体的径向范围映射到穿透圆柱表面的范围
+    // 原始范围: [minRadius, maxRadius] (文字在圆柱外表面)
+    // 目标范围: [radius - depth, radius + 突出量]
+    // 这样文字会从圆柱表面稍微突出，同时向内延伸到指定深度
+
+    const protrusion = 0.5  // 🔧 增加突出量，确保穿透
+    const targetOuterRadius = radius + protrusion  // 外表面目标半径
+    const targetInnerRadius = radius - depth - 1.0  // 🔧 增加内嵌深度，确保穿透
+
     // 记录修改前后的一些顶点位置
     const sampleBefore = []
     const sampleAfter = []
-    
+
     for (let i = 0; i < positionArray.length; i += 3) {
       const x = positionArray[i]
       const y = positionArray[i + 1]
       const z = positionArray[i + 2]
-      
+
       // 记录前10个顶点的原始位置
       if (i < 30) {
         sampleBefore.push({ x: x.toFixed(2), y: y.toFixed(2), z: z.toFixed(2) })
       }
-      
+
       const vertex = new THREE.Vector3(x, y, z)
       const toVertex = vertex.clone().sub(center)
       const axialComponent = toVertex.dot(axis)
       const radialVector = toVertex.clone().sub(axis.clone().multiplyScalar(axialComponent))
       const currentRadius = radialVector.length()
-      
+
       if (currentRadius > 0.001) {
         const radialDir = radialVector.clone().normalize()
-        
-        // 使用计算出的阈值来判断内外表面
-        const isOuterSurface = currentRadius >= radiusThreshold
-        
-        let targetRadius
-        if (isOuterSurface) {
-          // 外表面顶点：保持在圆柱表面稍微突出的位置
-          targetRadius = radius + 0.2
-          outerCount++
-        } else {
-          // 内表面顶点：向内延伸到圆柱内部
-          targetRadius = radius - depth * 3 - 1.0  // 更深的内嵌
-          innerCount++
+
+        // 🔧 线性映射：将原始径向位置映射到目标范围
+        // t = 0 表示最内层顶点，t = 1 表示最外层顶点
+        let t = 0.5  // 默认中间位置
+        if (textThickness > 0.001) {
+          t = (currentRadius - minRadius) / textThickness
         }
-        
+
+        // 目标半径 = 内表面半径 + t * (外表面半径 - 内表面半径)
+        const targetRadius = targetInnerRadius + t * (targetOuterRadius - targetInnerRadius)
+
         // 计算新位置
         const axialPosition = center.clone().add(axis.clone().multiplyScalar(axialComponent))
         const newPosition = axialPosition.clone().add(radialDir.clone().multiplyScalar(targetRadius))
-        
+
         positionArray[i] = newPosition.x
         positionArray[i + 1] = newPosition.y
         positionArray[i + 2] = newPosition.z
-        
+
         // 记录前10个顶点的新位置
         if (i < 30) {
           sampleAfter.push({ x: newPosition.x.toFixed(2), y: newPosition.y.toFixed(2), z: newPosition.z.toFixed(2) })
         }
       }
     }
-    
+
     console.log('[DEBUG] 顶点修改示例 - 前:', sampleBefore)
     console.log('[DEBUG] 顶点修改示例 - 后:', sampleAfter)
-    
+
     // 标记需要更新
     positions.needsUpdate = true
-    
+
     // 重新计算法向量和边界框
     geometry.computeVertexNormals()
     geometry.computeBoundingBox()
     geometry.computeBoundingSphere()
-    
+
+    // 打印变换后的边界框
+    const bbox = geometry.boundingBox
     console.log('[DEBUG] 圆柱面文字内嵌扩展完成:', {
-      outerVertices: outerCount,
-      innerVertices: innerCount,
-      radiusThreshold: radiusThreshold.toFixed(3),
-      outerTargetRadius: (radius + 0.2).toFixed(3),
-      innerTargetRadius: (radius - depth * 3 - 1.0).toFixed(3)
+      targetOuterRadius: targetOuterRadius.toFixed(3),
+      targetInnerRadius: targetInnerRadius.toFixed(3),
+      newBoundingBox: {
+        min: `(${bbox.min.x.toFixed(2)}, ${bbox.min.y.toFixed(2)}, ${bbox.min.z.toFixed(2)})`,
+        max: `(${bbox.max.x.toFixed(2)}, ${bbox.max.y.toFixed(2)}, ${bbox.max.z.toFixed(2)})`
+      }
     })
   }
 
@@ -902,19 +1001,19 @@ export class SurfaceTextManager {
    * @param {Object} cylinderInfo - 圆柱信息
    * @returns {THREE.Vector3} 切线向量
    */
-  calculateCylinderTangent(theta, cylinderInfo) {
+  calculateCylinderTangent (theta, cylinderInfo) {
     const { axis } = cylinderInfo
-    
+
     // 获取垂直于轴的参考方向
     const refDirection = cylinderSurfaceHelper.getPerpendicularVector(axis)
-    
+
     // 计算切线方向（垂直于径向，沿圆周）
     const radialDirection = refDirection.clone()
       .multiplyScalar(Math.cos(theta))
       .add(refDirection.clone().cross(axis).multiplyScalar(Math.sin(theta)))
-    
+
     const tangent = radialDirection.cross(axis).normalize()
-    
+
     return tangent
   }
 
@@ -1129,17 +1228,17 @@ export class SurfaceTextManager {
 
             // 创建一个用于布尔操作的文字几何体副本
             const textGeometryForCSG = otherTextObj.geometry.clone()
-            
+
             // 🔧 关键修复：检测是否是圆柱面文字
             const isCylinderText = otherTextObj.surfaceInfo?.surfaceType === 'cylinder'
-            
+
             if (isCylinderText) {
               // 🔧 圆柱面文字需要向内偏移才能正确进行布尔减法
               const cylinderInfo = otherTextObj.surfaceInfo.cylinderInfo
               if (cylinderInfo) {
                 this.offsetCylinderTextInward(textGeometryForCSG, cylinderInfo, otherTextObj.config.thickness || 0.5)
               }
-              
+
               // 圆柱面文字：几何体已经在世界坐标系
               const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert()
               textGeometryForCSG.applyMatrix4(targetInverseMatrix)
@@ -1370,8 +1469,18 @@ export class SurfaceTextManager {
 
     if (oldMode === mode) return // 模式相同，无需切换
 
+    // 🔧 关键检查：圆柱面文字不支持内嵌模式
+    // 原因：弯曲变换后的文字几何体不是闭合流形（manifold），无法进行布尔运算
+    const isCylinderText = textObject.surfaceInfo?.surfaceType === 'cylinder'
+    if (mode === 'engraved' && isCylinderText) {
+      const errorMsg = '圆柱面文字暂不支持内嵌模式（弯曲几何体无法进行布尔运算）'
+      console.warn(errorMsg)
+      this.emit('error', { type: 'modeSwitch', error: new Error(errorMsg), textId })
+      throw new Error(errorMsg)
+    }
+
     try {
-      // 🔧 关键修复：先更新 mode，这样 updateMeshMaterials 才能正确识别内嵌文字
+      // 先更新 mode，这样 updateMeshMaterials 才能正确识别内嵌文字
       textObject.mode = mode
 
       if (mode === 'engraved') {
@@ -1388,6 +1497,8 @@ export class SurfaceTextManager {
       this.emit('textModeChanged', { textObject, oldMode, newMode: mode })
 
     } catch (error) {
+      // 切换失败时恢复原来的模式
+      textObject.mode = oldMode
       console.error('切换文字模式失败:', error)
       this.emit('error', { type: 'modeSwitch', error, textId })
       throw error
@@ -1396,6 +1507,7 @@ export class SurfaceTextManager {
 
   /**
    * 应用内嵌模式（支持多个文字）
+   * 注意：仅支持平面文字，圆柱面文字在 switchTextMode 中已被拦截
    * @param {Object} textObject - 文字对象
    */
   async applyEngravingMode (textObject) {
@@ -1405,14 +1517,6 @@ export class SurfaceTextManager {
       textObject.originalTargetMaterial = Array.isArray(textObject.targetMesh.material)
         ? textObject.targetMesh.material[0]
         : textObject.targetMesh.material
-
-      console.log('[DEBUG] 保存原始几何体:', {
-        vertexCount: textObject.originalTargetGeometry.attributes.position?.count,
-        hasIndex: !!textObject.originalTargetGeometry.index,
-        materialType: typeof textObject.originalTargetMaterial
-      })
-    } else {
-      console.log('[DEBUG] 原始几何体已存在，跳过保存')
     }
 
     try {
@@ -1420,51 +1524,72 @@ export class SurfaceTextManager {
       textObject.mesh.updateMatrixWorld(true)
 
       // 创建一个用于布尔操作的文字几何体副本
-      const textGeometryForCSG = textObject.geometry.clone()
-      
+      let textGeometryForCSG = textObject.geometry.clone()
+
       // 🔧 关键修复：检测是否是圆柱面文字
       // 圆柱面文字的几何体已经在世界坐标系中（在CurvedTextGeometry中完成变换）
       // 网格的position/rotation被设为零，所以matrixWorld是单位矩阵
       const isCylinderText = textObject.surfaceInfo?.surfaceType === 'cylinder'
-      
+
       if (isCylinderText) {
         console.log('[DEBUG] 圆柱面文字内嵌模式')
-        
+
         const cylinderInfo = textObject.surfaceInfo.cylinderInfo
         if (cylinderInfo) {
-          // 🔧 关键：文字需要穿透圆柱表面
-          // 原始文字：外表面在 radius+thickness (5.5)，内表面在 radius (5.0)
-          // 移动 thickness 后：外表面在 radius (5.0)，内表面在 radius-thickness (4.5)
-          // 这样文字刚好从圆柱表面穿透到内部
-          const thickness = textObject.config.thickness || 0.5
-          const moveDistance = thickness
-          
-          console.log('[DEBUG] 内嵌移动距离:', moveDistance, '厚度:', thickness)
-          
-          this.moveVerticesInward(textGeometryForCSG, cylinderInfo, moveDistance)
-          
-          // 🔧 调试：显示移动后的几何体
-          const debugMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xff0000, 
-            wireframe: true
+          // 🔧 调试：打印圆柱信息（世界坐标系）
+          console.log('[DEBUG] 圆柱信息（世界坐标系）:', {
+            center: `(${cylinderInfo.center.x.toFixed(2)}, ${cylinderInfo.center.y.toFixed(2)}, ${cylinderInfo.center.z.toFixed(2)})`,
+            axis: `(${cylinderInfo.axis.x.toFixed(2)}, ${cylinderInfo.axis.y.toFixed(2)}, ${cylinderInfo.axis.z.toFixed(2)})`,
+            radius: cylinderInfo.radius.toFixed(2)
           })
-          const debugMesh = new THREE.Mesh(textGeometryForCSG.clone(), debugMaterial)
-          debugMesh.name = 'DEBUG_MovedGeometry'
-          this.scene.add(debugMesh)
-          console.log('[DEBUG] 已添加移动后的几何体可视化（红色线框）')
-          
-          // 打印边界框
+
+          // 🔧 调试：打印变换前的几何体边界框
           textGeometryForCSG.computeBoundingBox()
-          const bbox = textGeometryForCSG.boundingBox
-          console.log('[DEBUG] 移动后几何体边界框（世界坐标）:', {
-            min: `(${bbox.min.x.toFixed(2)}, ${bbox.min.y.toFixed(2)}, ${bbox.min.z.toFixed(2)})`,
-            max: `(${bbox.max.x.toFixed(2)}, ${bbox.max.y.toFixed(2)}, ${bbox.max.z.toFixed(2)})`
+          const bboxBefore = textGeometryForCSG.boundingBox
+          console.log('[DEBUG] 文字几何体边界框（世界坐标，变换前）:', {
+            min: `(${bboxBefore.min.x.toFixed(2)}, ${bboxBefore.min.y.toFixed(2)}, ${bboxBefore.min.z.toFixed(2)})`,
+            max: `(${bboxBefore.max.x.toFixed(2)}, ${bboxBefore.max.y.toFixed(2)}, ${bboxBefore.max.z.toFixed(2)})`
           })
         }
-        
-        // 转换到目标网格的局部坐标系
+
+        // 🔧 关键修复：先将文字几何体转换到局部坐标系
         const targetInverseMatrix = new THREE.Matrix4().copy(textObject.targetMesh.matrixWorld).invert()
         textGeometryForCSG.applyMatrix4(targetInverseMatrix)
+
+        // � 调试：打印转示换到局部坐标系后的边界框
+        textGeometryForCSG.computeBoundingBox()
+        const bboxLocal = textGeometryForCSG.boundingBox
+        console.log('[DEBUG] 文字几何体边界框（局部坐标，转换后）:', {
+          min: `(${bboxLocal.min.x.toFixed(2)}, ${bboxLocal.min.y.toFixed(2)}, ${bboxLocal.min.z.toFixed(2)})`,
+          max: `(${bboxLocal.max.x.toFixed(2)}, ${bboxLocal.max.y.toFixed(2)}, ${bboxLocal.max.z.toFixed(2)})`
+        })
+
+        // 🔧 调试：打印目标几何体的边界框
+        textObject.targetMesh.geometry.computeBoundingBox()
+        const targetBbox = textObject.targetMesh.geometry.boundingBox
+        console.log('[DEBUG] 目标几何体边界框（局部坐标）:', {
+          min: `(${targetBbox.min.x.toFixed(2)}, ${targetBbox.min.y.toFixed(2)}, ${targetBbox.min.z.toFixed(2)})`,
+          max: `(${targetBbox.max.x.toFixed(2)}, ${targetBbox.max.y.toFixed(2)}, ${targetBbox.max.z.toFixed(2)})`
+        })
+
+        // 🔧 关键修复：将圆柱信息也转换到局部坐标系
+        if (cylinderInfo) {
+          // 🔧 测试：用一个简单的立方体代替文字几何体，验证布尔操作是否正常
+          const testBoxSize = 1
+          const testBox = new THREE.BoxGeometry(testBoxSize, testBoxSize, testBoxSize)
+
+          // 把立方体放到文字的位置（使用文字几何体的中心）
+          textGeometryForCSG.computeBoundingBox()
+          const textCenter = new THREE.Vector3()
+          textGeometryForCSG.boundingBox.getCenter(textCenter)
+          testBox.translate(textCenter.x, textCenter.y, textCenter.z)
+
+          // 用立方体替换文字几何体
+          textGeometryForCSG.dispose()
+          textGeometryForCSG = testBox
+
+          console.log('[DEBUG] 使用测试立方体代替文字，位置:', textCenter)
+        }
       } else {
         console.log('[DEBUG] 平面文字内嵌模式 - 需要应用网格变换')
         // 平面文字：先应用网格变换到世界坐标系，再转换到目标网格的局部坐标系
@@ -1474,8 +1599,16 @@ export class SurfaceTextManager {
       }
 
       // 执行布尔减法操作，传入 textId 用于标识
+      // 🔧 重要：使用原始几何体进行布尔操作，而不是可能已被修改的当前几何体
+      const targetGeometryForCSG = textObject.originalTargetGeometry.clone()
+
+      console.log('[DEBUG] 准备执行布尔操作:', {
+        targetVertexCount: targetGeometryForCSG.attributes.position?.count,
+        toolVertexCount: textGeometryForCSG.attributes.position?.count
+      })
+
       const result = await this.booleanOperator.subtract(
-        textObject.targetMesh.geometry,
+        targetGeometryForCSG,
         textGeometryForCSG,
         null,
         { textId: textObject.id }
@@ -1486,16 +1619,58 @@ export class SurfaceTextManager {
         hasGeometry: !!(result && result.geometry),
         hasMaterials: !!(result && result.materials),
         geometryType: result?.geometry?.type,
-        vertexCount: result?.geometry?.attributes?.position?.count
+        vertexCount: result?.geometry?.attributes?.position?.count,
+        groupsCount: result?.geometry?.groups?.length || 0
       })
 
       if (result && result.geometry) {
+        // 🔧 调试：比较原始几何体和结果几何体的顶点数
+        const originalVertexCount = textObject.originalTargetGeometry.attributes.position?.count || 0
+        const resultVertexCount = result.geometry.attributes.position?.count || 0
+        console.log('[DEBUG] 顶点数变化:', {
+          original: originalVertexCount,
+          result: resultVertexCount,
+          difference: resultVertexCount - originalVertexCount
+        })
+
+        // 如果顶点数没有变化，说明布尔操作可能没有生效
+        if (resultVertexCount === originalVertexCount) {
+          console.warn('[DEBUG] ⚠️ 顶点数没有变化，布尔操作可能没有生效！')
+        }
+
         // 更新目标网格几何体
         textObject.targetMesh.geometry.dispose()
         textObject.targetMesh.geometry = result.geometry
 
-        // 更新多材质数组（支持多个文字）
-        this.updateMeshMaterials(textObject.targetMesh, textObject)
+        // 🔧 修复：直接使用布尔操作返回的材质
+        // result.materials[0] = 原始表面材质
+        // result.materials[1] = 雕刻区域材质
+        if (result.materials && result.materials.length > 1) {
+          // 使用原始材质的颜色更新布尔操作返回的材质
+          const originalColor = textObject.originalTargetMaterial?.color?.getHex() || 0x409eff
+          result.materials[0].color.setHex(originalColor)
+
+          // 雕刻区域使用深色
+          const r = ((originalColor >> 16) & 0xff) * 0.4
+          const g = ((originalColor >> 8) & 0xff) * 0.4
+          const b = (originalColor & 0xff) * 0.4
+          const engravedColor = (Math.floor(r) << 16) | (Math.floor(g) << 8) | Math.floor(b)
+          result.materials[1].color.setHex(engravedColor)
+          result.materials[1].userData = { textId: textObject.id, isEngravedText: true }
+
+          // 设置多材质
+          textObject.targetMesh.material = result.materials
+          textObject.engravedMaterial = result.materials[1]
+
+          console.log('[DEBUG] 已应用布尔操作返回的材质:', {
+            materialsCount: result.materials.length,
+            originalColor: originalColor.toString(16),
+            engravedColor: engravedColor.toString(16)
+          })
+        } else {
+          // 回退到旧方法
+          this.updateMeshMaterials(textObject.targetMesh, textObject)
+        }
 
         // 隐藏文字网格（因为已经雕刻到目标网格中）
         textObject.mesh.visible = false
@@ -1542,10 +1717,10 @@ export class SurfaceTextManager {
 
       // 获取原始颜色
       const originalColor = originalMaterial.color?.getHex() || 0x409eff
-      
+
       // 🔧 调试：使用明显的红色来标识内嵌区域
       const engravedColor = 0xff0000  // 红色，方便调试
-      
+
       // 原来的深色计算（调试完成后恢复）
       // const r = ((originalColor >> 16) & 0xff) * 0.6
       // const g = ((originalColor >> 8) & 0xff) * 0.6
@@ -1563,7 +1738,7 @@ export class SurfaceTextManager {
         // 更新颜色
         textObj.engravedMaterial.color.setHex(engravedColor)
       }
-      
+
       textObj.engravedMaterial.userData = {
         textId: textObj.id,
         isEngravedText: true,
@@ -1627,17 +1802,17 @@ export class SurfaceTextManager {
 
             // 创建一个用于布尔操作的文字几何体副本
             const textGeometryForCSG = otherTextObj.geometry.clone()
-            
+
             // 🔧 关键修复：检测是否是圆柱面文字
             const isCylinderText = otherTextObj.surfaceInfo?.surfaceType === 'cylinder'
-            
+
             if (isCylinderText) {
               // 🔧 圆柱面文字需要向内偏移才能正确进行布尔减法
               const cylinderInfo = otherTextObj.surfaceInfo.cylinderInfo
               if (cylinderInfo) {
                 this.offsetCylinderTextInward(textGeometryForCSG, cylinderInfo, otherTextObj.config.thickness || 0.5)
               }
-              
+
               // 圆柱面文字：几何体已经在世界坐标系
               const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert()
               textGeometryForCSG.applyMatrix4(targetInverseMatrix)
@@ -1850,9 +2025,9 @@ export class SurfaceTextManager {
    * 导出文字配置（符合config.js格式）
    * @returns {Object} 文字配置数据
    */
-  exportTextConfig() {
+  exportTextConfig () {
     const texts = []
-    
+
     this.textObjects.forEach((textObject, textId) => {
       const config = {
         // id 
@@ -1880,10 +2055,10 @@ export class SurfaceTextManager {
         // 在那个表面上添加文字
         attachmentSurface: textObject.surfaceId
       }
-      
+
       texts.push(config)
     })
-    
+
     return texts
   }
 
@@ -1891,12 +2066,12 @@ export class SurfaceTextManager {
    * 导入文字配置（从config.js格式）
    * @param {Array} textsConfig - 文字配置数组
    */
-  async importTextConfig(textsConfig) {
+  async importTextConfig (textsConfig) {
     if (!Array.isArray(textsConfig)) {
       console.warn('文字配置格式错误')
       return
     }
-    
+
     for (const textConfig of textsConfig) {
       try {
         // 恢复表面信息
@@ -1905,7 +2080,7 @@ export class SurfaceTextManager {
           console.warn('无法恢复表面信息:', textConfig.attachmentSurface)
           continue
         }
-        
+
         // 转换配置格式
         const config = {
           font: textConfig.type || 'helvetiker',
@@ -1913,11 +2088,11 @@ export class SurfaceTextManager {
           thickness: (textConfig.depth || 3) / 1000, // 毫米转米
           color: parseInt(textConfig.color?.replace('#', '') || 'ff00ff', 16)
         }
-        
+
         // 创建文字对象
         const textId = await this.createTextObject(textConfig.text, faceInfo)
         const textObject = this.textObjects.get(textId)
-        
+
         if (textObject) {
           // 应用位置和旋转
           if (textConfig.position) {
@@ -1926,17 +2101,17 @@ export class SurfaceTextManager {
           if (textConfig.rotate) {
             textObject.mesh.rotation.fromArray(textConfig.rotate)
           }
-          
+
           // 应用效果模式
           if (textConfig.effect === 'Engraved') {
             await this.switchTextMode(textId, 'engraved')
           }
-          
+
           // 更新配置
           textObject.config = { ...textObject.config, ...config }
           textObject.material.color.setHex(config.color)
         }
-        
+
       } catch (error) {
         console.error('导入文字配置失败:', textConfig, error)
       }
@@ -1947,7 +2122,7 @@ export class SurfaceTextManager {
    * 导出完整的表面标识配置
    * @returns {Object} 表面标识配置
    */
-  exportSurfaceConfig() {
+  exportSurfaceConfig () {
     return surfaceIdentifier.exportConfig()
   }
 
@@ -1955,7 +2130,7 @@ export class SurfaceTextManager {
    * 导入表面标识配置
    * @param {Object} config - 表面标识配置
    */
-  importSurfaceConfig(config) {
+  importSurfaceConfig (config) {
     surfaceIdentifier.importConfig(config)
   }
 
