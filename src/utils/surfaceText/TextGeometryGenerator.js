@@ -1,8 +1,7 @@
 import * as THREE from 'three'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
-import { cylinderSurfaceHelper } from './CylinderSurfaceHelper.js'
-import { curvedTextGeometry } from './CurvedTextGeometry.js'
+import { CylinderTextGeometry } from './CylinderTextGeometry.js'
 
 /**
  * 文字几何体生成器
@@ -13,6 +12,9 @@ export class TextGeometryGenerator {
     this.fontLoader = new FontLoader()
     this.loadedFonts = new Map() // 字体缓存
     this.defaultFont = null
+
+    // 新的圆柱面文字生成器（生成闭合流形几何体）
+    this.cylinderTextGenerator = new CylinderTextGeometry()
 
     // 预加载默认字体
     this.loadDefaultFont()
@@ -199,23 +201,29 @@ export class TextGeometryGenerator {
 
   /**
    * 生成圆柱面拟合文字
+   * 使用新的圆柱坐标映射方法，生成闭合流形几何体
    * @param {string} text - 文字内容
    * @param {THREE.Font} font - 字体
    * @param {Object} surfaceInfo - 表面信息
    * @param {Object} config - 配置
    * @returns {THREE.BufferGeometry} 圆柱面文字几何体
    */
-  generateCylinderText(text, font, surfaceInfo, config) {
+  generateCylinderText (text, font, surfaceInfo, config) {
     const { cylinderInfo, attachPoint } = surfaceInfo
 
-    console.log(`生成圆柱面文字: "${text}"`, {
-      cylinderInfo,
+    console.log(`🔧 生成圆柱面文字: "${text}"`, {
+      cylinderInfo: {
+        center: cylinderInfo.center,
+        axis: cylinderInfo.axis,
+        radius: cylinderInfo.radius
+      },
       attachPoint,
       config
     })
 
-    // 使用弧形文字生成器
-    const geometry = curvedTextGeometry.generateCylinderText(
+    // 使用新的圆柱坐标映射方法
+    // 这种方法保持 TextGeometry 的拓扑结构，生成闭合流形
+    const geometry = this.cylinderTextGenerator.generate(
       text,
       font,
       cylinderInfo,
@@ -223,8 +231,10 @@ export class TextGeometryGenerator {
       config
     )
 
-    console.log(`圆柱面文字几何体生成成功: "${text}"`, {
-      vertices: geometry.attributes.position?.count || 0
+    console.log(`✅ 圆柱面文字几何体生成成功: "${text}"`, {
+      vertices: geometry.attributes.position?.count || 0,
+      isManifold: geometry.userData?.isManifold || false,
+      generatorType: geometry.userData?.generatorType || 'unknown'
     })
 
     return geometry
@@ -237,7 +247,7 @@ export class TextGeometryGenerator {
    * @param {Object} config - 配置
    * @returns {THREE.BufferGeometry} 平面文字几何体
    */
-  generateFlatText(text, font, config) {
+  generateFlatText (text, font, config) {
     // 创建文字几何体参数
     const geometryParams = {
       font: font,

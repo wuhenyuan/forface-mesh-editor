@@ -335,24 +335,7 @@ export default {
       const grid = new THREE.GridHelper(20, 20, 0xcccccc, 0xeeeeee)
       scene.add(grid)
       
-      const lenth = 20;
-
-      // 创建测试立方体
-      const boxGeometry = new THREE.BoxGeometry(lenth, lenth, lenth);
-      const boxMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x409eff,
-        roughness: 0.7,
-        metalness: 0.1
-      })
-      const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial)
-      boxMesh.position.set(0, 0.5*length, 0);
-      boxMesh.name = 'TestBox'
-      boxMesh.castShadow = true
-      boxMesh.receiveShadow = true
-      scene.add(boxMesh)
-      meshes.value.push(boxMesh)
-      
-      // 创建测试圆柱体
+      // 只创建圆柱体用于测试
       const cylinderGeometry = new THREE.CylinderGeometry(5, 5, 15, 256)
       const cylinderMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x67c23a,
@@ -360,27 +343,12 @@ export default {
         metalness: 0.2
       })
       const cylinderMesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial)
-      cylinderMesh.position.set(-20, 7.5, 0)
+      cylinderMesh.position.set(0, 7.5, 0)  // 放在中心位置
       cylinderMesh.name = 'TestCylinder'
       cylinderMesh.castShadow = true
       cylinderMesh.receiveShadow = true
       scene.add(cylinderMesh)
       meshes.value.push(cylinderMesh)
-      
-      // 创建测试球体
-      const sphereGeometry = new THREE.SphereGeometry(6, 16, 12)
-      const sphereMaterial = new THREE.MeshStandardMaterial({
-        color: 0xe6a23c,
-        roughness: 0.5,
-        metalness: 0.3
-      })
-      const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial)
-      sphereMesh.position.set(20, 6, 0)
-      sphereMesh.name = 'TestSphere'
-      sphereMesh.castShadow = true
-      sphereMesh.receiveShadow = true
-      scene.add(sphereMesh)
-      meshes.value.push(sphereMesh)
       
       // 加载STL模型（如果存在）
       // loadSTLModel()
@@ -652,39 +620,50 @@ export default {
     
     // ==================== 文字系统相关函数 ====================
 
-    // 初始化时创建默认可编辑文字
+    // 初始化时创建默认可编辑文字（在圆柱体中间位置）
     const createInitialEditableText = async () => {
       if (!surfaceTextManager || !camera || !scene) return
       if (textObjects.value.length > 0) return
 
       try {
-        // 确保矩阵已更新，方便射线投射
+        // 确保矩阵已更新
         scene.updateMatrixWorld(true)
         camera.updateMatrixWorld(true)
 
-        // 直接用 Three.js Raycaster 从视口中心射线投射
-        const raycaster = new THREE.Raycaster()
-        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera)
-        const intersects = raycaster.intersectObjects(meshes.value, false)
-        
-        if (intersects.length === 0) {
-          console.warn('创建默认文字失败：未找到可用的面信息')
+        // 找到圆柱体
+        const cylinderMesh = meshes.value.find(m => m.name === 'TestCylinder')
+        if (!cylinderMesh) {
+          console.warn('创建默认文字失败：未找到圆柱体')
           return
         }
+
+        // 计算圆柱体中间位置的点（在圆柱体表面）
+        // 圆柱体位置: (0, 7.5, 0), 半径: 5, 高度: 15
+        const cylinderCenter = cylinderMesh.position.clone()
+        const radius = 5
         
-        const hit = intersects[0]
+        // 在圆柱体正面（Z轴正方向）的中间位置
+        const hitPoint = new THREE.Vector3(
+          cylinderCenter.x,
+          cylinderCenter.y,  // 圆柱体中心高度
+          cylinderCenter.z + radius  // 圆柱体表面
+        )
+
+        // 构造 faceInfo
         const faceInfo = {
-          mesh: hit.object,
-          faceIndex: hit.faceIndex,
-          face: hit.face,
-          point: hit.point,
-          distance: hit.distance,
-          uv: hit.uv
+          mesh: cylinderMesh,
+          faceIndex: 0,
+          face: {
+            normal: new THREE.Vector3(0, 0, 1)  // 指向外部
+          },
+          point: hitPoint,
+          distance: 0,
+          uv: new THREE.Vector2(0.5, 0.5)
         }
 
-        const textObject = await surfaceTextManager.createTextObject('012345', faceInfo)
+        const textObject = await surfaceTextManager.createTextObject('TEST', faceInfo)
         
-        // 把文字对象和相关数据挂到 window 上，方便工具栏访问
+        // 把文字对象和相关数据挂到 window 上，方便调试
         window.debugTextData = {
           textObjects: textObjects.value,
           targetMeshes: meshes.value,
@@ -692,7 +671,7 @@ export default {
           selectedTextObject: textObject
         }
         
-        console.log('✅ 默认文字已创建并挂载到 window.debugTextData')
+        console.log('✅ 圆柱面默认文字已创建')
         
       } catch (error) {
         console.error('创建默认文字失败:', error)

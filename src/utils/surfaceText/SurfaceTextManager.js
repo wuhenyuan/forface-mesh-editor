@@ -576,7 +576,7 @@ export class SurfaceTextManager {
       // 使用双面渲染，因为弯曲变换可能导致某些面的法向量翻转
       const material = new THREE.MeshPhongMaterial({
         color: this.config.defaultTextConfig.color,
-        side: THREE.DoubleSide  // 双面渲染，解决弯曲后面丢失问题
+        side: THREE.FrontSide  // 只渲染正面，方便调试面朝向
       })
       const mesh = new THREE.Mesh(geometry, material)
 
@@ -652,51 +652,64 @@ export class SurfaceTextManager {
       vertexCount: mesh.geometry.attributes.position?.count || 0
     })
 
-    // 🚀 使用简单可靠的检测器
-    // 🔧 关键修复：传递mesh对象以获取世界坐标转换
-    console.log('🚀 尝试简单圆柱检测器...')
-    const simpleCylinderInfo = simpleCylinderDetector.detectCylinder(mesh.geometry, mesh)
-
-    if (simpleCylinderInfo && simpleCylinderDetector.quickValidate(simpleCylinderInfo)) {
-      console.log('✅ 简单检测器成功识别圆柱面!', {
-        confidence: (simpleCylinderInfo.confidence * 100).toFixed(1) + '%',
-        radius: simpleCylinderInfo.radius.toFixed(2),
-        height: simpleCylinderInfo.height.toFixed(2)
-      })
-
+    // 检查几何体类型 - BoxGeometry 直接返回平面
+    if (mesh.geometry.type === 'BoxGeometry' || mesh.geometry.type === 'BoxBufferGeometry') {
+      console.log('📦 检测到 BoxGeometry，直接使用平面模式')
       return {
-        surfaceType: 'cylinder',
-        cylinderInfo: simpleCylinderInfo,
+        surfaceType: 'plane',
         attachPoint: faceInfo.point.clone()
       }
     }
 
-    // 🔄 备用：使用原来的复杂检测器
-    console.log('🔄 简单检测器失败，尝试复杂检测器...')
-    const cylinderInfo = cylinderSurfaceHelper.detectCylinder(mesh.geometry)
+    // 只对 CylinderGeometry 或顶点数较多的几何体进行圆柱检测
+    const vertexCount = mesh.geometry.attributes.position?.count || 0
+    if (mesh.geometry.type === 'CylinderGeometry' || mesh.geometry.type === 'CylinderBufferGeometry') {
+      console.log('🔵 检测到 CylinderGeometry，进行圆柱面检测')
+    } else if (vertexCount < 100) {
+      // 顶点数太少，不太可能是圆柱面
+      console.log('📝 顶点数较少，使用平面模式')
+      return {
+        surfaceType: 'plane',
+        attachPoint: faceInfo.point.clone()
+      }
+    }
 
-    if (cylinderInfo) {
-      console.log('圆柱面检测结果:', {
-        confidence: (cylinderInfo.confidence * 100).toFixed(1) + '%',
-        radius: cylinderInfo.radius.toFixed(2),
-        height: cylinderInfo.height.toFixed(2),
-        passThreshold: cylinderInfo.confidence > 0.3
-      })
+    // 使用简单检测器
+    console.log('🚀 尝试圆柱检测器...')
+    const simpleCylinderInfo = simpleCylinderDetector.detectCylinder(mesh.geometry, mesh)
 
-      // 使用更低的阈值
-      if (cylinderInfo.confidence > 0.3) {
-        console.log('✅ 复杂检测器识别圆柱面')
+    if (simpleCylinderInfo && simpleCylinderDetector.quickValidate(simpleCylinderInfo)) {
+      // 提高置信度阈值到 0.7
+      if (simpleCylinderInfo.confidence > 0.7) {
+        console.log('✅ 检测器成功识别圆柱面!', {
+          confidence: (simpleCylinderInfo.confidence * 100).toFixed(1) + '%',
+          radius: simpleCylinderInfo.radius.toFixed(2),
+          height: simpleCylinderInfo.height.toFixed(2)
+        })
 
         return {
           surfaceType: 'cylinder',
-          cylinderInfo: cylinderInfo,
+          cylinderInfo: simpleCylinderInfo,
           attachPoint: faceInfo.point.clone()
         }
       } else {
-        console.log('⚠️ 圆柱面置信度不足，使用平面模式')
+        console.log('⚠️ 圆柱面置信度不足 (' + (simpleCylinderInfo.confidence * 100).toFixed(1) + '%)，使用平面模式')
       }
-    } else {
-      console.log('❌ 复杂检测器也未检测到圆柱面')
+    }
+
+    // 备用：使用复杂检测器，但提高阈值
+    const cylinderInfo = cylinderSurfaceHelper.detectCylinder(mesh.geometry)
+
+    if (cylinderInfo && cylinderInfo.confidence > 0.7) {
+      console.log('✅ 复杂检测器识别圆柱面', {
+        confidence: (cylinderInfo.confidence * 100).toFixed(1) + '%'
+      })
+
+      return {
+        surfaceType: 'cylinder',
+        cylinderInfo: cylinderInfo,
+        attachPoint: faceInfo.point.clone()
+      }
     }
 
     // 默认为平面
@@ -1469,14 +1482,17 @@ export class SurfaceTextManager {
 
     if (oldMode === mode) return // 模式相同，无需切换
 
-    // 🔧 关键检查：圆柱面文字不支持内嵌模式
-    // 原因：弯曲变换后的文字几何体不是闭合流形（manifold），无法进行布尔运算
+    // 检查圆柱面文字是否支持内嵌模式
     const isCylinderText = textObject.surfaceInfo?.surfaceType === 'cylinder'
     if (mode === 'engraved' && isCylinderText) {
-      const errorMsg = '圆柱面文字暂不支持内嵌模式（弯曲几何体无法进行布尔运算）'
-      console.warn(errorMsg)
-      this.emit('error', { type: 'modeSwitch', error: new Error(errorMsg), textId })
-      throw new Error(errorMsg)
+      // 检查几何体是否是闭合流形
+      const isManifold = textObject.geometry?.userData?.isManifold
+      if (!isManifold) {
+        console.warn('⚠️ 圆柱面文字几何体非闭合流形，尝试继续执行布尔操作...')
+        // 不再阻止操作，让布尔操作库自己处理
+      } else {
+        console.log('✅ 圆柱面文字使用闭合流形几何体，支持内嵌模式')
+      }
     }
 
     try {
@@ -1552,11 +1568,12 @@ export class SurfaceTextManager {
           })
         }
 
-        // 🔧 关键修复：先将文字几何体转换到局部坐标系
+        // 🔧 关键：将文字几何体从世界坐标系转换到目标网格的局部坐标系
+        // 因为布尔操作是在局部坐标系中进行的
         const targetInverseMatrix = new THREE.Matrix4().copy(textObject.targetMesh.matrixWorld).invert()
         textGeometryForCSG.applyMatrix4(targetInverseMatrix)
 
-        // � 调试：打印转示换到局部坐标系后的边界框
+        // 调试：打印转换到局部坐标系后的边界框
         textGeometryForCSG.computeBoundingBox()
         const bboxLocal = textGeometryForCSG.boundingBox
         console.log('[DEBUG] 文字几何体边界框（局部坐标，转换后）:', {
@@ -1571,25 +1588,6 @@ export class SurfaceTextManager {
           min: `(${targetBbox.min.x.toFixed(2)}, ${targetBbox.min.y.toFixed(2)}, ${targetBbox.min.z.toFixed(2)})`,
           max: `(${targetBbox.max.x.toFixed(2)}, ${targetBbox.max.y.toFixed(2)}, ${targetBbox.max.z.toFixed(2)})`
         })
-
-        // 🔧 关键修复：将圆柱信息也转换到局部坐标系
-        if (cylinderInfo) {
-          // 🔧 测试：用一个简单的立方体代替文字几何体，验证布尔操作是否正常
-          const testBoxSize = 1
-          const testBox = new THREE.BoxGeometry(testBoxSize, testBoxSize, testBoxSize)
-
-          // 把立方体放到文字的位置（使用文字几何体的中心）
-          textGeometryForCSG.computeBoundingBox()
-          const textCenter = new THREE.Vector3()
-          textGeometryForCSG.boundingBox.getCenter(textCenter)
-          testBox.translate(textCenter.x, textCenter.y, textCenter.z)
-
-          // 用立方体替换文字几何体
-          textGeometryForCSG.dispose()
-          textGeometryForCSG = testBox
-
-          console.log('[DEBUG] 使用测试立方体代替文字，位置:', textCenter)
-        }
       } else {
         console.log('[DEBUG] 平面文字内嵌模式 - 需要应用网格变换')
         // 平面文字：先应用网格变换到世界坐标系，再转换到目标网格的局部坐标系
