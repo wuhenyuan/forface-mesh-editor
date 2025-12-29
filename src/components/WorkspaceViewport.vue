@@ -682,7 +682,18 @@ export default {
           uv: hit.uv
         }
 
-        await surfaceTextManager.createTextObject('我是字体', faceInfo)
+        const textObject = await surfaceTextManager.createTextObject('012345', faceInfo)
+        
+        // 把文字对象和相关数据挂到 window 上，方便工具栏访问
+        window.debugTextData = {
+          textObjects: textObjects.value,
+          targetMeshes: meshes.value,
+          surfaceTextManager: surfaceTextManager,
+          selectedTextObject: textObject
+        }
+        
+        console.log('✅ 默认文字已创建并挂载到 window.debugTextData')
+        
       } catch (error) {
         console.error('创建默认文字失败:', error)
       }
@@ -1129,6 +1140,7 @@ export default {
       hasSelectedText,
       textObjects,
       selectedTextId,
+      surfaceTextManager, // 添加 surfaceTextManager 的暴露
       
       // 物体选择状态
       objectSelectionEnabled,

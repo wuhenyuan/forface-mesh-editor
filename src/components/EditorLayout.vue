@@ -41,7 +41,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, provide } from 'vue'
 import ToolbarPanel from './ToolbarPanel.vue'
 import FeaturePanel from './FeaturePanel.vue'
 import FeatureMenu from './FeatureMenu.vue'
@@ -60,6 +60,19 @@ export default {
     const feature = ref('base')
     const selectedTextObject = ref(null)
     const workspaceRef = ref(null)
+    
+    // 提供工作区引用给子组件（如工具栏）
+    provide('workspaceRef', workspaceRef)
+    
+    // 提供获取场景数据的方法
+    provide('getSceneData', () => {
+      if (!workspaceRef.value) return null
+      return {
+        textObjects: workspaceRef.value.textObjects,
+        surfaceTextManager: workspaceRef.value.surfaceTextManager,
+        selectedTextId: workspaceRef.value.selectedTextId
+      }
+    })
     
     // ========== 功能菜单数据管理 ==========
     // 这部分数据和逻辑可以由上层应用传入

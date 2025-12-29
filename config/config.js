@@ -64,7 +64,6 @@ export default {
         position: [0, 0, 0],
         // 字体旋转
         rotate: [0, 0, 0],
-        face: '',
         // 文字贴合方式： 法线贴合（纯前端不一定有方案），直接摁下去
         wrap: 'surface Project',
         // 在那个表面上添加文字，通过原始mesh的索引范围作为唯一id标识。。

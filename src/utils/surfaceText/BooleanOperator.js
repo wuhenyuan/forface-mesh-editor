@@ -4,6 +4,10 @@
  */
 import * as THREE from 'three'
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh'
+
+// 启用加速光线投射
+THREE.Mesh.prototype.raycast = acceleratedRaycast
 
 export class BooleanOperator {
   constructor() {
@@ -79,6 +83,22 @@ export class BooleanOperator {
       throw new Error('布尔操作库未准备就绪')
     }
 
+    // 预检查几何体相交性（使用综合检测）
+    const intersectionCheck = this.checkIntersectionComprehensive(targetGeometry, toolGeometry, toolMatrix, {
+      useBVH: true,
+      fastOnly: false
+    })
+    
+    if (!intersectionCheck.finalResult) {
+      const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒'
+      console.warn(`几何体不相交 (${method}检测):`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason)
+      if (options.strictMode) {
+        throw new Error(`几何体不相交: ${intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason}`)
+      }
+    } else if (intersectionCheck.confidence === 'high') {
+      console.log(`几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)`)
+    }
+
     try {
       console.log('开始执行布尔减法操作 (SUBTRACTION)')
       const startTime = performance.now()
@@ -134,11 +154,25 @@ export class BooleanOperator {
    * @param {THREE.BufferGeometry} geometry1 - 几何体1
    * @param {THREE.BufferGeometry} geometry2 - 几何体2
    * @param {THREE.Matrix4} [matrix2] - 几何体2的变换矩阵
+   * @param {Object} [options] - 选项
    * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async union (geometry1, geometry2, matrix2 = null) {
+  async union (geometry1, geometry2, matrix2 = null, options = {}) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪')
+    }
+
+    // 预检查几何体相交性（联合操作对不相交的几何体也有意义）
+    const intersectionCheck = this.checkIntersectionComprehensive(geometry1, geometry2, matrix2, {
+      useBVH: true,
+      fastOnly: false
+    })
+    
+    if (!intersectionCheck.finalResult) {
+      const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒'
+      console.info(`几何体不相交 (${method}检测)，将执行简单合并:`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason)
+    } else {
+      console.log(`几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)，将执行真正的联合操作`)
     }
 
     try {
@@ -178,11 +212,28 @@ export class BooleanOperator {
    * @param {THREE.BufferGeometry} geometry1 - 几何体1
    * @param {THREE.BufferGeometry} geometry2 - 几何体2
    * @param {THREE.Matrix4} [matrix2] - 几何体2的变换矩阵
+   * @param {Object} [options] - 选项
    * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async intersect (geometry1, geometry2, matrix2 = null) {
+  async intersect (geometry1, geometry2, matrix2 = null, options = {}) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪')
+    }
+
+    // 预检查几何体相交性
+    const intersectionCheck = this.checkIntersectionComprehensive(geometry1, geometry2, matrix2, {
+      useBVH: true,
+      fastOnly: false
+    })
+    
+    if (!intersectionCheck.finalResult) {
+      const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒'
+      console.warn(`几何体不相交 (${method}检测)，交集操作将返回空结果:`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason)
+      if (options.strictMode) {
+        throw new Error(`几何体不相交，无法计算交集: ${intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason}`)
+      }
+    } else {
+      console.log(`几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)`)
     }
 
     try {
@@ -282,6 +333,208 @@ export class BooleanOperator {
     } catch (error) {
       console.error('批量布尔操作失败:', error)
       throw error
+    }
+  }
+
+  /**
+   * 检查两个几何体是否相交（边界盒快速检测）
+   * @param {THREE.BufferGeometry} geometry1 - 几何体1
+   * @param {THREE.BufferGeometry} geometry2 - 几何体2
+   * @param {THREE.Matrix4} [matrix2] - 几何体2的变换矩阵
+   * @returns {Object} 相交检查结果
+   */
+  checkGeometryIntersection (geometry1, geometry2, matrix2 = null) {
+    try {
+      // 计算边界盒
+      geometry1.computeBoundingBox()
+      geometry2.computeBoundingBox()
+
+      const box1 = geometry1.boundingBox.clone()
+      const box2 = geometry2.boundingBox.clone()
+
+      // 应用变换矩阵到第二个边界盒
+      if (matrix2) {
+        box2.applyMatrix4(matrix2)
+      }
+
+      // 检查边界盒是否相交
+      const intersects = box1.intersectsBox(box2)
+      
+      if (!intersects) {
+        // 计算距离
+        const center1 = new THREE.Vector3()
+        const center2 = new THREE.Vector3()
+        box1.getCenter(center1)
+        box2.getCenter(center2)
+        const distance = center1.distanceTo(center2)
+        
+        return {
+          intersects: false,
+          reason: `边界盒不相交，距离: ${distance.toFixed(2)}`,
+          distance,
+          box1,
+          box2,
+          method: 'boundingBox'
+        }
+      }
+
+      // 检查是否一个完全包含另一个
+      const contains1 = box1.containsBox(box2)
+      const contains2 = box2.containsBox(box1)
+
+      return {
+        intersects: true,
+        reason: 'bounding boxes intersect',
+        distance: 0,
+        contains1,
+        contains2,
+        box1,
+        box2,
+        method: 'boundingBox'
+      }
+
+    } catch (error) {
+      console.warn('几何体相交检查失败:', error)
+      return {
+        intersects: true, // 默认假设相交，避免阻止操作
+        reason: 'intersection check failed',
+        error: error.message,
+        method: 'boundingBox'
+      }
+    }
+  }
+
+  /**
+   * 使用 BVH 树进行精确的几何体相交检测
+   * @param {THREE.Mesh} meshA - 网格A
+   * @param {THREE.Mesh} meshB - 网格B
+   * @returns {Object} 精确相交检查结果
+   */
+  checkMeshIntersectionBVH (meshA, meshB) {
+    try {
+      // 确保几何体有 BVH 树
+      if (!meshA.geometry.boundsTree) {
+        meshA.geometry.computeBoundsTree = meshA.geometry.computeBoundsTree || (() => {
+          meshA.geometry.boundsTree = new MeshBVH(meshA.geometry)
+        })
+        meshA.geometry.computeBoundsTree()
+      }
+
+      if (!meshB.geometry.boundsTree) {
+        meshB.geometry.computeBoundsTree = meshB.geometry.computeBoundsTree || (() => {
+          meshB.geometry.boundsTree = new MeshBVH(meshB.geometry)
+        })
+        meshB.geometry.computeBoundsTree()
+      }
+
+      // 使用 BVH 树检测相交
+      const intersects = meshA.geometry.boundsTree.intersectsGeometry(
+        meshB.geometry,
+        meshA.matrixWorld,
+        meshB.matrixWorld
+      )
+
+      return {
+        intersects,
+        reason: intersects ? 'BVH trees intersect' : 'BVH trees do not intersect',
+        method: 'BVH',
+        precision: 'high'
+      }
+
+    } catch (error) {
+      console.warn('BVH 相交检测失败:', error)
+      return {
+        intersects: true, // 默认假设相交
+        reason: 'BVH intersection check failed',
+        error: error.message,
+        method: 'BVH',
+        fallback: true
+      }
+    }
+  }
+
+  /**
+   * 从几何体创建临时网格用于 BVH 检测
+   * @param {THREE.BufferGeometry} geometry - 几何体
+   * @param {THREE.Matrix4} [matrix] - 变换矩阵
+   * @returns {THREE.Mesh} 临时网格
+   */
+  createTempMesh (geometry, matrix = null) {
+    const material = new THREE.MeshBasicMaterial()
+    const mesh = new THREE.Mesh(geometry, material)
+    
+    if (matrix) {
+      mesh.applyMatrix4(matrix)
+    }
+    
+    mesh.updateMatrixWorld()
+    return mesh
+  }
+
+  /**
+   * 综合相交检测（先快速边界盒检测，再精确 BVH 检测）
+   * @param {THREE.BufferGeometry} geometry1 - 几何体1
+   * @param {THREE.BufferGeometry} geometry2 - 几何体2
+   * @param {THREE.Matrix4} [matrix2] - 几何体2的变换矩阵
+   * @param {Object} [options] - 检测选项
+   * @returns {Object} 综合相交检查结果
+   */
+  checkIntersectionComprehensive (geometry1, geometry2, matrix2 = null, options = {}) {
+    const { useBVH = true, fastOnly = false } = options
+
+    // 第一步：快速边界盒检测
+    const boundingBoxCheck = this.checkGeometryIntersection(geometry1, geometry2, matrix2)
+    
+    if (!boundingBoxCheck.intersects) {
+      // 边界盒都不相交，肯定不相交
+      return {
+        ...boundingBoxCheck,
+        bvhCheck: null,
+        finalResult: false,
+        confidence: 'high'
+      }
+    }
+
+    // 如果只需要快速检测，返回边界盒结果
+    if (fastOnly || !useBVH) {
+      return {
+        ...boundingBoxCheck,
+        bvhCheck: null,
+        finalResult: true,
+        confidence: 'medium'
+      }
+    }
+
+    // 第二步：精确 BVH 检测
+    try {
+      const mesh1 = this.createTempMesh(geometry1)
+      const mesh2 = this.createTempMesh(geometry2, matrix2)
+      
+      const bvhCheck = this.checkMeshIntersectionBVH(mesh1, mesh2)
+      
+      // 清理临时网格
+      mesh1.geometry = null // 避免清理原始几何体
+      mesh2.geometry = null
+      mesh1.material.dispose()
+      mesh2.material.dispose()
+
+      return {
+        boundingBoxCheck,
+        bvhCheck,
+        finalResult: bvhCheck.intersects,
+        confidence: bvhCheck.fallback ? 'medium' : 'high',
+        method: 'comprehensive'
+      }
+
+    } catch (error) {
+      console.warn('BVH 检测失败，回退到边界盒结果:', error)
+      return {
+        ...boundingBoxCheck,
+        bvhCheck: { error: error.message },
+        finalResult: boundingBoxCheck.intersects,
+        confidence: 'medium',
+        fallback: true
+      }
     }
   }
 
