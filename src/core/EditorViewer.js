@@ -3,15 +3,22 @@
  * 在基础 Viewer 上集成面拾取、文字系统、物体选择等功能
  */
 import { Viewer } from './Viewer.js'
-import { FacePicker, FacePickingUtils } from '../utils/facePicking/index.js'
-import { SurfaceTextManager } from '../utils/surfaceText/index.js'
-import { ObjectSelectionManager } from '../utils/objectSelection/index.js'
+import { FacePicker, FacePickingUtils } from './facePicking/index.js'
+import { SurfaceTextManager } from './surfaceText/index.js'
+import { ObjectSelectionManager } from './objectSelection/index.js'
+import { LoaderManager } from './LoaderManager.js'
+import { FeatureDetector } from './facePicking/FeatureDetector.js'
+import { FeatureBasedNaming } from './facePicking/FeatureBasedNaming.js'
 
 export class EditorViewer extends Viewer {
   constructor(container, options = {}) {
     super(container, options)
     
-    // 子系统
+    // 核心子系统
+    this._loaderManager = null
+    this._featureDetector = null
+    
+    // 交互子系统
     this._facePicker = null
     this._surfaceTextManager = null
     this._objectSelectionManager = null
@@ -24,6 +31,140 @@ export class EditorViewer extends Viewer {
     this._textModeEnabled = false
     this._facePickingEnabled = false
     this._objectSelectionEnabled = false
+    
+    // 初始化核心子系统
+    this._initCoreSubsystems()
+  }
+  
+  // ==================== 核心子系统 ====================
+  
+  /**
+   * 初始化核心子系统
+   */
+  _initCoreSubsystems() {
+    // 特征检测器
+    this._featureDetector = new FeatureDetector()
+    
+    // 加载管理器
+    this._loaderManager = new LoaderManager()
+    this._loaderManager.setFeatureDetector(this._featureDetector)
+    
+    // 设置加载事件
+    this._loaderManager.onProgress = (progress) => {
+      this.events.emit('loadProgress', progress)
+    }
+    this._loaderManager.onError = (error) => {
+      this.events.emit('loadError', { error })
+    }
+    
+    // 设置特征检测事件
+    this._featureDetector.onDetectionStart = (modelId) => {
+      this.events.emit('featureDetectionStart', { modelId })
+    }
+    this._featureDetector.onDetectionProgress = (modelId, progress) => {
+      this.events.emit('featureDetectionProgress', { modelId, progress })
+    }
+    this._featureDetector.onDetectionComplete = (result) => {
+      this.events.emit('featureDetectionComplete', result)
+    }
+  }
+  
+  // ==================== 模型加载 ====================
+  
+  /**
+   * 加载模型（统一入口）
+   * @param {string|File|Blob} source - 文件路径或文件对象
+   * @param {Object} options - 加载选项
+   * @returns {Promise<Object>} 加载结果
+   */
+  async loadModel(source, options = {}) {
+    const {
+      addToScene = true,
+      detectFeatures = true,
+      ...loaderOptions
+    } = options
+    
+    try {
+      // 使用 LoaderManager 加载
+      const result = await this._loaderManager.load(source, {
+        detectFeatures,
+        ...loaderOptions
+      })
+      
+      // 添加到场景
+      if (addToScene) {
+        this.addMesh(result.model, {
+          selectable: true,
+          castShadow: true,
+          receiveShadow: true
+        })
+      }
+      
+      this.events.emit('modelLoaded', {
+        model: result.model,
+        modelId: result.modelId,
+        format: result.format,
+        metadata: result.metadata,
+        features: this._featureDetector.getModelFeatures(result.modelId)
+      })
+      
+      return result
+    } catch (error) {
+      console.error('[EditorViewer] 模型加载失败:', error)
+      throw error
+    }
+  }
+  
+  /**
+   * 获取加载管理器
+   */
+  getLoaderManager() {
+    return this._loaderManager
+  }
+  
+  // ==================== 特征检测 ====================
+  
+  /**
+   * 手动触发特征检测
+   * @param {THREE.Mesh|THREE.Group} model - 模型
+   * @param {string} modelId - 模型ID
+   * @param {Object} options - 检测选项
+   */
+  async detectFeatures(model, modelId, options = {}) {
+    return this._featureDetector.detect(model, modelId, options)
+  }
+  
+  /**
+   * 根据点击获取特征
+   * @param {string} modelId - 模型ID
+   * @param {THREE.Intersection} intersection - 射线交点
+   */
+  getFeatureAtIntersection(modelId, intersection) {
+    return this._featureDetector.getFeatureAtIntersection(modelId, intersection)
+  }
+  
+  /**
+   * 获取模型的所有特征
+   * @param {string} modelId - 模型ID
+   */
+  getModelFeatures(modelId) {
+    return this._featureDetector.getModelFeatures(modelId)
+  }
+  
+  /**
+   * 获取适合添加文字的表面
+   * @param {string} modelId - 模型ID
+   * @param {Object} options - 筛选选项
+   */
+  getTextableSurfaces(modelId, options = {}) {
+    return this._featureDetector.getTextableSurfaces(modelId, options)
+  }
+  
+  /**
+   * 获取特征检测器
+   */
+  getFeatureDetector() {
+    return this._featureDetector
   }
   
   // ==================== 面拾取系统 ====================
@@ -434,6 +575,18 @@ export class EditorViewer extends Viewer {
    * 销毁时清理子系统
    */
   dispose() {
+    // 清理核心子系统
+    if (this._loaderManager) {
+      this._loaderManager.dispose()
+      this._loaderManager = null
+    }
+    
+    if (this._featureDetector) {
+      this._featureDetector.dispose()
+      this._featureDetector = null
+    }
+    
+    // 清理交互子系统
     if (this._facePicker) {
       this._facePicker.destroy()
       this._facePicker = null

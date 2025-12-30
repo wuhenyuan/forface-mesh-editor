@@ -3,6 +3,7 @@
  * 兼容 Vue 2.6+ 的轻量级状态管理
  */
 import Vue from 'vue'
+import { HistoryManager, TextCommand } from '../core/history/index.js'
 
 // ==================== 1. 核心状态 ====================
 const state = Vue.observable({
@@ -24,10 +25,17 @@ const state = Vue.observable({
   textList: [],
   textCounter: 0,
   
-  // 撤销重做栈
-  undoStack: [],
-  redoStack: [],
-  maxHistorySize: 50,
+  // 撤销重做（命令历史）
+  history: {
+    undoCount: 0,
+    redoCount: 0,
+    canUndo: false,
+    canRedo: false,
+    isBusy: false,
+    isApplying: false,
+    transactionName: null,
+    lastError: null
+  },
   
   // 工作区引用（用于调用 3D 操作）
   workspaceRef: null,
@@ -69,14 +77,24 @@ const state = Vue.observable({
   }
 })
 
+// ==================== 1.5 HistoryManager ====================
+const historyManager = new HistoryManager({
+  maxSize: 50,
+  onChange: (snapshot) => {
+    Object.assign(state.history, snapshot)
+  }
+})
+
 // ==================== 2. Getters ====================
 const getters = {
   // 功能菜单是否显示
   shouldShowMenu: () => state.currentFeature === 'base' && state.menuVisible,
   
   // 是否可撤销/重做
-  canUndo: () => state.undoStack.length > 0,
-  canRedo: () => state.redoStack.length > 0,
+  canUndo: () => state.history.canUndo,
+  canRedo: () => state.history.canRedo,
+  isHistoryBusy: () => state.history.isBusy,
+  isHistoryApplying: () => state.history.isApplying,
   
   // 是否有选中文字
   hasSelectedText: () => !!state.selectedTextObject,
@@ -96,6 +114,61 @@ const getters = {
 
 // ==================== 3. Actions ====================
 const actions = {
+  // --- History helpers ---
+  getHistoryManager() {
+    return historyManager
+  },
+
+  getViewer() {
+    return state.workspaceRef?.value?.getViewer?.() || null
+  },
+
+  async executeCommand(command) {
+    try {
+      state.history.lastError = null
+      await historyManager.execute(command)
+    } catch (error) {
+      state.history.lastError = error
+      throw error
+    }
+  },
+
+  captureCommand(command) {
+    historyManager.capture(command)
+  },
+
+  async undo() {
+    try {
+      state.history.lastError = null
+      return await historyManager.undo()
+    } catch (error) {
+      state.history.lastError = error
+      throw error
+    }
+  },
+
+  async redo() {
+    try {
+      state.history.lastError = null
+      return await historyManager.redo()
+    } catch (error) {
+      state.history.lastError = error
+      throw error
+    }
+  },
+
+  beginTransaction(name) {
+    historyManager.beginTransaction(name)
+  },
+
+  commitTransaction() {
+    historyManager.commitTransaction()
+  },
+
+  async rollbackTransaction() {
+    return await historyManager.rollbackTransaction()
+  },
+
   // --- 初始化 ---
   setWorkspaceRef(ref) {
     state.workspaceRef = ref
@@ -135,21 +208,12 @@ const actions = {
       content: textObject.content,
       displayName
     })
-    
-    this._pushHistory({
-      type: 'TEXT_ADD',
-      payload: { id: textObject.id, content: textObject.content, displayName }
-    })
   },
   
   removeText(textId) {
     const index = state.textList.findIndex(t => t.id === textId)
     if (index !== -1) {
-      const removed = state.textList.splice(index, 1)[0]
-      this._pushHistory({
-        type: 'TEXT_REMOVE',
-        payload: { ...removed, index }
-      })
+      state.textList.splice(index, 1)
     }
     
     if (state.selectedTextObject?.id === textId) {
@@ -168,15 +232,10 @@ const actions = {
   updateTextInList(textId, content) {
     const item = state.textList.find(t => t.id === textId)
     if (item) {
-      const oldContent = item.content
       item.content = content
-      this._pushHistory({
-        type: 'TEXT_UPDATE',
-        payload: { textId, from: oldContent, to: content }
-      })
     }
   },
-  
+
   // ========== 浮动 UI 操作 ==========
   
   // --- 右键菜单 ---
@@ -290,28 +349,36 @@ const actions = {
     state.editMenu.visible = false
     state.tooltip.visible = false
   },
-  
-  // --- 撤销重做 ---
-  _pushHistory(action) {
-    state.undoStack.push(action)
-    state.redoStack = []
-    if (state.undoStack.length > state.maxHistorySize) {
-      state.undoStack.shift()
-    }
+
+  // ========== 历史集成：文字相关 ==========
+  async deleteText(textId) {
+    const viewer = this.getViewer()
+    if (!viewer || !textId) return
+    await this.executeCommand(new TextCommand('delete', viewer, { textId }))
   },
-  
-  undo() {
-    if (state.undoStack.length === 0) return null
-    const action = state.undoStack.pop()
-    state.redoStack.push(action)
-    return action
+
+  async updateTextContent(textId, content) {
+    const viewer = this.getViewer()
+    if (!viewer || !textId) return
+    await this.executeCommand(new TextCommand('updateContent', viewer, { textId, to: content }))
   },
-  
-  redo() {
-    if (state.redoStack.length === 0) return null
-    const action = state.redoStack.pop()
-    state.undoStack.push(action)
-    return action
+
+  async updateTextColor(textId, color) {
+    const viewer = this.getViewer()
+    if (!viewer || !textId) return
+    await this.executeCommand(new TextCommand('updateColor', viewer, { textId, to: color }))
+  },
+
+  async updateTextConfigWithHistory(textId, patch) {
+    const viewer = this.getViewer()
+    if (!viewer || !textId) return
+    await this.executeCommand(new TextCommand('updateConfig', viewer, { textId, patch }))
+  },
+
+  async switchTextModeWithHistory(textId, mode) {
+    const viewer = this.getViewer()
+    if (!viewer || !textId) return
+    await this.executeCommand(new TextCommand('setMode', viewer, { textId, toMode: mode }))
   },
   
   // --- 重置 ---
@@ -322,8 +389,7 @@ const actions = {
     state.selectedTextObject = null
     state.textList = []
     state.textCounter = 0
-    state.undoStack = []
-    state.redoStack = []
+    historyManager.clear()
   }
 }
 
