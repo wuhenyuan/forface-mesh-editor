@@ -2,13 +2,15 @@
  * 编辑器专用 Viewer
  * 在基础 Viewer 上集成面拾取、文字系统、物体选择等功能
  */
+import * as THREE from 'three'
 import { Viewer } from './Viewer.js'
 import { FacePicker, FacePickingUtils } from './facePicking/index.js'
 import { SurfaceTextManager } from './surfaceText/index.js'
 import { ObjectSelectionManager } from './objectSelection/index.js'
 import { LoaderManager } from './LoaderManager.js'
+import { ExportManager } from './ExportManager.js'
+import { ProjectManager } from './ProjectManager.js'
 import { FeatureDetector } from './facePicking/FeatureDetector.js'
-import { FeatureBasedNaming } from './facePicking/FeatureBasedNaming.js'
 
 export class EditorViewer extends Viewer {
   constructor(container, options = {}) {
@@ -16,6 +18,8 @@ export class EditorViewer extends Viewer {
     
     // 核心子系统
     this._loaderManager = null
+    this._exportManager = null
+    this._projectManager = null
     this._featureDetector = null
     
     // 交互子系统
@@ -49,12 +53,37 @@ export class EditorViewer extends Viewer {
     this._loaderManager = new LoaderManager()
     this._loaderManager.setFeatureDetector(this._featureDetector)
     
+    // 导出管理器
+    this._exportManager = new ExportManager()
+    
+    // 项目管理器
+    this._projectManager = new ProjectManager()
+    
     // 设置加载事件
     this._loaderManager.onProgress = (progress) => {
       this.events.emit('loadProgress', progress)
     }
     this._loaderManager.onError = (error) => {
       this.events.emit('loadError', { error })
+    }
+    
+    // 设置导出事件
+    this._exportManager.onProgress = (progress) => {
+      this.events.emit('exportProgress', progress)
+    }
+    this._exportManager.onError = (error) => {
+      this.events.emit('exportError', { error })
+    }
+    
+    // 设置项目管理事件
+    this._projectManager.onChange = (event) => {
+      this.events.emit('projectChanged', event)
+    }
+    this._projectManager.onSave = (event) => {
+      this.events.emit('projectSaved', event)
+    }
+    this._projectManager.onLoad = (event) => {
+      this.events.emit('projectLoaded', event)
     }
     
     // 设置特征检测事件
@@ -120,6 +149,307 @@ export class EditorViewer extends Viewer {
    */
   getLoaderManager() {
     return this._loaderManager
+  }
+  
+  // ==================== 模型导出 ====================
+  
+  /**
+   * 导出模型
+   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
+   * @param {string} format - 导出格式: 'stl' | 'obj' | 'gltf' | 'glb'
+   * @param {Object} options - 导出选项
+   * @returns {Promise<Blob>} 导出结果
+   */
+  async exportModel(objects, format, options = {}) {
+    return this._exportManager.export(objects, format, options)
+  }
+  
+  /**
+   * 导出并下载模型
+   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
+   * @param {string} format - 导出格式
+   * @param {string} filename - 文件名（不含扩展名）
+   * @param {Object} options - 导出选项
+   */
+  async exportAndDownload(objects, format, filename = 'model', options = {}) {
+    await this._exportManager.exportAndDownload(objects, format, filename, options)
+    this.events.emit('modelExported', { format, filename })
+  }
+  
+  /**
+   * 导出场景中的所有网格
+   * @param {string} format - 导出格式
+   * @param {string} filename - 文件名
+   * @param {Object} options - 导出选项
+   */
+  async exportScene(format, filename = 'scene', options = {}) {
+    const blob = await this._exportManager.exportScene(this.scene, format, options)
+    this._exportManager._downloadBlob(blob, `${filename}.${this._exportManager._getExtension(format)}`)
+    this.events.emit('sceneExported', { format, filename })
+  }
+  
+  /**
+   * 导出选中的对象
+   * @param {string} format - 导出格式
+   * @param {string} filename - 文件名
+   * @param {Object} options - 导出选项
+   */
+  async exportSelected(format, filename = 'selected', options = {}) {
+    const selected = this.getSelectedObject()
+    if (!selected) {
+      throw new Error('没有选中的对象')
+    }
+    
+    await this._exportManager.exportAndDownload(selected, format, filename, options)
+    this.events.emit('selectedExported', { format, filename, object: selected })
+  }
+  
+  /**
+   * 导出所有网格（合并后）
+   * @param {string} format - 导出格式
+   * @param {string} filename - 文件名
+   * @param {Object} options - 导出选项
+   */
+  async exportMerged(format, filename = 'merged', options = {}) {
+    const meshes = this._meshes.filter(m => !m.userData.isHelper)
+    if (meshes.length === 0) {
+      throw new Error('没有可导出的网格')
+    }
+    
+    const blob = await this._exportManager.exportMerged(meshes, format, options)
+    this._exportManager._downloadBlob(blob, `${filename}.${this._exportManager._getExtension(format)}`)
+    this.events.emit('mergedExported', { format, filename, meshCount: meshes.length })
+  }
+  
+  /**
+   * 获取支持的导出格式
+   * @returns {Object[]} 格式列表
+   */
+  getSupportedExportFormats() {
+    return this._exportManager.getSupportedFormats()
+  }
+  
+  /**
+   * 估算导出文件大小
+   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
+   * @param {string} format - 导出格式
+   * @returns {Object} 估算信息
+   */
+  estimateExportSize(objects, format) {
+    return this._exportManager.estimateExportSize(objects, format)
+  }
+  
+  /**
+   * 获取导出管理器
+   */
+  getExportManager() {
+    return this._exportManager
+  }
+  
+  // ==================== 项目管理 ====================
+  
+  /**
+   * 创建新项目
+   * @param {Object} options - 项目选项
+   * @returns {Object} 项目数据
+   */
+  createProject(options = {}) {
+    // 清理当前场景
+    this._clearScene()
+    
+    // 创建新项目
+    const project = this._projectManager.createProject(options)
+    
+    this.events.emit('projectCreated', project)
+    return project
+  }
+  
+  /**
+   * 保存项目到本地
+   * @param {string} key - 存储键名（可选）
+   * @returns {boolean} 是否成功
+   */
+  saveProject(key) {
+    // 同步当前状态到项目配置
+    this._syncStateToProject()
+    
+    const storageKey = key || `editor_project_${this._projectManager.projectInfo.id}`
+    return this._projectManager.saveToLocal(storageKey)
+  }
+  
+  /**
+   * 从本地加载项目
+   * @param {string} key - 存储键名
+   * @returns {Promise<Object>} 项目数据
+   */
+  async loadProject(key = 'editor_project') {
+    const data = this._projectManager.loadFromLocal(key)
+    if (!data) return null
+    
+    // 恢复场景状态
+    await this._restoreProjectState(data)
+    
+    return data
+  }
+  
+  /**
+   * 导出项目文件
+   * @param {string} filename - 文件名
+   */
+  exportProjectFile(filename) {
+    this._syncStateToProject()
+    this._projectManager.exportProjectFile(filename || this._projectManager.getProjectName())
+  }
+  
+  /**
+   * 导入项目文件
+   * @param {File} file - JSON 文件
+   * @returns {Promise<Object>} 项目数据
+   */
+  async importProjectFile(file) {
+    const data = await this._projectManager.importProjectFile(file)
+    await this._restoreProjectState(data)
+    return data
+  }
+  
+  /**
+   * 获取本地项目列表
+   * @returns {Array} 项目列表
+   */
+  getLocalProjectList() {
+    return this._projectManager.getLocalProjectList()
+  }
+  
+  /**
+   * 删除本地项目
+   * @param {string} key - 存储键名
+   */
+  deleteLocalProject(key) {
+    this._projectManager.deleteLocalProject(key)
+  }
+  
+  /**
+   * 获取项目名称
+   * @returns {string}
+   */
+  getProjectName() {
+    return this._projectManager.getProjectName()
+  }
+  
+  /**
+   * 设置项目名称
+   * @param {string} name
+   */
+  setProjectName(name) {
+    this._projectManager.setProjectName(name)
+  }
+  
+  /**
+   * 项目是否有未保存的修改
+   * @returns {boolean}
+   */
+  isProjectDirty() {
+    return this._projectManager.isDirty()
+  }
+  
+  /**
+   * 获取项目管理器
+   */
+  getProjectManager() {
+    return this._projectManager
+  }
+  
+  /**
+   * 同步当前状态到项目配置
+   * @private
+   */
+  _syncStateToProject() {
+    // 同步模型配置
+    const meshes = this._meshes.filter(m => !m.userData.isHelper)
+    if (meshes.length > 0) {
+      const mainMesh = meshes[0]
+      const box = new THREE.Box3().setFromObject(mainMesh)
+      const size = box.getSize(new THREE.Vector3())
+      
+      this._projectManager.updateFinalModelConfig({
+        scale: mainMesh.scale.toArray(),
+        boundingBox: size.toArray()
+      })
+    }
+    
+    // 同步文字配置
+    this._projectManager.config.texts = []
+    this._textObjects.forEach(textObj => {
+      this._projectManager.addTextConfig({
+        id: textObj.id,
+        displayName: textObj.displayName,
+        content: textObj.content,
+        font: textObj.config?.font,
+        size: textObj.config?.size,
+        thickness: textObj.config?.thickness,
+        mode: textObj.mode,
+        color: textObj.material?.color ? '#' + textObj.material.color.getHexString() : '#333333',
+        position: textObj.mesh?.position?.toArray() || [0, 0, 0],
+        rotation: textObj.mesh?.rotation?.toArray() || [0, 0, 0],
+        featureName: textObj.featureName
+      })
+    })
+    
+    // 更新属性标识符
+    this._projectManager.updatePropIdentifier()
+  }
+  
+  /**
+   * 从项目数据恢复场景状态
+   * @private
+   */
+  async _restoreProjectState(projectData) {
+    const config = projectData.config
+    
+    // 清理当前场景
+    this._clearScene()
+    
+    // 加载原始模型
+    if (config.originModelPath) {
+      try {
+        await this.loadModel(config.originModelPath)
+      } catch (error) {
+        console.warn('[EditorViewer] 加载原始模型失败:', error)
+      }
+    }
+    
+    // 加载底座模型
+    if (config.baseModelPath) {
+      try {
+        await this.loadModel(config.baseModelPath, { name: 'base' })
+      } catch (error) {
+        console.warn('[EditorViewer] 加载底座模型失败:', error)
+      }
+    }
+    
+    // 恢复文字
+    // 注意：文字恢复需要先有模型和特征检测完成
+    // 这里只是示例，实际实现可能需要更复杂的逻辑
+    console.log(`[EditorViewer] 待恢复 ${config.texts.length} 个文字`)
+  }
+  
+  /**
+   * 清理场景
+   * @private
+   */
+  _clearScene() {
+    // 清理文字
+    this._textObjects.forEach(textObj => {
+      this._surfaceTextManager?.deleteText(textObj.id)
+    })
+    this._textObjects = []
+    
+    // 清理网格（保留辅助对象）
+    const meshesToRemove = this._meshes.filter(m => !m.userData.isHelper)
+    meshesToRemove.forEach(mesh => this.removeMesh(mesh))
+    
+    // 清理特征缓存
+    this._featureDetector?.clearCache()
   }
   
   // ==================== 特征检测 ====================
@@ -317,6 +647,23 @@ export class EditorViewer extends Viewer {
       }
       this.events.emit('textDeleted', { id, textObject })
     })
+
+    // 同步转发更新事件（用于 UI/store 同步）
+    this._surfaceTextManager.on('textContentUpdated', (data) => {
+      this.events.emit('textContentUpdated', data)
+    })
+
+    this._surfaceTextManager.on('textConfigUpdated', (data) => {
+      this.events.emit('textConfigUpdated', data)
+    })
+
+    this._surfaceTextManager.on('textColorUpdated', (data) => {
+      this.events.emit('textColorUpdated', data)
+    })
+
+    this._surfaceTextManager.on('textModeChanged', (data) => {
+      this.events.emit('textModeChanged', data)
+    })
     
     this._surfaceTextManager.on('textModeEnabled', () => {
       this._textModeEnabled = true
@@ -401,8 +748,25 @@ export class EditorViewer extends Viewer {
   /**
    * 删除文字
    */
-  deleteText(textId) {
-    this._surfaceTextManager?.deleteText(textId)
+  async deleteText(textId) {
+    return await this._surfaceTextManager?.deleteText(textId)
+  }
+
+  /**
+   * 获取文字快照（用于撤销/重做）
+   */
+  getTextSnapshot(textId) {
+    return this._surfaceTextManager?.getTextSnapshot?.(textId) || null
+  }
+
+  /**
+   * 从快照恢复文字（用于撤销/重做）
+   */
+  async restoreText(snapshot) {
+    if (!this._surfaceTextManager) {
+      this.initTextSystem()
+    }
+    return await this._surfaceTextManager?.restoreText?.(snapshot)
   }
   
   /**
@@ -581,8 +945,18 @@ export class EditorViewer extends Viewer {
       this._loaderManager = null
     }
     
+    if (this._exportManager) {
+      this._exportManager.dispose()
+      this._exportManager = null
+    }
+    
+    if (this._projectManager) {
+      this._projectManager.dispose()
+      this._projectManager = null
+    }
+    
     if (this._featureDetector) {
-      this._featureDetector.dispose()
+      this._featureDetector.clearCache()
       this._featureDetector = null
     }
     

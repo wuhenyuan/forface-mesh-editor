@@ -20,8 +20,6 @@ export { FeaturePool } from './FeaturePool.js'
 
 // 调试和测试工具
 export { DebugLogger, debugLogger } from './DebugLogger.js'
-export { runFinalIntegrationTests } from './integration-test-final.js'
-export { runFinalValidation } from './final-validation.js'
 
 /**
  * 创建面拾取器的便捷函数
@@ -229,24 +227,7 @@ export const FacePickingUtils = {
     }
   },
   
-  /**
-   * 运行完整的验证测试
-   * @returns {Promise<Object>} 测试结果
-   */
   async runValidationTests() {
-    const { runFinalIntegrationTests } = await import('./integration-test-final.js')
-    const { runFinalValidation } = await import('./final-validation.js')
-    
-    const integrationResults = await runFinalIntegrationTests()
-    const validationResults = await runFinalValidation()
-    
-    return {
-      integration: integrationResults,
-      validation: validationResults,
-      overall: {
-        success: integrationResults.success && validationResults.success,
-        timestamp: new Date().toISOString()
-      }
-    }
+    throw new Error('Validation test helpers are not bundled in this build')
   }
 }

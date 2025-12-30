@@ -6,6 +6,9 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { EventManager } from './EventManager.js'
+import { OptimizedFacePicker } from './facePicking/OptimizedFacePicker.js'
+import { FeatureDetector } from './facePicking/FeatureDetector.js'
+import { FeatureBasedNaming } from './facePicking/FeatureBasedNaming.js'
 
 export class Viewer {
   constructor(container, options = {}) {
@@ -44,6 +47,12 @@ export class Viewer {
     this._facePicker = null
     this._surfaceTextManager = null
     this._objectSelectionManager = null
+    
+    // 特征检测系统
+    this._featureDetector = new FeatureDetector()
+    this._featureNaming = new FeatureBasedNaming()
+    this._featureOnlyMode = false  // 只允许选中特征面的开关
+    this._detectedFeatures = new Map() // meshId -> features
     
     // 初始化
     this._init()
@@ -84,6 +93,38 @@ export class Viewer {
     if (this.options.enableGrid) {
       this._setupGrid()
     }
+    
+    // 初始化面拾取器
+    this._initFacePicker()
+  }
+  
+  /**
+   * 初始化面拾取器
+   */
+  _initFacePicker() {
+    this._facePicker = new OptimizedFacePicker(
+      this.scene,
+      this.camera,
+      this.renderer,
+      this.renderer.domElement
+    )
+    
+    // 监听面拾取事件
+    this._facePicker.on('faceSelected', (faceInfo, event) => {
+      this.events.emit('faceSelected', { faceInfo, event })
+    })
+    
+    this._facePicker.on('faceDeselected', (faceInfo, event) => {
+      this.events.emit('faceDeselected', { faceInfo, event })
+    })
+    
+    this._facePicker.on('featureSelected', (data) => {
+      this.events.emit('featureSelected', data)
+    })
+    
+    this._facePicker.on('selectionChanged', (summary) => {
+      this.events.emit('faceSelectionChanged', summary)
+    })
   }
   
   _setupLighting() {
@@ -185,6 +226,23 @@ export class Viewer {
     if (intersects.length > 0) {
       const hit = intersects[0]
       const target = this._findSelectableParent(hit.object)
+      
+      // 特征面过滤模式检查
+      if (this._featureOnlyMode && hit.faceIndex !== undefined) {
+        const feature = this.getFeatureByFace(hit.object, hit.faceIndex)
+        if (!feature) {
+          // 未识别的面，不触发点击事件
+          console.log('[Viewer] 特征面过滤: 点击的面未被识别为特征')
+          this.events.emit('click', { 
+            target: null, 
+            targetType: 'empty', 
+            event,
+            filtered: true,
+            reason: 'not_a_feature'
+          })
+          return
+        }
+      }
       
       this.events.emit('click', {
         target,
@@ -668,6 +726,232 @@ export class Viewer {
     return dataUrl
   }
   
+  // ==================== 特征检测系统 ====================
+  
+  /**
+   * 为网格检测特征（平面、圆柱面等）
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @returns {Promise<Object>} 特征数据
+   */
+  async detectFeatures(mesh) {
+    if (!mesh || !mesh.geometry) {
+      console.warn('无效的网格对象')
+      return null
+    }
+    
+    const meshId = this._featureDetector.generateMeshId(mesh)
+    
+    // 检查缓存
+    if (this._detectedFeatures.has(meshId)) {
+      return this._detectedFeatures.get(meshId)
+    }
+    
+    console.log(`[Viewer] 开始检测网格特征: ${mesh.name || meshId}`)
+    
+    try {
+      // 执行特征检测
+      const features = await this._featureDetector.preprocessMesh(mesh)
+      
+      // 生成特征命名
+      const namedFeatures = this._featureNaming.detectAndNameFeatures(mesh, meshId)
+      
+      // 合并结果
+      const result = {
+        meshId,
+        meshName: mesh.name,
+        ...features,
+        namedFeatures
+      }
+      
+      // 缓存结果
+      this._detectedFeatures.set(meshId, result)
+      
+      // 更新面拾取器
+      if (this._facePicker) {
+        await this._facePicker.setMeshes([mesh])
+      }
+      
+      this.events.emit('featuresDetected', { mesh, features: result })
+      
+      console.log(`[Viewer] 特征检测完成: ${features.planes.length} 个平面, ${features.cylinders.length} 个圆柱面`)
+      
+      return result
+      
+    } catch (error) {
+      console.error('[Viewer] 特征检测失败:', error)
+      this.events.emit('featureDetectionError', { mesh, error })
+      return null
+    }
+  }
+  
+  /**
+   * 批量检测多个网格的特征
+   * @param {THREE.Mesh[]} meshes - 网格数组
+   * @returns {Promise<Map>} meshId -> features 的映射
+   */
+  async detectFeaturesForMeshes(meshes) {
+    const results = new Map()
+    
+    for (const mesh of meshes) {
+      const features = await this.detectFeatures(mesh)
+      if (features) {
+        results.set(features.meshId, features)
+      }
+    }
+    
+    // 更新面拾取器
+    if (this._facePicker && meshes.length > 0) {
+      await this._facePicker.setMeshes(meshes)
+    }
+    
+    return results
+  }
+  
+  /**
+   * 根据面索引获取特征信息
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @param {number} faceIndex - 面索引
+   * @returns {Object|null} 特征信息
+   */
+  getFeatureByFace(mesh, faceIndex) {
+    const meshId = this._featureDetector.generateMeshId(mesh)
+    
+    // 从特征命名系统获取
+    const featureName = this._featureNaming.getFeatureNameByTriangle(meshId, faceIndex)
+    if (featureName) {
+      return this._featureNaming.getFeatureByName(featureName)
+    }
+    
+    // 从特征检测器获取
+    return this._featureDetector.getFeatureByFaceIndex(meshId, faceIndex)
+  }
+  
+  /**
+   * 获取网格的所有特征
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @returns {Object|null} 特征数据
+   */
+  getMeshFeatures(mesh) {
+    const meshId = this._featureDetector.generateMeshId(mesh)
+    return this._detectedFeatures.get(meshId) || null
+  }
+  
+  /**
+   * 获取特征的所有三角形索引
+   * @param {string} featureName - 特征名字
+   * @returns {Array} 三角形索引数组
+   */
+  getFeatureTriangles(featureName) {
+    return this._featureNaming.getFeatureTriangles(featureName)
+  }
+  
+  /**
+   * 选择整个特征（选中特征包含的所有面）
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @param {string} featureId - 特征ID
+   */
+  selectFeature(mesh, featureId) {
+    if (!this._facePicker) return
+    
+    const meshId = this._featureDetector.generateMeshId(mesh)
+    this._facePicker.selectFeature(meshId, featureId)
+  }
+  
+  /**
+   * 设置特征面过滤模式
+   * @param {boolean} enabled - 是否只允许选中识别出的特征面
+   */
+  setFeatureOnlyMode(enabled) {
+    this._featureOnlyMode = enabled
+    console.log(`[Viewer] 特征面过滤模式: ${enabled ? '开启' : '关闭'}`)
+    this.events.emit('featureOnlyModeChanged', { enabled })
+  }
+  
+  /**
+   * 获取特征面过滤模式状态
+   * @returns {boolean} 是否开启
+   */
+  isFeatureOnlyMode() {
+    return this._featureOnlyMode
+  }
+  
+  /**
+   * 启用面拾取功能
+   */
+  enableFacePicking() {
+    if (this._facePicker) {
+      this._facePicker.enable()
+      console.log('[Viewer] 面拾取功能已启用')
+    }
+  }
+  
+  /**
+   * 禁用面拾取功能
+   */
+  disableFacePicking() {
+    if (this._facePicker) {
+      this._facePicker.disable()
+      console.log('[Viewer] 面拾取功能已禁用')
+    }
+  }
+  
+  /**
+   * 获取面拾取器实例
+   * @returns {OptimizedFacePicker|null}
+   */
+  getFacePicker() {
+    return this._facePicker
+  }
+  
+  /**
+   * 获取特征检测器实例
+   * @returns {FeatureDetector}
+   */
+  getFeatureDetector() {
+    return this._featureDetector
+  }
+  
+  /**
+   * 获取特征命名系统实例
+   * @returns {FeatureBasedNaming}
+   */
+  getFeatureNaming() {
+    return this._featureNaming
+  }
+  
+  /**
+   * 清除特征缓存
+   * @param {THREE.Mesh} mesh - 网格对象（可选，不传则清除所有）
+   */
+  clearFeatureCache(mesh = null) {
+    if (mesh) {
+      const meshId = this._featureDetector.generateMeshId(mesh)
+      this._detectedFeatures.delete(meshId)
+      this._featureDetector.clearCache(meshId)
+    } else {
+      this._detectedFeatures.clear()
+      this._featureDetector.clearCache()
+      this._featureNaming.clearCache()
+    }
+    console.log('[Viewer] 特征缓存已清除')
+  }
+  
+  /**
+   * 获取特征检测统计信息
+   * @returns {Object} 统计信息
+   */
+  getFeatureStats() {
+    const detectorStats = this._featureDetector.getCacheStats()
+    const facePickerStats = this._facePicker?.getPerformanceStats() || {}
+    
+    return {
+      detector: detectorStats,
+      facePicker: facePickerStats,
+      cachedMeshes: this._detectedFeatures.size,
+      featureOnlyMode: this._featureOnlyMode
+    }
+  }
+  
   // ==================== 销毁 ====================
   
   dispose() {
@@ -679,6 +963,17 @@ export class Viewer {
     
     this._unbindEvents()
     this.events.clear()
+    
+    // 清理面拾取器
+    if (this._facePicker) {
+      this._facePicker.destroy()
+      this._facePicker = null
+    }
+    
+    // 清理特征检测系统
+    this._featureDetector.clearCache()
+    this._featureNaming.clearCache()
+    this._detectedFeatures.clear()
     
     // 清理所有网格
     this._meshes.forEach(mesh => {
