@@ -288,15 +288,147 @@ export class ProjectManager {
 
   /**
    * 更新属性标识符（用于版本比对）
+   * 生成一个唯一标识符，用于判断当前编辑状态与已保存状态是否一致
    */
   updatePropIdentifier() {
-    const parts = [
-      `scale:${this.config.finalModelConfig.scale.join(',')}`,
-      `texts:${this.config.texts.length}`,
-      `base:${this.config.baseModelPath ? 'yes' : 'no'}`
-    ]
-    this.config.propIdentifier = parts.join('|')
-    this._markDirty()
+    this.config.propIdentifier = this._generatePropIdentifier()
+  }
+
+  /**
+   * 生成属性标识符
+   * @private
+   * @returns {string} 属性标识符
+   */
+  _generatePropIdentifier() {
+    const parts = []
+    
+    // 1. 最终模型配置
+    const fm = this.config.finalModelConfig
+    parts.push(`fm_scale:${fm.scale.join(',')}`)
+    parts.push(`fm_bbox:${fm.boundingBox.join(',')}`)
+    
+    // 2. 底座配置
+    const bm = this.config.baseModelConfig
+    if (this.config.baseModelPath) {
+      parts.push(`base:${this.config.baseModelPath}`)
+      parts.push(`bm_pos:${bm.position.join(',')}`)
+      parts.push(`bm_scale:${bm.scale.join(',')}`)
+      parts.push(`bm_rot:${bm.rotation.join(',')}`)
+    } else {
+      parts.push('base:none')
+    }
+    
+    // 3. 文字配置（按 index 排序保证一致性）
+    const sortedTexts = [...this.config.texts].sort((a, b) => 
+      (a.index || '').localeCompare(b.index || '')
+    )
+    
+    sortedTexts.forEach((t, i) => {
+      parts.push(`t${i}_id:${t.index}`)
+      parts.push(`t${i}_txt:${t.text}`)
+      parts.push(`t${i}_size:${t.size}`)
+      parts.push(`t${i}_depth:${t.depth}`)
+      parts.push(`t${i}_effect:${t.effect}`)
+      parts.push(`t${i}_color:${t.color}`)
+      parts.push(`t${i}_pos:${t.position.join(',')}`)
+      parts.push(`t${i}_rot:${t.rotate.join(',')}`)
+      parts.push(`t${i}_surface:${t.attachmentSurface}`)
+    })
+    
+    // 4. 其他配置
+    parts.push(`faceRepare:${this.config.faceRepare}`)
+    parts.push(`modelOpt:${this.config.modelOptimization}`)
+    
+    // 生成 hash
+    const str = parts.join('|')
+    return this._simpleHash(str)
+  }
+
+  /**
+   * 简单哈希函数
+   * @private
+   */
+  _simpleHash(str) {
+    let hash = 0
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36)
+  }
+
+  /**
+   * 比较当前配置与已保存配置是否有变化
+   * @param {string} savedIdentifier - 已保存的标识符
+   * @returns {Object} { hasChanges: boolean, changes: string[] }
+   */
+  compareWithSaved(savedIdentifier) {
+    const currentIdentifier = this._generatePropIdentifier()
+    
+    if (currentIdentifier === savedIdentifier) {
+      return { hasChanges: false, changes: [] }
+    }
+    
+    // 检测具体变化
+    const changes = this._detectChanges(savedIdentifier)
+    return { hasChanges: true, changes }
+  }
+
+  /**
+   * 检测具体变化（用于提示用户）
+   * @private
+   */
+  _detectChanges(savedIdentifier) {
+    const changes = []
+    
+    // 这里简化处理，实际可以存储上次保存的完整配置进行详细对比
+    // 目前只返回通用提示
+    if (this._isDirty) {
+      if (this.config.texts.length > 0) {
+        changes.push('文字配置')
+      }
+      if (this.config.baseModelPath) {
+        changes.push('底座配置')
+      }
+      changes.push('模型属性')
+    }
+    
+    return changes
+  }
+
+  /**
+   * 获取变更摘要（用于提示用户）
+   * @returns {string} 变更摘要文本
+   */
+  getChangesSummary() {
+    if (!this._isDirty) {
+      return '没有未保存的修改'
+    }
+    
+    const items = []
+    
+    // 检查文字变化
+    if (this.config.texts.length > 0) {
+      items.push(`${this.config.texts.length}个文字`)
+    }
+    
+    // 检查底座
+    if (this.config.baseModelPath) {
+      items.push('底座设置')
+    }
+    
+    // 检查模型缩放
+    const scale = this.config.finalModelConfig.scale
+    if (scale[0] !== 1 || scale[1] !== 1 || scale[2] !== 1) {
+      items.push('模型缩放')
+    }
+    
+    if (items.length === 0) {
+      return '有未保存的修改'
+    }
+    
+    return `您有以下修改尚未保存：${items.join('、')}`
   }
 
   // ==================== 状态查询 ====================

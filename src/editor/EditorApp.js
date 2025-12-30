@@ -436,36 +436,126 @@ export class EditorApp {
   }
   
   _syncStateToProject() {
-    const meshes = this.viewer.getMeshes().filter(m => !m.userData.isHelper)
+    // 1. 收集主模型配置
+    const meshes = this.viewer.getMeshes().filter(m => !m.userData.isHelper && !m.userData.isText)
+    
     if (meshes.length > 0) {
       const mainMesh = meshes[0]
       const box = new THREE.Box3().setFromObject(mainMesh)
       const size = box.getSize(new THREE.Vector3())
       
+      // 计算表面积和体积（近似值）
+      let surface = 0
+      let volume = 0
+      mainMesh.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+          const geo = child.geometry
+          geo.computeBoundingBox()
+          const geoSize = geo.boundingBox.getSize(new THREE.Vector3())
+          // 简单估算：假设为长方体
+          surface += 2 * (geoSize.x * geoSize.y + geoSize.y * geoSize.z + geoSize.x * geoSize.z)
+          volume += geoSize.x * geoSize.y * geoSize.z
+        }
+      })
+      
       this.projectManager.updateFinalModelConfig({
         scale: mainMesh.scale.toArray(),
-        boundingBox: size.toArray()
+        boundingBox: size.toArray(),
+        surface: Math.round(surface * 100) / 100,
+        volume: Math.round(volume * 100) / 100
       })
     }
     
+    // 2. 收集底座配置
+    const baseMesh = this.viewer.getMeshByName('base') || this.viewer.getMeshByName('Base')
+    if (baseMesh) {
+      const baseBox = new THREE.Box3().setFromObject(baseMesh)
+      const baseSize = baseBox.getSize(new THREE.Vector3())
+      
+      this.projectManager.updateBaseModelConfig({
+        position: baseMesh.position.toArray(),
+        scale: baseMesh.scale.toArray(),
+        rotation: [baseMesh.rotation.x, baseMesh.rotation.y, baseMesh.rotation.z],
+        boundingBox: baseSize.toArray()
+      })
+    }
+    
+    // 3. 收集文字配置
     this.projectManager.config.texts = []
     this._textObjects.forEach(textObj => {
+      // 获取文字的完整配置
+      const textConfig = this._textManager?.getTextConfig?.(textObj.id) || {}
+      
       this.projectManager.addTextConfig({
         id: textObj.id,
-        displayName: textObj.displayName,
+        displayName: textObj.displayName || textObj.content,
         content: textObj.content,
-        font: textObj.config?.font,
-        size: textObj.config?.size,
-        thickness: textObj.config?.thickness,
-        mode: textObj.mode,
-        color: textObj.material?.color ? '#' + textObj.material.color.getHexString() : '#333333',
+        font: textConfig.font || textObj.config?.font || 'helvetiker',
+        size: textConfig.size || textObj.config?.size || 1,
+        thickness: textConfig.thickness || textObj.config?.thickness || 0.1,
+        mode: textObj.mode || 'raised',
+        color: this._getTextColor(textObj),
         position: textObj.mesh?.position?.toArray() || [0, 0, 0],
-        rotation: textObj.mesh?.rotation?.toArray() || [0, 0, 0],
-        featureName: textObj.featureName
+        rotation: this._getTextRotation(textObj),
+        featureName: textObj.featureName || textObj.attachedSurface || ''
       })
     })
     
+    // 4. 更新属性标识符
     this.projectManager.updatePropIdentifier()
+    
+    console.log('[EditorApp] 状态已同步到项目配置')
+  }
+  
+  /**
+   * 获取文字颜色
+   * @private
+   */
+  _getTextColor(textObj) {
+    if (textObj.material?.color) {
+      return '#' + textObj.material.color.getHexString()
+    }
+    if (textObj.mesh?.material?.color) {
+      return '#' + textObj.mesh.material.color.getHexString()
+    }
+    return '#333333'
+  }
+  
+  /**
+   * 获取文字旋转
+   * @private
+   */
+  _getTextRotation(textObj) {
+    if (textObj.mesh?.rotation) {
+      return [textObj.mesh.rotation.x, textObj.mesh.rotation.y, textObj.mesh.rotation.z]
+    }
+    return [0, 0, 0]
+  }
+  
+  /**
+   * 检查是否需要更新（与后端已保存版本对比）
+   * @param {string} savedIdentifier - 后端保存的 propIdentifier
+   * @returns {Object} { needsUpdate: boolean, summary: string }
+   */
+  checkNeedsUpdate(savedIdentifier) {
+    this._syncStateToProject()
+    const result = this.projectManager.compareWithSaved(savedIdentifier)
+    
+    return {
+      needsUpdate: result.hasChanges,
+      summary: result.hasChanges 
+        ? this.projectManager.getChangesSummary()
+        : '没有需要更新的内容'
+    }
+  }
+  
+  /**
+   * 获取当前项目的 propIdentifier
+   * @returns {string}
+   */
+  getCurrentPropIdentifier() {
+    this._syncStateToProject()
+    return this.projectManager.config.propIdentifier
   }
   
   async _restoreProjectState(projectData) {
