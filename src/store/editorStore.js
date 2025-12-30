@@ -3,7 +3,8 @@
  * 兼容 Vue 2.6+ 的轻量级状态管理
  */
 import Vue from 'vue'
-import { HistoryManager, TextCommand } from '../core/history/index.js'
+import { HistoryManager } from '../lib/history/index.js'
+import { TextCommand } from '../editor/commands/index.js'
 
 // ==================== 1. 核心状态 ====================
 const state = Vue.observable({

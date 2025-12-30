@@ -14,8 +14,8 @@
 
 <script>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { EditorViewer } from '../core/index.js'
-import { TextCommand, TransformCommand } from '../core/history/index.js'
+import { EditorApp } from '../editor/index.js'
+import { TextCommand, TransformCommand } from '../editor/commands/index.js'
 import { useEditorStore } from '../store/index.js'
 import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating/index.js'
 
@@ -75,7 +75,7 @@ export default {
     // ==================== 初始化 ====================
     
     const initViewer = () => {
-      viewer = new EditorViewer(container.value)
+      viewer = new EditorApp(container.value)
       
       // 创建测试圆柱体
       viewer.createCylinder({ name: 'TestCylinder' })
