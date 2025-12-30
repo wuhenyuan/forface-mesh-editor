@@ -16,10 +16,12 @@ export { TextTransformControls } from './TextTransformControls.js'
 export { CurvedTextGeometry, curvedTextGeometry } from './CurvedTextGeometry.js'
 export { CylinderSurfaceHelper, cylinderSurfaceHelper } from './CylinderSurfaceHelper.js'
 export { CylinderTextGeometry, cylinderTextGeometry } from './CylinderTextGeometry.js'
+export { CSGCylinderText, csgCylinderText } from './CSGCylinderText.js'
 
 // 测试工具
 export { CylinderTextTester, cylinderTextTester } from './test-cylinder-text.js'
 export { runAllTextSystemTests } from './test-text-system.js'
+export { testCSGCylinderText, benchmarkCSGCylinderText } from './test-csg-cylinder-text.js'
 
 /**
  * 创建表面文字管理器的便捷函数

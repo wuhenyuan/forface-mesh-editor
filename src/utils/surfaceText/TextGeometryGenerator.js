@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
 import { CylinderTextGeometry } from './CylinderTextGeometry.js'
+import { CSGCylinderText } from './CSGCylinderText.js'
 
 /**
  * 文字几何体生成器
@@ -13,8 +14,16 @@ export class TextGeometryGenerator {
     this.loadedFonts = new Map() // 字体缓存
     this.defaultFont = null
 
-    // 新的圆柱面文字生成器（生成闭合流形几何体）
+    // 旧的圆柱面文字生成器（坐标映射方法）
     this.cylinderTextGenerator = new CylinderTextGeometry()
+    
+    // 新的 CSG 圆柱面文字生成器（布尔操作方法）
+    this.csgCylinderText = new CSGCylinderText()
+    
+    // 圆柱面文字生成方法：'csg' | 'mapping'
+    // 'csg' - 使用 CSG 布尔操作（更精确，但较慢）
+    // 'mapping' - 使用坐标映射（较快，但可能有变形）
+    this.cylinderTextMethod = 'csg'
 
     // 预加载默认字体
     this.loadDefaultFont()
@@ -201,7 +210,7 @@ export class TextGeometryGenerator {
 
   /**
    * 生成圆柱面拟合文字
-   * 使用新的圆柱坐标映射方法，生成闭合流形几何体
+   * 支持两种方法：CSG 布尔操作 和 坐标映射
    * @param {string} text - 文字内容
    * @param {THREE.Font} font - 字体
    * @param {Object} surfaceInfo - 表面信息
@@ -211,7 +220,7 @@ export class TextGeometryGenerator {
   generateCylinderText (text, font, surfaceInfo, config) {
     const { cylinderInfo, attachPoint } = surfaceInfo
 
-    console.log(`🔧 生成圆柱面文字: "${text}"`, {
+    console.log(`🔧 生成圆柱面文字: "${text}" (方法: ${this.cylinderTextMethod})`, {
       cylinderInfo: {
         center: cylinderInfo.center,
         axis: cylinderInfo.axis,
@@ -221,8 +230,59 @@ export class TextGeometryGenerator {
       config
     })
 
-    // 使用新的圆柱坐标映射方法
-    // 这种方法保持 TextGeometry 的拓扑结构，生成闭合流形
+    let geometry
+
+    if (this.cylinderTextMethod === 'csg') {
+      // 使用 CSG 布尔操作方法（更精确）
+      console.log('🔄 使用 CSG 布尔操作生成圆柱面文字')
+      
+      try {
+        geometry = this.csgCylinderText.generateSimple(
+          text,
+          font,
+          cylinderInfo,
+          attachPoint,
+          {
+            size: config.size || 1,
+            thickness: config.thickness || 0.5,
+            textHeight: 30,  // 切割用的文字厚度
+            cylinderSegments: 64,
+            curveSegments: config.curveSegments || 12,
+            bevelEnabled: config.bevelEnabled || false
+          }
+        )
+        
+        console.log(`✅ CSG 圆柱面文字生成成功: "${text}"`, {
+          vertices: geometry.attributes.position?.count || 0,
+          generatorType: 'CSGCylinderText'
+        })
+        
+      } catch (error) {
+        console.warn('⚠️ CSG 方法失败，回退到坐标映射方法:', error.message)
+        // 回退到坐标映射方法
+        geometry = this.generateCylinderTextByMapping(text, font, cylinderInfo, attachPoint, config)
+      }
+      
+    } else {
+      // 使用坐标映射方法（较快）
+      geometry = this.generateCylinderTextByMapping(text, font, cylinderInfo, attachPoint, config)
+    }
+
+    return geometry
+  }
+
+  /**
+   * 使用坐标映射方法生成圆柱面文字
+   * @param {string} text - 文字内容
+   * @param {THREE.Font} font - 字体
+   * @param {Object} cylinderInfo - 圆柱信息
+   * @param {THREE.Vector3} attachPoint - 附着点
+   * @param {Object} config - 配置
+   * @returns {THREE.BufferGeometry} 圆柱面文字几何体
+   */
+  generateCylinderTextByMapping (text, font, cylinderInfo, attachPoint, config) {
+    console.log('🔄 使用坐标映射生成圆柱面文字')
+    
     const geometry = this.cylinderTextGenerator.generate(
       text,
       font,
@@ -231,13 +291,34 @@ export class TextGeometryGenerator {
       config
     )
 
-    console.log(`✅ 圆柱面文字几何体生成成功: "${text}"`, {
+    console.log(`✅ 坐标映射圆柱面文字生成成功: "${text}"`, {
       vertices: geometry.attributes.position?.count || 0,
       isManifold: geometry.userData?.isManifold || false,
-      generatorType: geometry.userData?.generatorType || 'unknown'
+      generatorType: geometry.userData?.generatorType || 'CylinderTextGeometry'
     })
 
     return geometry
+  }
+
+  /**
+   * 设置圆柱面文字生成方法
+   * @param {string} method - 'csg' | 'mapping'
+   */
+  setCylinderTextMethod (method) {
+    if (method === 'csg' || method === 'mapping') {
+      this.cylinderTextMethod = method
+      console.log(`圆柱面文字生成方法已设置为: ${method}`)
+    } else {
+      console.warn(`无效的方法: ${method}，保持当前方法: ${this.cylinderTextMethod}`)
+    }
+  }
+
+  /**
+   * 获取当前圆柱面文字生成方法
+   * @returns {string} 'csg' | 'mapping'
+   */
+  getCylinderTextMethod () {
+    return this.cylinderTextMethod
   }
 
   /**

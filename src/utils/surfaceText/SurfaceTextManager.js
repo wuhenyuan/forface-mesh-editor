@@ -2196,6 +2196,24 @@ export class SurfaceTextManager {
   }
 
   /**
+   * 设置圆柱面文字生成方法
+   * @param {string} method - 'csg' | 'mapping'
+   *   - 'csg': 使用 CSG 布尔操作（更精确，文字完美贴合曲面）
+   *   - 'mapping': 使用坐标映射（较快，但可能有轻微变形）
+   */
+  setCylinderTextMethod (method) {
+    this.geometryGenerator.setCylinderTextMethod(method)
+  }
+
+  /**
+   * 获取当前圆柱面文字生成方法
+   * @returns {string} 'csg' | 'mapping'
+   */
+  getCylinderTextMethod () {
+    return this.geometryGenerator.getCylinderTextMethod()
+  }
+
+  /**
    * 检查是否处于编辑模式
    * @returns {boolean} 是否处于编辑模式
    */
