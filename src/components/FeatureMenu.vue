@@ -16,7 +16,7 @@
         <span>加载中...</span>
       </div>
       <div v-else-if="displayItems.length === 0" class="empty">
-        <span>{{ emptyText }}</span>
+        <span>暂无数据</span>
       </div>
       <div v-else class="grid">
         <el-card
@@ -35,68 +35,64 @@
 </template>
 
 <script>
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
+import { useEditorStore } from '../store/index.js'
+
 export default {
   name: 'FeatureMenu',
-  props: {
-    feature: {
-      type: String,
-      default: 'base'
-    },
-    // 上层传入的菜单数据
-    items: {
-      type: Array,
-      default: () => []
-    },
-    // 是否正在加载
-    loading: {
-      type: Boolean,
-      default: false
-    },
-    // 是否使用远程搜索（true 时不在本地过滤，由上层处理）
-    remoteSearch: {
-      type: Boolean,
-      default: false
-    },
-    // 空状态文案
-    emptyText: {
-      type: String,
-      default: '暂无数据'
-    }
-  },
-  emits: ['search', 'select'],
+  emits: ['select'],
   setup(props, { emit }) {
-    const keyword = ref('')
+    const store = useEditorStore()
     
-    // 显示的数据：如果是远程搜索，直接用 items；否则本地过滤
-    const displayItems = computed(() => {
-      if (props.remoteSearch || !keyword.value) {
-        return props.items
-      }
-      // 本地搜索过滤
-      return props.items.filter(item => 
-        item.name.includes(keyword.value) ||
-        (item.tags && item.tags.some(tag => tag.includes(keyword.value)))
-      )
+    const keyword = computed({
+      get: () => store.state.menuKeyword,
+      set: (val) => store.setMenuKeyword(val)
     })
     
+    const loading = computed(() => store.state.menuLoading)
+    const displayItems = computed(() => store.state.menuItems)
+    
     // 搜索处理
-    const handleSearch = (value) => {
-      emit('search', value, props.feature)
+    const handleSearch = async (value) => {
+      store.setMenuLoading(true)
+      
+      // 模拟搜索延迟
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      // 模拟数据
+      const allData = [
+        { id: 'b1', name: '圆形底座', thumbnail: '' },
+        { id: 'b2', name: '方形底座', thumbnail: '' },
+        { id: 'b3', name: '心形底座', thumbnail: '' },
+        { id: 'b4', name: '星形底座', thumbnail: '' },
+        { id: 'b5', name: '六边形底座', thumbnail: '' },
+        { id: 'b6', name: '椭圆底座', thumbnail: '' }
+      ]
+      
+      if (!value) {
+        store.setMenuItems(allData.slice(0, 4))
+      } else {
+        store.setMenuItems(allData.filter(item => item.name.includes(value)))
+      }
+      
+      store.setMenuLoading(false)
     }
     
     // 选择菜单项
     const handleSelect = (item) => {
-      emit('select', item, props.feature)
+      emit('select', item, store.state.currentFeature)
+      console.log('选中菜单项:', item.name)
     }
     
-    // feature 变化时清空搜索
-    watch(() => props.feature, () => {
-      keyword.value = ''
-    })
+    // 功能切换时清空搜索并加载数据
+    watch(() => store.state.currentFeature, () => {
+      store.setMenuKeyword('')
+      handleSearch('')
+    }, { immediate: true })
     
     return { 
       keyword, 
+      loading,
       displayItems,
       handleSearch,
       handleSelect
@@ -134,11 +130,14 @@ export default {
   padding: 8px;
 }
 .card {
+  cursor: pointer;
+}
+.card :deep(.el-card__body) {
+  padding: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
 }
 .thumb {
   width: 100%;

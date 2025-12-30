@@ -4,11 +4,11 @@
     <div class="panel-body">
       <el-collapse v-model="activeNames">
       
-      <!-- 文字列表面板 - 常驻显示 -->
+      <!-- 文字列表面板 -->
       <el-collapse-item title="文字属性" name="text">
         <div class="text-list" v-if="textList.length > 0">
           <div 
-            v-for="(text, index) in textList" 
+            v-for="text in textList" 
             :key="text.id"
             class="text-item"
             :class="{ active: selectedTextObject && selectedTextObject.id === text.id }"
@@ -30,7 +30,7 @@
         
         <!-- 选中文字的属性编辑 -->
         <div v-if="selectedTextObject" class="text-properties">
-          <div class="properties-title">{{ currentTextDisplayName }} 属性</div>
+          <div class="properties-title">{{ selectedTextName }} 属性</div>
           <div class="row">
             <span>文字内容</span>
             <el-input 
@@ -61,7 +61,7 @@
           </div>
           
           <!-- 圆柱面特有属性 -->
-          <div v-if="isSelectedTextOnCylinder" class="cylinder-properties">
+          <div v-if="isOnCylinder" class="cylinder-properties">
             <div class="properties-subtitle">圆柱面属性</div>
             <div class="row">
               <span>环绕方向</span>
@@ -118,8 +118,6 @@
             >
               <el-option label="Helvetiker" value="helvetiker"></el-option>
               <el-option label="Helvetiker Bold" value="helvetiker_bold"></el-option>
-              <el-option label="Optimer" value="optimer"></el-option>
-              <el-option label="Optimer Bold" value="optimer_bold"></el-option>
             </el-select>
           </div>
           <div class="row">
@@ -146,7 +144,6 @@
           </div>
           <div class="text-actions">
             <el-button size="mini" @click="deleteSelectedText" type="danger">删除文字</el-button>
-            <el-button size="mini" @click="duplicateText">复制文字</el-button>
           </div>
         </div>
       </el-collapse-item>
@@ -154,13 +151,14 @@
       <el-collapse-item title="基本尺寸" name="base">
         <div class="row">
           <span>体积</span>
-          <el-input size="mini" v-model="form.volume"></el-input>
+          <el-input size="mini" v-model="form.volume" disabled></el-input>
         </div>
         <div class="row">
           <span>外形尺寸</span>
-          <el-input size="mini" v-model="form.size"></el-input>
+          <el-input size="mini" v-model="form.size" disabled></el-input>
         </div>
       </el-collapse-item>
+      
       <el-collapse-item title="颜色" name="color">
         <div class="colors">
           <el-color-picker v-model="form.color" size="small"></el-color-picker>
@@ -168,24 +166,9 @@
           <el-color-picker v-model="form.color3" size="small"></el-color-picker>
         </div>
       </el-collapse-item>
-      <el-collapse-item title="设计参数" name="design">
-        <div class="row">
-          <span>厚度</span>
-          <el-input-number v-model="form.thickness" :min="0.5" :max="10" size="mini"></el-input-number>
-        </div>
-        <div class="row">
-          <span>比例</span>
-          <el-input-number v-model="form.scale" :min="0.1" :max="3" :step="0.1" size="mini"></el-input-number>
-        </div>
-      </el-collapse-item>
-      <el-collapse-item title="对象属性" name="object">
-        <div class="row">
-          <span>名称</span>
-          <el-input size="mini" v-model="form.objectName"></el-input>
-        </div>
-      </el-collapse-item>
       </el-collapse>
     </div>
+    
     <div class="price">
       <div class="text">预计价格</div>
       <div class="value">￥{{ price }}</div>
@@ -198,184 +181,138 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, reactive } from 'vue'
+import { useEditorStore } from '../store/index.js'
+
 export default {
   name: 'PropertyPanel',
-  props: {
-    selectedTextObject: {
-      type: Object,
-      default: null
-    },
-    textList: {
-      type: Array,
-      default: () => []
-    }
-  },
-  emits: [
-    'updateTextContent',
-    'updateTextColor', 
-    'updateTextMode',
-    'updateTextFont',
-    'updateTextSize',
-    'updateTextThickness',
-    'updateTextDirection',
-    'updateLetterSpacing',
-    'updateCurvingStrength',
-    'updateStartAngle',
-    'deleteSelectedText',
-    'deleteText',
-    'selectText',
-    'duplicateText'
-  ],
-  setup(props, { emit }) {
-    const activeNames = ref(['text', 'base', 'color', 'design'])
+  setup() {
+    const store = useEditorStore()
+    const activeNames = ref(['text', 'base', 'color'])
+    
+    // 从 store 获取数据
+    const selectedTextObject = computed(() => store.state.selectedTextObject)
+    const textList = computed(() => store.state.textList)
+    const selectedTextName = computed(() => store.selectedTextName())
+    const isOnCylinder = computed(() => store.isSelectedTextOnCylinder())
     
     // 基本表单
-    const form = ref({
+    const form = reactive({
       volume: '36531.36mm³',
       size: '120×120×180.00mm',
       color: '#409eff',
       color2: '#67c23a',
-      color3: '#e6a23c',
-      thickness: 1.0,
-      scale: 1.0,
-      objectName: '对象'
+      color3: '#e6a23c'
     })
     
     // 文字表单
-    const textForm = ref({
+    const textForm = reactive({
       content: '',
       color: '#333333',
       mode: 'raised',
       font: 'helvetiker',
       size: 1,
       thickness: 0.1,
-      // 圆柱面特有属性
       direction: 1,
       letterSpacing: 0.1,
       curvingStrength: 1.0,
       startAngle: 0
     })
     
-    // 检查选中文字是否在圆柱面上
-    const isSelectedTextOnCylinder = computed(() => {
-      return props.selectedTextObject && 
-             props.selectedTextObject.mesh &&
-             props.selectedTextObject.mesh.userData.surfaceType === 'cylinder'
-    })
+    const price = computed(() => '128.00')
     
-    // 当前选中文字的显示名称
-    const currentTextDisplayName = computed(() => {
-      if (!props.selectedTextObject) return ''
-      const textItem = props.textList.find(t => t.id === props.selectedTextObject.id)
-      return textItem ? textItem.displayName : '文字'
-    })
-    
-    // 监听选中的文字对象变化
-    watch(() => props.selectedTextObject, (newTextObject) => {
-      if (newTextObject) {
-        // 更新文字表单数据
-        textForm.value = {
-          content: newTextObject.content || '',
-          color: '#' + newTextObject.material.color.getHexString(),
-          mode: newTextObject.mode || 'raised',
-          font: newTextObject.config.font || 'helvetiker',
-          size: newTextObject.config.size || 1,
-          thickness: newTextObject.config.thickness || 0.1,
-          // 圆柱面特有属性
-          direction: newTextObject.config.direction || 1,
-          letterSpacing: newTextObject.config.letterSpacing || 0.1,
-          curvingStrength: newTextObject.config.curvingStrength || 1.0,
-          startAngle: newTextObject.config.startAngle || 0
-        }
+    // 同步选中文字到表单
+    watch(selectedTextObject, (obj) => {
+      if (obj) {
+        textForm.content = obj.content || ''
+        textForm.color = '#' + (obj.material?.color?.getHexString?.() || '333333')
+        textForm.mode = obj.mode || 'raised'
+        textForm.font = obj.config?.font || 'helvetiker'
+        textForm.size = obj.config?.size || 1
+        textForm.thickness = obj.config?.thickness || 0.1
+        textForm.direction = obj.config?.direction || 1
+        textForm.letterSpacing = obj.config?.letterSpacing || 0.1
+        textForm.curvingStrength = obj.config?.curvingStrength || 1.0
+        textForm.startAngle = obj.config?.startAngle || 0
       }
     }, { immediate: true })
     
-    const price = computed(() =>
-      (Math.round(form.value.thickness * 128 * form.value.scale * 100) / 100).toFixed(2)
-    )
+    // 获取 workspace 引用
+    const getWorkspace = () => store.state.workspaceRef?.value
     
-    // 选择文字项
+    // 选择文字
     const selectTextItem = (text) => {
-      emit('selectText', text.id)
+      getWorkspace()?.selectText(text.id)
     }
     
-    // 删除文字项
+    // 删除文字
     const deleteTextItem = (textId) => {
-      emit('deleteText', textId)
+      getWorkspace()?.deleteText(textId)
     }
     
-    // 文字属性更新方法
+    const deleteSelectedText = () => {
+      getWorkspace()?.deleteSelectedText()
+    }
+    
+    // 更新方法
     const updateTextContent = () => {
-      if (props.selectedTextObject) {
-        emit('updateTextContent', props.selectedTextObject.id, textForm.value.content)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateTextContent(selectedTextObject.value.id, textForm.content)
+        store.updateTextInList(selectedTextObject.value.id, textForm.content)
       }
     }
     
     const updateTextColor = () => {
-      if (props.selectedTextObject) {
-        emit('updateTextColor', props.selectedTextObject.id, textForm.value.color)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateTextColor(selectedTextObject.value.id, textForm.color)
       }
     }
     
     const updateTextMode = () => {
-      if (props.selectedTextObject) {
-        emit('updateTextMode', props.selectedTextObject.id, textForm.value.mode)
+      if (selectedTextObject.value) {
+        getWorkspace()?.switchTextMode(selectedTextObject.value.id, textForm.mode)
       }
     }
     
     const updateTextFont = () => {
-      if (props.selectedTextObject) {
-        emit('updateTextFont', props.selectedTextObject.id, textForm.value.font)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateTextConfig(selectedTextObject.value.id, { font: textForm.font })
       }
     }
     
     const updateTextSize = () => {
-      if (props.selectedTextObject) {
-        emit('updateTextSize', props.selectedTextObject.id, textForm.value.size)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateTextConfig(selectedTextObject.value.id, { size: textForm.size })
       }
     }
     
     const updateTextThickness = () => {
-      if (props.selectedTextObject) {
-        emit('updateTextThickness', props.selectedTextObject.id, textForm.value.thickness)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateTextConfig(selectedTextObject.value.id, { thickness: textForm.thickness })
       }
     }
     
-    const deleteSelectedText = () => {
-      if (props.selectedTextObject) {
-        emit('deleteSelectedText')
-      }
-    }
-    
-    const duplicateText = () => {
-      if (props.selectedTextObject) {
-        emit('duplicateText')
-      }
-    }
-    
-    // 圆柱面特有属性更新方法
     const updateTextDirection = () => {
-      if (props.selectedTextObject) {
-        emit('updateTextDirection', props.selectedTextObject.id, textForm.value.direction)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateTextDirection(selectedTextObject.value.id, textForm.direction)
       }
     }
     
     const updateLetterSpacing = () => {
-      if (props.selectedTextObject) {
-        emit('updateLetterSpacing', props.selectedTextObject.id, textForm.value.letterSpacing)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateLetterSpacing(selectedTextObject.value.id, textForm.letterSpacing)
       }
     }
     
     const updateCurvingStrength = () => {
-      if (props.selectedTextObject) {
-        emit('updateCurvingStrength', props.selectedTextObject.id, textForm.value.curvingStrength)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateCurvingStrength(selectedTextObject.value.id, textForm.curvingStrength)
       }
     }
     
     const updateStartAngle = () => {
-      if (props.selectedTextObject) {
-        emit('updateStartAngle', props.selectedTextObject.id, textForm.value.startAngle)
+      if (selectedTextObject.value) {
+        getWorkspace()?.updateStartAngle(selectedTextObject.value.id, textForm.startAngle)
       }
     }
     
@@ -384,10 +321,13 @@ export default {
       form, 
       textForm,
       price,
-      currentTextDisplayName,
-      isSelectedTextOnCylinder,
+      selectedTextObject,
+      textList,
+      selectedTextName,
+      isOnCylinder,
       selectTextItem,
       deleteTextItem,
+      deleteSelectedText,
       updateTextContent,
       updateTextColor,
       updateTextMode,
@@ -397,9 +337,7 @@ export default {
       updateTextDirection,
       updateLetterSpacing,
       updateCurvingStrength,
-      updateStartAngle,
-      deleteSelectedText,
-      duplicateText
+      updateStartAngle
     }
   }
 }
@@ -456,11 +394,10 @@ export default {
   border-top: 1px solid #ebeef5;
 }
 
-/* 文字列表样式 */
+/* 文字列表 */
 .text-list {
   margin-bottom: 12px;
 }
-
 .text-item {
   display: flex;
   align-items: center;
@@ -471,26 +408,21 @@ export default {
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .text-item:hover {
   background: #e6f0ff;
 }
-
 .text-item.active {
   background: #409eff;
   color: #fff;
 }
-
 .text-item.active .text-content {
   color: rgba(255, 255, 255, 0.8);
 }
-
 .text-name {
   font-weight: 500;
   margin-right: 8px;
   flex-shrink: 0;
 }
-
 .text-content {
   flex: 1;
   color: #909399;
@@ -499,7 +431,6 @@ export default {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .empty-text {
   padding: 20px;
   text-align: center;
@@ -507,46 +438,34 @@ export default {
   font-size: 12px;
 }
 
-/* 文字属性编辑区域 */
+/* 文字属性 */
 .text-properties {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px dashed #ebeef5;
 }
-
 .properties-title {
-  font-weight: 500;
-  margin-bottom: 10px;
-  color: #409eff;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #303133;
 }
-
-.text-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed #ebeef5;
-}
-
-/* 圆柱面属性样式 */
-.cylinder-properties {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed #e4e7ed;
-}
-
 .properties-subtitle {
   font-size: 12px;
   color: #909399;
   margin-bottom: 8px;
   font-weight: 500;
 }
-
-.properties-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #303133;
+.cylinder-properties {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e4e7ed;
+}
+.text-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #ebeef5;
 }
 </style>

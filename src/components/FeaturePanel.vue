@@ -1,6 +1,6 @@
 <template>
   <div class="feature-panel">
-    <el-menu :default-active="active" class="feature-menu" @select="onSelect" router="false">
+    <el-menu :default-active="currentFeature" class="feature-menu" @select="onSelect">
       <el-menu-item index="base">底座</el-menu-item>
       <el-menu-item index="ornament">饰品</el-menu-item>
       <el-menu-item index="text">文字</el-menu-item>
@@ -10,23 +10,22 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useEditorStore } from '../store/index.js'
+
 export default {
   name: 'FeaturePanel',
-  props: {
-    value: {
-      type: String,
-      default: 'base'
+  setup() {
+    const store = useEditorStore()
+    
+    const currentFeature = computed(() => store.state.currentFeature)
+    
+    const onSelect = (key) => {
+      console.log('🔥 FeaturePanel onSelect:', key)
+      store.setFeature(key)
     }
-  },
-  setup(props, { emit }) {
-    const active = ref(props.value)
-    const onSelect = key => {
-      active.value = key
-      emit('input', key)
-      emit('change', key)
-    }
-    return { active, onSelect }
+    
+    return { currentFeature, onSelect }
   }
 }
 </script>
@@ -41,7 +40,7 @@ export default {
 .feature-menu {
   border-right: none;
 }
-.feature-menu ::v-deep .el-menu-item {
+.feature-menu :deep(.el-menu-item) {
   height: 48px;
   line-height: 48px;
 }

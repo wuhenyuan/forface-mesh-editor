@@ -2,7 +2,23 @@
   "name": "forface-mesh-editor",
   "version": "1.0.0",
   "description": "Vue 2 + Vite 项目",
-  "main": "index.js",
+  "main": "dist/forface-mesh-editor.umd.js",
+  "module": "dist/forface-mesh-editor.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/forface-mesh-editor.es.js",
+      "require": "./dist/forface-mesh-editor.umd.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/components",
+    "src/utils"
+  ],
+  "peerDependencies": {
+    "vue": "^2.7.0",
+    "element-ui": "^2.15.0"
+  },
   "dependencies": {
     "element-ui": "^2.15.14",
     "three": "^0.160.0",
@@ -17,8 +33,9 @@
     "vue-template-compiler": "^2.7.16"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --config vite.dev.config.js",
     "build": "vite build",
+    "build:lib": "vite build --mode lib",
     "preview": "vite preview"
   },
   "keywords": [
