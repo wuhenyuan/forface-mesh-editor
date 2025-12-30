@@ -10,6 +10,10 @@ import { TextCommand } from '../editor/commands/index.js'
 const state = Vue.observable({
   // 功能区状态
   currentFeature: 'base', // 'base' | 'ornament' | 'text' | 'adjust'
+
+  // 视图模式（结果态/构造态）
+  viewMode: 'result', // 'result' | 'construct'
+  viewModeBusy: false,
   
   // 功能菜单状态
   menuVisible: true,
@@ -90,6 +94,10 @@ const historyManager = new HistoryManager({
 const getters = {
   // 功能菜单是否显示
   shouldShowMenu: () => state.currentFeature === 'base' && state.menuVisible,
+
+  // 视图模式
+  isResultMode: () => state.viewMode === 'result',
+  isConstructMode: () => state.viewMode === 'construct',
   
   // 是否可撤销/重做
   canUndo: () => state.history.canUndo,
@@ -115,6 +123,34 @@ const getters = {
 
 // ==================== 3. Actions ====================
 const actions = {
+  // --- ViewMode helpers ---
+  async setViewMode(mode, options = {}) {
+    const { force = false } = options
+    if (mode !== 'result' && mode !== 'construct') return
+    if (state.viewModeBusy) return
+    if (!force && state.viewMode === mode) return
+
+    const viewer = this.getViewer()
+    state.viewModeBusy = true
+    try {
+      await viewer?.setViewMode?.(mode)
+      state.viewMode = mode
+    } finally {
+      state.viewModeBusy = false
+    }
+  },
+
+  async toggleViewMode() {
+    const next = state.viewMode === 'result' ? 'construct' : 'result'
+    return await this.setViewMode(next)
+  },
+
+  async ensureConstructMode() {
+    if (state.viewMode !== 'construct') {
+      await this.setViewMode('construct')
+    }
+  },
+
   // --- History helpers ---
   getHistoryManager() {
     return historyManager
@@ -127,6 +163,7 @@ const actions = {
   async executeCommand(command) {
     try {
       state.history.lastError = null
+      await this.ensureConstructMode()
       await historyManager.execute(command)
     } catch (error) {
       state.history.lastError = error
@@ -141,6 +178,7 @@ const actions = {
   async undo() {
     try {
       state.history.lastError = null
+      await this.ensureConstructMode()
       return await historyManager.undo()
     } catch (error) {
       state.history.lastError = error
@@ -151,6 +189,7 @@ const actions = {
   async redo() {
     try {
       state.history.lastError = null
+      await this.ensureConstructMode()
       return await historyManager.redo()
     } catch (error) {
       state.history.lastError = error
@@ -353,30 +392,35 @@ const actions = {
 
   // ========== 历史集成：文字相关 ==========
   async deleteText(textId) {
+    await this.ensureConstructMode()
     const viewer = this.getViewer()
     if (!viewer || !textId) return
     await this.executeCommand(new TextCommand('delete', viewer, { textId }))
   },
 
   async updateTextContent(textId, content) {
+    await this.ensureConstructMode()
     const viewer = this.getViewer()
     if (!viewer || !textId) return
     await this.executeCommand(new TextCommand('updateContent', viewer, { textId, to: content }))
   },
 
   async updateTextColor(textId, color) {
+    await this.ensureConstructMode()
     const viewer = this.getViewer()
     if (!viewer || !textId) return
     await this.executeCommand(new TextCommand('updateColor', viewer, { textId, to: color }))
   },
 
   async updateTextConfigWithHistory(textId, patch) {
+    await this.ensureConstructMode()
     const viewer = this.getViewer()
     if (!viewer || !textId) return
     await this.executeCommand(new TextCommand('updateConfig', viewer, { textId, patch }))
   },
 
   async switchTextModeWithHistory(textId, mode) {
+    await this.ensureConstructMode()
     const viewer = this.getViewer()
     if (!viewer || !textId) return
     await this.executeCommand(new TextCommand('setMode', viewer, { textId, toMode: mode }))
@@ -385,6 +429,8 @@ const actions = {
   // --- 重置 ---
   reset() {
     state.currentFeature = 'base'
+    state.viewMode = 'result'
+    state.viewModeBusy = false
     state.menuVisible = true
     state.menuItems = []
     state.selectedTextObject = null

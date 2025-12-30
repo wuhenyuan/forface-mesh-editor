@@ -94,6 +94,11 @@ export default {
       
       // 注册到 store
       store.setWorkspaceRef({ value: getExposedMethods() })
+
+      // 同步 store 的 viewMode 到运行时（首次挂载时需要 force）
+      store.setViewMode(store.state.viewMode, { force: true }).catch(err => {
+        console.error('同步 viewMode 失败:', err)
+      })
       
       // 挂载到 window 供调试
       if (import.meta.env.DEV) {
@@ -268,7 +273,9 @@ export default {
           break
           
         case 'addText':
-          viewer.enableTextMode()
+          store.setViewMode('construct')
+            .then(() => viewer.enableTextMode())
+            .catch(err => console.error('进入编辑态失败:', err))
           break
           
         case 'select':
@@ -366,7 +373,9 @@ export default {
       if (!viewer) return
       
       if (newTool === 'text') {
-        viewer.enableTextMode()
+        store.setViewMode('construct')
+          .then(() => viewer.enableTextMode())
+          .catch(err => console.error('进入编辑态失败:', err))
       } else if (oldTool === 'text') {
         viewer.disableTextMode()
       }

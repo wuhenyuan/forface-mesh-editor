@@ -35,6 +35,10 @@ export class EditorApp {
     this._textObjects = []
     this._selectedTextId = null
     this._textModeEnabled = false
+
+    // 视图模式：结果态 / 构造态
+    this.viewMode = 'construct' // 'construct' | 'result'
+    this._viewModeBusy = false
     
     // 初始化
     this._setupEvents()
@@ -268,6 +272,9 @@ export class EditorApp {
         this.viewer.setControlsEnabled(!isDragging)
       })
     }
+
+    // 同步当前 viewMode（避免初始化后仍可在结果态触发编辑交互）
+    this._textManager.setViewMode?.(this.viewMode).catch?.(() => {})
     
     return this._textManager
   }
@@ -327,6 +334,46 @@ export class EditorApp {
   
   getTextManager() {
     return this._textManager
+  }
+
+  // ==================== 视图模式（结果态/构造态） ====================
+
+  /**
+   * 设置视图模式
+   * - construct：显示可编辑对象（原模型/底座/文字），允许编辑
+   * - result：显示布尔/结果态（内嵌文字已应用），禁止编辑
+   */
+  async setViewMode(mode) {
+    if (mode !== 'construct' && mode !== 'result') return
+    if (this._viewModeBusy) return
+    if (this.viewMode === mode) return
+
+    this._viewModeBusy = true
+    try {
+      if (mode === 'result') {
+        // 先关闭编辑入口
+        this.disableTextMode()
+        this.disableObjectSelection()
+
+        // 应用内嵌/布尔结果并禁止交互
+        await this._textManager?.setViewMode?.('result')
+      } else {
+        // 恢复构造态（显示 operands）
+        await this._textManager?.setViewMode?.('construct')
+
+        // 恢复编辑交互
+        this.enableObjectSelection()
+      }
+
+      this.viewMode = mode
+      this.viewer.events.emit('viewModeChanged', { mode })
+    } finally {
+      this._viewModeBusy = false
+    }
+  }
+
+  getViewMode() {
+    return this.viewMode
   }
   
   // ==================== 物体选择系统 ====================

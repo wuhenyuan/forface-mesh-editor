@@ -36,6 +36,10 @@ export class SurfaceTextManager {
     this.selectedTextId = null
     this.isTextMode = false
 
+    // 视图模式：构造态/结果态
+    this.viewMode = 'construct' // 'construct' | 'result'
+    this._engravingDirtyMeshes = new Set() // mesh.uuid -> dirty
+
     // 编辑模式状态
     this.isEditing = false // 是否处于编辑模式（内嵌文字被选中编辑）
     this.isDragging = false // 是否正在拖动
@@ -117,6 +121,236 @@ export class SurfaceTextManager {
     this.emit('textModeDisabled')
   }
 
+  // ==================== 视图模式（结果态/构造态） ====================
+
+  getViewMode () {
+    return this.viewMode
+  }
+
+  /**
+   * 设置视图模式
+   * - construct：显示可编辑对象（目标网格原始几何体 + 全部文字 mesh）
+   * - result：应用内嵌布尔结果（目标网格更新几何体 + 隐藏内嵌文字 mesh），并禁用编辑交互
+   */
+  async setViewMode (mode, options = {}) {
+    if (mode !== 'construct' && mode !== 'result') return
+    if (this.viewMode === mode) return
+
+    if (mode === 'result') {
+      // 结果态：禁止交互 + 应用布尔结果
+      this.disableTextMode()
+      this._forceClearSelection()
+      await this._applyAllEngravings({ force: true })
+      this.viewMode = 'result'
+      this.emit('viewModeChanged', { mode: 'result' })
+      return
+    }
+
+    // 构造态：恢复原始几何体 + 显示所有文字 mesh
+    this.viewMode = 'construct'
+    this._forceClearSelection()
+    this._restoreAllBaselines()
+    this._showAllTextMeshesForConstruct()
+    this.emit('viewModeChanged', { mode: 'construct' })
+  }
+
+  _markEngravingDirty (mesh) {
+    if (!mesh?.uuid) return
+    this._engravingDirtyMeshes.add(mesh.uuid)
+  }
+
+  _getMeshBaseline (mesh) {
+    return mesh?.userData?._surfaceTextBaseline || null
+  }
+
+  _ensureMeshBaseline (mesh) {
+    if (!mesh || !mesh.geometry) return null
+    if (!mesh.userData) mesh.userData = {}
+
+    const existing = this._getMeshBaseline(mesh)
+    if (existing?.geometry) return existing
+
+    const baseline = {
+      geometry: mesh.geometry.clone(),
+      material: mesh.material
+    }
+
+    mesh.userData._surfaceTextBaseline = baseline
+    return baseline
+  }
+
+  _restoreBaselineForMesh (mesh) {
+    const baseline = this._getMeshBaseline(mesh)
+    if (!baseline?.geometry) return
+
+    try {
+      mesh.geometry?.dispose?.()
+    } catch {}
+
+    mesh.geometry = baseline.geometry.clone()
+    mesh.material = baseline.material
+  }
+
+  _restoreAllBaselines () {
+    this.targetMeshes.forEach(mesh => {
+      this._restoreBaselineForMesh(mesh)
+    })
+  }
+
+  _showAllTextMeshesForConstruct () {
+    this.textObjects.forEach((textObject) => {
+      if (!textObject?.mesh) return
+
+      // 显示文字 mesh（包括内嵌文字）
+      textObject.mesh.visible = true
+
+      // 从内嵌编辑位置恢复到表面位置
+      if (textObject.mode === 'engraved' && textObject.originalPosition) {
+        textObject.mesh.position.copy(textObject.originalPosition)
+        textObject.mesh.updateMatrixWorld(true)
+      }
+    })
+  }
+
+  _forceClearSelection () {
+    if (!this.selectedTextId) return
+    const textObject = this.textObjects.get(this.selectedTextId)
+
+    this.transformControls.detach()
+    if (textObject?.mesh) {
+      this.removeSelectionHighlight(textObject.mesh)
+    }
+
+    this.emit('textDeselected', textObject)
+    this.selectedTextId = null
+    this.isEditing = false
+  }
+
+  async _applyAllEngravings ({ force = false } = {}) {
+    const targetMeshes = new Map() // uuid -> mesh
+
+    this.textObjects.forEach((textObject) => {
+      if (!textObject?.targetMesh?.uuid) return
+      if (textObject.mode !== 'engraved') return
+
+      const uuid = textObject.targetMesh.uuid
+      if (!force && !this._engravingDirtyMeshes.has(uuid)) return
+      targetMeshes.set(uuid, textObject.targetMesh)
+    })
+
+    for (const mesh of targetMeshes.values()) {
+      await this._applyEngravingsForMesh(mesh)
+      this._engravingDirtyMeshes.delete(mesh.uuid)
+    }
+  }
+
+  _getEngravedMaterialForMesh (mesh, originalMaterial) {
+    if (!mesh.userData) mesh.userData = {}
+
+    const originalColor = originalMaterial?.color?.getHex?.() ?? 0x409eff
+    const r = ((originalColor >> 16) & 0xff) * 0.4
+    const g = ((originalColor >> 8) & 0xff) * 0.4
+    const b = (originalColor & 0xff) * 0.4
+    const engravedColor = (Math.floor(r) << 16) | (Math.floor(g) << 8) | Math.floor(b)
+
+    if (!mesh.userData._surfaceTextEngravedMaterial) {
+      mesh.userData._surfaceTextEngravedMaterial = new THREE.MeshStandardMaterial({
+        color: engravedColor,
+        roughness: 0.9,
+        metalness: 0.0
+      })
+    } else {
+      mesh.userData._surfaceTextEngravedMaterial.color.setHex(engravedColor)
+    }
+
+    return mesh.userData._surfaceTextEngravedMaterial
+  }
+
+  async _applyEngravingsForMesh (mesh) {
+    if (!mesh) return
+
+    const baseline = this._ensureMeshBaseline(mesh)
+    if (!baseline?.geometry) return
+
+    const textIds = this.meshTextMap.get(mesh.uuid)
+    if (!textIds) return
+
+    const engravedTextObjects = []
+    for (const textId of textIds) {
+      const textObject = this.textObjects.get(textId)
+      if (textObject?.mode === 'engraved') {
+        engravedTextObjects.push(textObject)
+      }
+    }
+
+    // 没有内嵌文字：恢复原始几何体/材质并返回
+    if (engravedTextObjects.length === 0) {
+      this._restoreBaselineForMesh(mesh)
+      return
+    }
+
+    let currentGeometry = baseline.geometry.clone()
+    try {
+      for (const textObject of engravedTextObjects) {
+        // 确保文字网格的世界矩阵最新
+        textObject.mesh.updateMatrixWorld(true)
+
+        const textGeometryForCSG = textObject.geometry.clone()
+        const isCylinderText = textObject.surfaceInfo?.surfaceType === 'cylinder'
+
+        if (isCylinderText) {
+          const targetInverseMatrix = new THREE.Matrix4().copy(mesh.matrixWorld).invert()
+          textGeometryForCSG.applyMatrix4(targetInverseMatrix)
+        } else {
+          textGeometryForCSG.applyMatrix4(textObject.mesh.matrixWorld)
+          const targetInverseMatrix = new THREE.Matrix4().copy(mesh.matrixWorld).invert()
+          textGeometryForCSG.applyMatrix4(targetInverseMatrix)
+        }
+
+        const result = await this.booleanOperator.subtract(
+          currentGeometry,
+          textGeometryForCSG,
+          null,
+          { textId: textObject.id }
+        )
+
+        if (result?.geometry) {
+          if (currentGeometry !== baseline.geometry) {
+            currentGeometry.dispose()
+          }
+          currentGeometry = result.geometry
+        }
+
+        textGeometryForCSG.dispose()
+
+        // 结果态隐藏内嵌文字网格
+        textObject.mesh.visible = false
+      }
+
+      mesh.geometry?.dispose?.()
+      mesh.geometry = currentGeometry
+
+      const originalMaterial = Array.isArray(baseline.material)
+        ? baseline.material[0]
+        : baseline.material
+
+      const engravedMaterial = this._getEngravedMaterialForMesh(mesh, originalMaterial)
+      mesh.material = [originalMaterial, engravedMaterial]
+
+    } catch (error) {
+      // 回退到原始几何体，避免场景处于半成品状态
+      try {
+        if (currentGeometry && currentGeometry !== baseline.geometry) {
+          currentGeometry.dispose()
+        }
+      } catch {}
+
+      this._restoreBaselineForMesh(mesh)
+      engravedTextObjects.forEach(t => { if (t?.mesh) t.mesh.visible = true })
+      throw error
+    }
+  }
+
   /**
    * 启用点击监听（初始化时调用）
    */
@@ -140,6 +374,9 @@ export class SurfaceTextManager {
    * @param {MouseEvent} event - 鼠标事件
    */
   async _onCanvasClick (event) {
+    // 结果态禁止交互
+    if (this.viewMode !== 'construct') return
+
     // 计算归一化设备坐标（相对于 canvas）
     const canvas = this.renderer.domElement
     const rect = canvas.getBoundingClientRect()
@@ -1224,114 +1461,110 @@ export class SurfaceTextManager {
       await this.deselectText(false) // 不应用更改，因为我们要删除它
     }
 
-    // 如果是内嵌模式，需要处理几何体
-    if (textObject.mode === 'engraved' && textObject.originalTargetGeometry) {
+    const isConstructView = this.viewMode === 'construct'
+
+    // 如果是内嵌模式：构造态不做布尔（等切回结果态统一重算）；结果态保持原逻辑
+    if (textObject.mode === 'engraved') {
       // 先移除映射关系（这样在检查其他内嵌文字时不会包含当前文字）
       this.removeMeshTextMapping(textObject.targetMesh, textId)
 
-      // 检查该网格上是否还有其他内嵌文字
-      const textIds = this.meshTextMap.get(textObject.targetMesh.uuid)
-      const otherEngravedTexts = []
+      if (isConstructView || !textObject.originalTargetGeometry) {
+        this._markEngravingDirty(textObject.targetMesh)
+      } else {
+        // 检查该网格上是否还有其他内嵌文字
+        const textIds = this.meshTextMap.get(textObject.targetMesh.uuid)
+        const otherEngravedTexts = []
 
-      if (textIds) {
-        for (const otherTextId of textIds) {
-          const otherTextObj = this.textObjects.get(otherTextId)
-          if (otherTextObj && otherTextObj.mode === 'engraved') {
-            otherEngravedTexts.push(otherTextObj)
+        if (textIds) {
+          for (const otherTextId of textIds) {
+            const otherTextObj = this.textObjects.get(otherTextId)
+            if (otherTextObj && otherTextObj.mode === 'engraved') {
+              otherEngravedTexts.push(otherTextObj)
+            }
           }
         }
-      }
 
-      if (otherEngravedTexts.length > 0) {
-        // 还有其他内嵌文字，需要重新应用它们的布尔操作
-        console.log(`删除文字后，重新应用 ${otherEngravedTexts.length} 个其他内嵌文字`)
+        if (otherEngravedTexts.length > 0) {
+          console.log(`删除文字后，重新应用 ${otherEngravedTexts.length} 个其他内嵌文字`)
 
-        try {
-          // 从原始几何体开始
-          let currentGeometry = textObject.originalTargetGeometry.clone()
+          try {
+            let currentGeometry = textObject.originalTargetGeometry.clone()
 
-          // 依次应用其他内嵌文字的布尔操作
-          for (const otherTextObj of otherEngravedTexts) {
-            // 更新文字网格的世界矩阵
-            otherTextObj.mesh.updateMatrixWorld(true)
+            for (const otherTextObj of otherEngravedTexts) {
+              otherTextObj.mesh.updateMatrixWorld(true)
+              const textGeometryForCSG = otherTextObj.geometry.clone()
 
-            // 创建一个用于布尔操作的文字几何体副本
-            const textGeometryForCSG = otherTextObj.geometry.clone()
-
-            // 🔧 关键修复：检测是否是圆柱面文字
-            const isCylinderText = otherTextObj.surfaceInfo?.surfaceType === 'cylinder'
-
-            if (isCylinderText) {
-              // 🔧 圆柱面文字需要向内偏移才能正确进行布尔减法
-              const cylinderInfo = otherTextObj.surfaceInfo.cylinderInfo
-              if (cylinderInfo) {
-                this.offsetCylinderTextInward(textGeometryForCSG, cylinderInfo, otherTextObj.config.thickness || 0.5)
+              const isCylinderText = otherTextObj.surfaceInfo?.surfaceType === 'cylinder'
+              if (isCylinderText) {
+                const cylinderInfo = otherTextObj.surfaceInfo.cylinderInfo
+                if (cylinderInfo) {
+                  this.offsetCylinderTextInward(textGeometryForCSG, cylinderInfo, otherTextObj.config.thickness || 0.5)
+                }
+                const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert()
+                textGeometryForCSG.applyMatrix4(targetInverseMatrix)
+              } else {
+                textGeometryForCSG.applyMatrix4(otherTextObj.mesh.matrixWorld)
+                const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert()
+                textGeometryForCSG.applyMatrix4(targetInverseMatrix)
               }
 
-              // 圆柱面文字：几何体已经在世界坐标系
-              const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert()
-              textGeometryForCSG.applyMatrix4(targetInverseMatrix)
-            } else {
-              // 平面文字：需要应用网格变换
-              textGeometryForCSG.applyMatrix4(otherTextObj.mesh.matrixWorld)
-              const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert()
-              textGeometryForCSG.applyMatrix4(targetInverseMatrix)
-            }
+              const result = await this.booleanOperator.subtract(
+                currentGeometry,
+                textGeometryForCSG,
+                null,
+                { textId: otherTextObj.id }
+              )
 
-            // 执行布尔减法操作
-            const result = await this.booleanOperator.subtract(
-              currentGeometry,
-              textGeometryForCSG,
-              null,
-              { textId: otherTextObj.id }
-            )
-
-            if (result && result.geometry) {
-              // 清理上一个几何体
-              if (currentGeometry !== textObject.originalTargetGeometry) {
-                currentGeometry.dispose()
+              if (result && result.geometry) {
+                if (currentGeometry !== textObject.originalTargetGeometry) {
+                  currentGeometry.dispose()
+                }
+                currentGeometry = result.geometry
               }
-              currentGeometry = result.geometry
+
+              textGeometryForCSG.dispose()
             }
 
-            // 清理临时几何体
-            textGeometryForCSG.dispose()
+            textObject.targetMesh.geometry.dispose()
+            textObject.targetMesh.geometry = currentGeometry
+            this.updateMeshMaterials(textObject.targetMesh, otherEngravedTexts[0])
+
+          } catch (error) {
+            console.error('重新应用其他内嵌文字失败:', error)
+            textObject.targetMesh.geometry.dispose()
+            textObject.targetMesh.geometry = textObject.originalTargetGeometry.clone()
+            if (textObject.originalTargetMaterial) {
+              textObject.targetMesh.material = textObject.originalTargetMaterial
+            }
           }
 
-          // 更新目标网格几何体
-          textObject.targetMesh.geometry.dispose()
-          textObject.targetMesh.geometry = currentGeometry
-
-          // 更新多材质数组
-          this.updateMeshMaterials(textObject.targetMesh, otherEngravedTexts[0])
-
-        } catch (error) {
-          console.error('重新应用其他内嵌文字失败:', error)
-          // 回退：恢复原始几何体
+        } else {
           textObject.targetMesh.geometry.dispose()
           textObject.targetMesh.geometry = textObject.originalTargetGeometry.clone()
+
           if (textObject.originalTargetMaterial) {
             textObject.targetMesh.material = textObject.originalTargetMaterial
           }
         }
 
-      } else {
-        // 没有其他内嵌文字，直接恢复原始几何体和材质
-        textObject.targetMesh.geometry.dispose()
-        textObject.targetMesh.geometry = textObject.originalTargetGeometry.clone()
-
-        // 恢复原始材质
-        if (textObject.originalTargetMaterial) {
-          textObject.targetMesh.material = textObject.originalTargetMaterial
-        }
+        // 清理原始几何体引用
+        textObject.originalTargetGeometry.dispose()
+        textObject.originalTargetGeometry = null
+        textObject.originalTargetMaterial = null
       }
-
-      // 清理原始几何体引用
-      textObject.originalTargetGeometry.dispose()
 
     } else {
       // 非内嵌模式，只需移除映射关系
       this.removeMeshTextMapping(textObject.targetMesh, textId)
+    }
+
+    // 清理原始几何体缓存（无论是否已执行布尔）
+    if (textObject.originalTargetGeometry) {
+      try {
+        textObject.originalTargetGeometry.dispose()
+      } catch {}
+      textObject.originalTargetGeometry = null
+      textObject.originalTargetMaterial = null
     }
 
     // 清理雕刻材质
@@ -1386,6 +1619,11 @@ export class SurfaceTextManager {
       console.log(`文字内容已更新: ${textId}`, { oldContent, newContent })
       this.emit('textContentUpdated', { textObject, oldContent, newContent })
 
+      // 内嵌文字在构造态下不立即布尔，标记为待更新
+      if (textObject.mode === 'engraved') {
+        this._markEngravingDirty(textObject.targetMesh)
+      }
+
     } catch (error) {
       console.error('更新文字内容失败:', error)
       this.emit('error', { type: 'contentUpdate', error, textId })
@@ -1422,6 +1660,11 @@ export class SurfaceTextManager {
 
       console.log(`文字配置已更新: ${textId}`, { oldConfig, newConfig: textObject.config })
       this.emit('textConfigUpdated', { textObject, oldConfig, newConfig: textObject.config })
+
+      // 内嵌文字在构造态下不立即布尔，标记为待更新
+      if (textObject.mode === 'engraved') {
+        this._markEngravingDirty(textObject.targetMesh)
+      }
 
     } catch (error) {
       console.error('更新文字配置失败:', error)
@@ -1513,20 +1756,40 @@ export class SurfaceTextManager {
 
     try {
       if (mode === 'engraved') {
-        // 先更新 mode，这样 updateMeshMaterials 才能正确识别内嵌文字
+        // 先更新 mode，这样后续逻辑才能正确识别内嵌文字
         textObject.mode = 'engraved'
 
-        // 切换到内嵌模式，执行布尔操作
-        await this.applyEngravingMode(textObject)
-        textObject.engraveStatus = 'success'
-        textObject.engraveError = null
+        // 记录 baseline（用于构造态恢复/结果态重算）
+        this._ensureMeshBaseline(textObject.targetMesh)
+
+        if (this.viewMode === 'construct') {
+          // 构造态不立即布尔：保持文字可见，标记为待更新
+          textObject.mesh.visible = true
+          textObject.engraveStatus = null
+          textObject.engraveError = null
+          this._markEngravingDirty(textObject.targetMesh)
+        } else {
+          // 结果态：立即应用布尔操作
+          await this.applyEngravingMode(textObject)
+          textObject.engraveStatus = 'success'
+          textObject.engraveError = null
+        }
       } else {
-        // 注意：这里先保持旧 mode（通常是 engraved），以便 applyRaisedMode 能正确恢复几何体
-        // 切换到凸起模式，恢复原始状态
-        await this.applyRaisedMode(textObject)
-        textObject.mode = 'raised'
-        textObject.engraveStatus = null
-        textObject.engraveError = null
+        if (this.viewMode === 'construct') {
+          // 构造态：只切换标记，结果态再统一重算
+          textObject.mode = 'raised'
+          textObject.mesh.visible = true
+          textObject.engraveStatus = null
+          textObject.engraveError = null
+          this._markEngravingDirty(textObject.targetMesh)
+        } else {
+          // 结果态：恢复原始状态
+          // 注意：这里先保持旧 mode（通常是 engraved），以便 applyRaisedMode 能正确恢复几何体
+          await this.applyRaisedMode(textObject)
+          textObject.mode = 'raised'
+          textObject.engraveStatus = null
+          textObject.engraveError = null
+        }
       }
 
       textObject.modified = Date.now()
@@ -2093,6 +2356,10 @@ export class SurfaceTextManager {
         const textObject = this.textObjects.get(this.selectedTextId)
         textObject.modified = Date.now()
         this.emit('textTransformed', textObject)
+
+        if (textObject?.mode === 'engraved') {
+          this._markEngravingDirty(textObject.targetMesh)
+        }
       }
     })
 
@@ -2334,6 +2601,22 @@ export class SurfaceTextManager {
     for (const id of textIds) {
       await this.deleteText(id)
     }
+
+    // 清理构造/结果态缓存（baseline/雕刻材质）
+    this.targetMeshes.forEach(mesh => {
+      const baseline = mesh?.userData?._surfaceTextBaseline
+      if (baseline?.geometry?.dispose) {
+        baseline.geometry.dispose()
+      }
+      if (mesh?.userData?._surfaceTextEngravedMaterial?.dispose) {
+        mesh.userData._surfaceTextEngravedMaterial.dispose()
+      }
+      if (mesh?.userData) {
+        delete mesh.userData._surfaceTextBaseline
+        delete mesh.userData._surfaceTextEngravedMaterial
+      }
+    })
+    this._engravingDirtyMeshes.clear()
 
     // 清理子系统
     this.transformControls.dispose()

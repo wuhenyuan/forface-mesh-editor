@@ -7,6 +7,14 @@
       <el-button size="mini" :disabled="!canUndo" @click="handleUndo">撤销</el-button>
       <el-button size="mini" :disabled="!canRedo" @click="handleRedo">恢复</el-button>
       <el-button size="mini" @click="handleResetView">重置视图</el-button>
+      <el-button
+        size="mini"
+        :loading="viewModeBusy"
+        :disabled="viewModeBusy || isBusy"
+        @click="handleToggleViewMode"
+      >
+        {{ viewModeLabel }}
+      </el-button>
       <el-divider direction="vertical"></el-divider>
       <el-button size="mini">模型尺寸</el-button>
       <el-button size="mini">设计交流</el-button>
@@ -30,8 +38,13 @@ export default {
     const projectName = ref('人物模型编辑器')
     
     const isBusy = computed(() => store.isHistoryBusy?.() || false)
+    const viewModeBusy = computed(() => store.state.viewModeBusy)
     const canUndo = computed(() => store.canUndo() && !isBusy.value)
     const canRedo = computed(() => store.canRedo() && !isBusy.value)
+
+    const viewModeLabel = computed(() => (
+      store.state.viewMode === 'result' ? '进入编辑' : '查看结果'
+    ))
     
     const handleUndo = async () => {
       try {
@@ -53,14 +66,26 @@ export default {
       const workspace = store.state.workspaceRef?.value
       workspace?.resetView()
     }
+
+    const handleToggleViewMode = async () => {
+      try {
+        await store.toggleViewMode()
+      } catch (error) {
+        console.error('切换视图模式失败:', error)
+      }
+    }
     
     return { 
       projectName,
       canUndo,
       canRedo,
+      isBusy,
+      viewModeBusy,
+      viewModeLabel,
       handleUndo,
       handleRedo,
-      handleResetView
+      handleResetView,
+      handleToggleViewMode
     }
   }
 }
