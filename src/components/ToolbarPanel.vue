@@ -29,49 +29,23 @@ export default {
     const store = useEditorStore()
     const projectName = ref('人物模型编辑器')
     
-    const canUndo = computed(() => store.canUndo())
-    const canRedo = computed(() => store.canRedo())
+    const isBusy = computed(() => store.isHistoryBusy?.() || false)
+    const canUndo = computed(() => store.canUndo() && !isBusy.value)
+    const canRedo = computed(() => store.canRedo() && !isBusy.value)
     
-    const handleUndo = () => {
-      const action = store.undo()
-      if (!action) return
-      
-      const workspace = store.state.workspaceRef?.value
-      if (!workspace) return
-      
-      // 根据 action 类型执行撤销
-      switch (action.type) {
-        case 'TEXT_ADD':
-          workspace.deleteText(action.payload.id)
-          break
-        case 'TEXT_REMOVE':
-          // TODO: 恢复文字
-          console.log('恢复文字:', action.payload)
-          break
-        case 'TEXT_UPDATE':
-          workspace.updateTextContent(action.payload.textId, action.payload.from)
-          break
+    const handleUndo = async () => {
+      try {
+        await store.undo()
+      } catch (error) {
+        console.error('撤销失败:', error)
       }
     }
     
-    const handleRedo = () => {
-      const action = store.redo()
-      if (!action) return
-      
-      const workspace = store.state.workspaceRef?.value
-      if (!workspace) return
-      
-      switch (action.type) {
-        case 'TEXT_ADD':
-          // TODO: 重新创建文字
-          console.log('重新创建文字:', action.payload)
-          break
-        case 'TEXT_REMOVE':
-          workspace.deleteText(action.payload.id)
-          break
-        case 'TEXT_UPDATE':
-          workspace.updateTextContent(action.payload.textId, action.payload.to)
-          break
+    const handleRedo = async () => {
+      try {
+        await store.redo()
+      } catch (error) {
+        console.error('重做失败:', error)
       }
     }
     

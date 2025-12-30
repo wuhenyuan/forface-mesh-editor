@@ -247,72 +247,97 @@ export default {
     
     // 删除文字
     const deleteTextItem = (textId) => {
-      getWorkspace()?.deleteText(textId)
+      store.deleteText(textId).catch(err => {
+        console.error('删除文字失败:', err)
+      })
     }
     
     const deleteSelectedText = () => {
-      getWorkspace()?.deleteSelectedText()
+      const id = selectedTextObject.value?.id
+      if (!id) return
+      store.deleteText(id).catch(err => {
+        console.error('删除文字失败:', err)
+      })
     }
     
     // 更新方法
     const updateTextContent = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateTextContent(selectedTextObject.value.id, textForm.content)
-        store.updateTextInList(selectedTextObject.value.id, textForm.content)
+        store.updateTextContent(selectedTextObject.value.id, textForm.content).catch(err => {
+          console.error('更新文字内容失败:', err)
+        })
       }
     }
     
     const updateTextColor = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateTextColor(selectedTextObject.value.id, textForm.color)
+        store.updateTextColor(selectedTextObject.value.id, textForm.color).catch(err => {
+          console.error('更新文字颜色失败:', err)
+        })
       }
     }
     
     const updateTextMode = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.switchTextMode(selectedTextObject.value.id, textForm.mode)
+        store.switchTextModeWithHistory(selectedTextObject.value.id, textForm.mode).catch(err => {
+          console.error('切换文字模式失败:', err)
+        })
       }
     }
     
     const updateTextFont = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateTextConfig(selectedTextObject.value.id, { font: textForm.font })
+        store.updateTextConfigWithHistory(selectedTextObject.value.id, { font: textForm.font }).catch(err => {
+          console.error('更新文字配置失败:', err)
+        })
       }
     }
     
     const updateTextSize = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateTextConfig(selectedTextObject.value.id, { size: textForm.size })
+        store.updateTextConfigWithHistory(selectedTextObject.value.id, { size: textForm.size }).catch(err => {
+          console.error('更新文字配置失败:', err)
+        })
       }
     }
     
     const updateTextThickness = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateTextConfig(selectedTextObject.value.id, { thickness: textForm.thickness })
+        store.updateTextConfigWithHistory(selectedTextObject.value.id, { thickness: textForm.thickness }).catch(err => {
+          console.error('更新文字配置失败:', err)
+        })
       }
     }
     
     const updateTextDirection = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateTextDirection(selectedTextObject.value.id, textForm.direction)
+        store.updateTextConfigWithHistory(selectedTextObject.value.id, { direction: textForm.direction }).catch(err => {
+          console.error('更新文字配置失败:', err)
+        })
       }
     }
     
     const updateLetterSpacing = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateLetterSpacing(selectedTextObject.value.id, textForm.letterSpacing)
+        store.updateTextConfigWithHistory(selectedTextObject.value.id, { letterSpacing: textForm.letterSpacing }).catch(err => {
+          console.error('更新文字配置失败:', err)
+        })
       }
     }
     
     const updateCurvingStrength = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateCurvingStrength(selectedTextObject.value.id, textForm.curvingStrength)
+        store.updateTextConfigWithHistory(selectedTextObject.value.id, { curvingStrength: textForm.curvingStrength }).catch(err => {
+          console.error('更新文字配置失败:', err)
+        })
       }
     }
     
     const updateStartAngle = () => {
       if (selectedTextObject.value) {
-        getWorkspace()?.updateStartAngle(selectedTextObject.value.id, textForm.startAngle)
+        store.updateTextConfigWithHistory(selectedTextObject.value.id, { startAngle: textForm.startAngle }).catch(err => {
+          console.error('更新文字配置失败:', err)
+        })
       }
     }
     

@@ -15,6 +15,7 @@
 <script>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { EditorViewer } from '../core/index.js'
+import { TextCommand, TransformCommand } from '../core/history/index.js'
 import { useEditorStore } from '../store/index.js'
 import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating/index.js'
 
@@ -45,6 +46,31 @@ export default {
     const store = useEditorStore()
     
     let viewer = null
+    let isInitializing = true
+
+    let selectedObject = null
+    let transformMode = 'translate'
+    let transformBefore = null
+
+    const snapshotTransform = (object) => {
+      if (!object) return null
+      return {
+        position: [object.position.x, object.position.y, object.position.z],
+        rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+        rotationOrder: object.rotation.order,
+        scale: [object.scale.x, object.scale.y, object.scale.z]
+      }
+    }
+
+    const isSameTransform = (a, b) => {
+      if (!a || !b) return false
+      return (
+        a.rotationOrder === b.rotationOrder &&
+        a.position?.every((v, i) => v === b.position[i]) &&
+        a.rotation?.every((v, i) => v === b.rotation[i]) &&
+        a.scale?.every((v, i) => v === b.scale[i])
+      )
+    }
     
     // ==================== 初始化 ====================
     
@@ -62,7 +88,9 @@ export default {
       bindViewerEvents()
       
       // 创建默认文字（开发测试用）
-      createInitialText()
+      createInitialText().finally(() => {
+        isInitializing = false
+      })
       
       // 注册到 store
       store.setWorkspaceRef({ value: getExposedMethods() })
@@ -115,6 +143,12 @@ export default {
       viewer.events.on('textCreated', ({ textObject }) => {
         store.addText(textObject)
         emit('textCreated', textObject)
+
+        // 用户在场景中“已发生”的创建：补一条可撤销记录（不重复执行）
+        if (isInitializing || store.isHistoryApplying()) return
+        const snapshot = viewer.getTextSnapshot?.(textObject.id)
+        if (!snapshot) return
+        store.captureCommand(new TextCommand('create', viewer, { snapshot }))
       })
       
       viewer.events.on('textSelected', ({ textObject }) => {
@@ -131,14 +165,52 @@ export default {
         store.removeText(id)
         emit('textDeleted', { id, textObject })
       })
+
+      viewer.events.on('textContentUpdated', ({ textObject, newContent }) => {
+        if (!textObject?.id) return
+        store.updateTextInList(textObject.id, newContent)
+      })
       
       // 物体选择事件
       viewer.events.on('objectSelected', ({ object }) => {
+        selectedObject = object
         emit('objectSelected', object)
       })
       
       viewer.events.on('objectDeselected', ({ object }) => {
+        if (selectedObject?.uuid === object?.uuid) {
+          selectedObject = null
+        }
         emit('objectDeselected', object)
+      })
+
+      viewer.events.on('transformModeChanged', ({ mode }) => {
+        transformMode = mode
+      })
+
+      viewer.events.on('objectDragging', ({ isDragging }) => {
+        if (store.isHistoryApplying()) return
+        if (!selectedObject) return
+
+        if (isDragging) {
+          transformBefore = snapshotTransform(selectedObject)
+          return
+        }
+
+        if (!transformBefore) return
+        const after = snapshotTransform(selectedObject)
+        if (isSameTransform(transformBefore, after)) {
+          transformBefore = null
+          return
+        }
+
+        const name = selectedObject?.name ? ` ${selectedObject.name}` : ''
+        store.captureCommand(
+          new TransformCommand(selectedObject, transformBefore, after, {
+            description: `变换${name} (${transformMode})`
+          })
+        )
+        transformBefore = null
       })
       
       // 悬停提示
@@ -221,7 +293,9 @@ export default {
       // 判断是文字还是普通对象
       if (target.userData?.isText) {
         const textId = target.userData.textId
-        viewer.updateTextColor(textId, color)
+        store.updateTextColor(textId, color).catch(err => {
+          console.error('更新文字颜色失败:', err)
+        })
       } else {
         viewer.setObjectColor(target, color)
       }
@@ -243,7 +317,9 @@ export default {
       
       if (target.userData?.isText) {
         const textId = target.userData.textId
-        viewer.deleteText(textId)
+        store.deleteText(textId).catch(err => {
+          console.error('删除文字失败:', err)
+        })
       } else {
         viewer.removeMesh(target)
       }

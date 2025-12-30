@@ -552,36 +552,50 @@ export class SurfaceTextManager {
    * 创建文字对象
    * @param {string} content - 文字内容
    * @param {Object} faceInfo - 面信息
+   * @param {Object} options - 可选项（用于撤销/重做恢复）
+   * @param {string} options.id - 指定文字ID
+   * @param {Object} options.config - 指定文字配置（会与默认配置合并）
    * @returns {Promise<string>} 文字对象ID
    */
-  async createTextObject (content, faceInfo) {
+  async createTextObject (content, faceInfo, options = {}) {
     if (this.textObjects.size >= this.config.maxTextObjects) {
       throw new Error(`文字对象数量已达到最大限制: ${this.config.maxTextObjects}`)
     }
 
-    const textId = this.generateTextId()
+    const textId = options.id || this.generateTextId()
+
+    if (options.id && this.textObjects.has(textId)) {
+      console.warn(`文字对象已存在，跳过创建: ${textId}`)
+      return textId
+    }
 
     try {
       // 检测表面类型
       const surfaceInfo = this.analyzeSurface(faceInfo)
 
+      const initialConfig = {
+        ...this.config.defaultTextConfig,
+        ...(options.config || {})
+      }
+
       // 生成文字几何体（根据表面类型选择生成方式）
       const geometry = await this.geometryGenerator.generate(
         content,
-        this.config.defaultTextConfig,
+        initialConfig,
         surfaceInfo
       )
 
       // 创建文字网格
       // 使用双面渲染，因为弯曲变换可能导致某些面的法向量翻转
       const material = new THREE.MeshPhongMaterial({
-        color: this.config.defaultTextConfig.color,
+        color: initialConfig.color,
         side: THREE.FrontSide  // 只渲染正面，方便调试面朝向
       })
       const mesh = new THREE.Mesh(geometry, material)
 
       // 设置文字对象的用户数据，用于识别
       mesh.userData = {
+        isText: true,
         isTextObject: true,
         textId: textId,
         type: 'text',
@@ -610,8 +624,10 @@ export class SurfaceTextManager {
         faceInfo: faceInfo,
         surfaceId: surfaceId, // 添加表面标识
         surfaceInfo: surfaceInfo, // 添加表面信息
-        config: { ...this.config.defaultTextConfig },
+        config: { ...initialConfig },
         mode: 'raised',
+        engraveStatus: null, // 'success' | 'failed' | null
+        engraveError: null,
         created: Date.now(),
         modified: Date.now()
       }
@@ -1496,26 +1512,58 @@ export class SurfaceTextManager {
     }
 
     try {
-      // 先更新 mode，这样 updateMeshMaterials 才能正确识别内嵌文字
-      textObject.mode = mode
-
       if (mode === 'engraved') {
+        // 先更新 mode，这样 updateMeshMaterials 才能正确识别内嵌文字
+        textObject.mode = 'engraved'
+
         // 切换到内嵌模式，执行布尔操作
         await this.applyEngravingMode(textObject)
+        textObject.engraveStatus = 'success'
+        textObject.engraveError = null
       } else {
+        // 注意：这里先保持旧 mode（通常是 engraved），以便 applyRaisedMode 能正确恢复几何体
         // 切换到凸起模式，恢复原始状态
         await this.applyRaisedMode(textObject)
+        textObject.mode = 'raised'
+        textObject.engraveStatus = null
+        textObject.engraveError = null
       }
 
       textObject.modified = Date.now()
 
       console.log(`文字模式已切换: ${textId}`, { oldMode, newMode: mode })
-      this.emit('textModeChanged', { textObject, oldMode, newMode: mode })
+      this.emit('textModeChanged', {
+        textObject,
+        oldMode,
+        newMode: mode,
+        engraveStatus: textObject.engraveStatus,
+        engraveError: textObject.engraveError
+      })
 
     } catch (error) {
-      // 切换失败时恢复原来的模式
-      textObject.mode = oldMode
       console.error('切换文字模式失败:', error)
+
+      // 需求：失败时 UI 仍保持为 engraved（但提示失败）
+      if (mode === 'engraved') {
+        textObject.mode = 'engraved'
+        textObject.engraveStatus = 'failed'
+        textObject.engraveError = error?.message || String(error)
+        textObject.modified = Date.now()
+
+        this.emit('textModeChanged', {
+          textObject,
+          oldMode,
+          newMode: 'engraved',
+          engraveStatus: 'failed',
+          engraveError: textObject.engraveError
+        })
+
+        this.emit('error', { type: 'modeSwitch', error, textId })
+        return
+      }
+
+      // 其他情况按原逻辑回滚并抛出
+      textObject.mode = oldMode
       this.emit('error', { type: 'modeSwitch', error, textId })
       throw error
     }
@@ -1894,6 +1942,145 @@ export class SurfaceTextManager {
    */
   getSelectedTextObject () {
     return this.selectedTextId ? this.textObjects.get(this.selectedTextId) : null
+  }
+
+  /**
+   * 获取文字对象快照（用于撤销/重做）
+   * @param {string} textId - 文字ID
+   * @returns {Object|null} 可序列化快照
+   */
+  getTextSnapshot (textId) {
+    const textObject = this.textObjects.get(textId)
+    if (!textObject) return null
+
+    const faceInfo = textObject.faceInfo || {}
+    const normal = faceInfo.face?.normal
+    const point = faceInfo.point
+    const uv = faceInfo.uv
+
+    const mesh = textObject.mesh
+
+    return {
+      version: 1,
+      id: textObject.id,
+      content: textObject.content,
+      mode: textObject.mode,
+      engraveStatus: textObject.engraveStatus || null,
+      engraveError: textObject.engraveError || null,
+      config: { ...textObject.config },
+
+      surfaceId: textObject.surfaceId || null,
+      targetMeshUuid: textObject.targetMesh?.uuid || null,
+      targetMeshName: textObject.targetMesh?.name || null,
+      faceIndex: textObject.targetFace ?? null,
+
+      point: point ? { x: point.x, y: point.y, z: point.z } : null,
+      normal: normal ? { x: normal.x, y: normal.y, z: normal.z } : null,
+      uv: uv ? { x: uv.x, y: uv.y } : null,
+
+      meshTransform: mesh
+        ? {
+            position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+            rotation: {
+              x: mesh.rotation.x,
+              y: mesh.rotation.y,
+              z: mesh.rotation.z,
+              order: mesh.rotation.order
+            },
+            scale: { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z }
+          }
+        : null
+    }
+  }
+
+  /**
+   * 从快照恢复文字（用于撤销/重做）
+   * @param {Object} snapshot - 文字快照
+   * @returns {Promise<string>} 文字ID
+   */
+  async restoreText (snapshot) {
+    if (!snapshot?.id) {
+      throw new Error('Invalid text snapshot')
+    }
+
+    if (this.textObjects.has(snapshot.id)) {
+      return snapshot.id
+    }
+
+    const targetMesh =
+      (snapshot.targetMeshUuid
+        ? this.targetMeshes.find(m => m.uuid === snapshot.targetMeshUuid)
+        : null) ||
+      (snapshot.targetMeshUuid
+        ? this.scene.getObjectByProperty('uuid', snapshot.targetMeshUuid)
+        : null)
+
+    if (!targetMesh) {
+      throw new Error(`Target mesh not found for text restore: ${snapshot.targetMeshUuid || snapshot.targetMeshName}`)
+    }
+
+    const point = snapshot.point
+      ? new THREE.Vector3(snapshot.point.x, snapshot.point.y, snapshot.point.z)
+      : new THREE.Vector3()
+
+    const normal = snapshot.normal
+      ? new THREE.Vector3(snapshot.normal.x, snapshot.normal.y, snapshot.normal.z)
+      : null
+
+    const uv = snapshot.uv ? new THREE.Vector2(snapshot.uv.x, snapshot.uv.y) : null
+
+    const faceInfo = {
+      mesh: targetMesh,
+      faceIndex: snapshot.faceIndex ?? 0,
+      face: normal ? { normal } : null,
+      point,
+      distance: 0,
+      uv
+    }
+
+    const textId = await this.createTextObject(snapshot.content, faceInfo, {
+      id: snapshot.id,
+      config: snapshot.config || {}
+    })
+
+    const textObject = this.textObjects.get(textId)
+    if (!textObject) return textId
+
+    // 恢复变换
+    if (snapshot.meshTransform) {
+      const { position, rotation, scale } = snapshot.meshTransform
+      if (position) {
+        textObject.mesh.position.set(position.x, position.y, position.z)
+      }
+      if (rotation) {
+        textObject.mesh.rotation.order = rotation.order || textObject.mesh.rotation.order
+        textObject.mesh.rotation.set(rotation.x, rotation.y, rotation.z)
+      }
+      if (scale) {
+        textObject.mesh.scale.set(scale.x, scale.y, scale.z)
+      }
+      textObject.mesh.updateMatrixWorld(true)
+    }
+
+    // 恢复模式（成功态重跑一次，失败态只恢复失败标记）
+    if (snapshot.mode === 'engraved') {
+      if (snapshot.engraveStatus === 'failed') {
+        textObject.mode = 'engraved'
+        textObject.engraveStatus = 'failed'
+        textObject.engraveError = snapshot.engraveError || 'CSG failed'
+        this.emit('textModeChanged', {
+          textObject,
+          oldMode: 'raised',
+          newMode: 'engraved',
+          engraveStatus: 'failed',
+          error: textObject.engraveError
+        })
+      } else {
+        await this.switchTextMode(textId, 'engraved')
+      }
+    }
+
+    return textId
   }
 
   /**
