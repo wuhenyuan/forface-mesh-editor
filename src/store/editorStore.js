@@ -239,7 +239,36 @@ const actions = {
     state.menuKeyword = keyword
   },
   
-  // --- 文字管理 ---
+  // --- 文字管理（被动接收，由 StateManager 调用） ---
+  
+  /**
+   * 接收文字列表（由 StateManager 同步）
+   */
+  receiveTexts(textList) {
+    state.textList = textList
+  },
+  
+  /**
+   * 接收选中状态（由 StateManager 同步）
+   */
+  receiveSelection(selection) {
+    if (selection.textId) {
+      // 从 textList 找到对应的文字对象
+      const textItem = state.textList.find(t => t.id === selection.textId)
+      state.selectedTextObject = textItem || null
+    } else {
+      state.selectedTextObject = null
+    }
+  },
+  
+  /**
+   * 接收文字计数器（由 StateManager 同步）
+   */
+  receiveTextCounter(counter) {
+    state.textCounter = counter
+  },
+  
+  // --- 兼容旧 API（逐步废弃） ---
   addText(textObject) {
     state.textCounter++
     const displayName = `文字${state.textCounter}`

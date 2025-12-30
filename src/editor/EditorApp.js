@@ -11,6 +11,7 @@ import { SurfaceTextManager } from '../lib/surfaceText/index.js'
 import { ObjectSelectionManager } from '../lib/objectSelection/index.js'
 import { FeatureDetector } from '../lib/facePicking/FeatureDetector.js'
 import { ProjectManager } from './ProjectManager.js'
+import { StateManager } from './StateManager.js'
 
 export class EditorApp {
   constructor(container, options = {}) {
