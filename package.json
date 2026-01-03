@@ -16,11 +16,12 @@
     "src/utils"
   ],
   "peerDependencies": {
-    "vue": "^2.7.0",
-    "element-ui": "^2.15.0"
+    "element-ui": "^2.15.0",
+    "vue": "^2.7.0"
   },
   "dependencies": {
     "element-ui": "^2.15.14",
+    "jszip": "^3.10.1",
     "three": "^0.160.0",
     "three-bvh-csg": "^0.0.17",
     "three-mesh-bvh": "^0.9.4",

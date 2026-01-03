@@ -300,6 +300,32 @@ export class EditorViewer extends Viewer {
     this._syncStateToProject()
     this._projectManager.exportProjectFile(filename || this._projectManager.getProjectName())
   }
+
+  /**
+   * 导出项目 ZIP 包（project.json + models/*）
+   * @param {string} filename
+   * @param {Object} options 透传到 ProjectManager.exportProjectPackage
+   */
+  async exportProjectPackage(filename, options = {}) {
+    this._syncStateToProject()
+    return await this._projectManager.exportProjectPackage({
+      filename: filename || this._projectManager.getProjectName(),
+      ...options
+    })
+  }
+
+  /**
+   * 导出“本地全量包”(ZIP)：project.json + model/*
+   * @param {string} filename
+   * @param {Object} options 透传到 ProjectManager.exportLocalFullPackage
+   */
+  async exportLocalFullPackage(filename, options = {}) {
+    this._syncStateToProject()
+    return await this._projectManager.exportLocalFullPackage({
+      filename: filename || this._projectManager.getProjectName(),
+      ...options
+    })
+  }
   
   /**
    * 导入项目文件
@@ -410,18 +436,26 @@ export class EditorViewer extends Viewer {
     this._clearScene()
     
     // 加载原始模型
-    if (config.originModelPath) {
+    const originPath =
+      this._projectManager?.resolveModelPath?.('origin') ||
+      config?.models?.origin?.path ||
+      config?.originModelPath
+    if (originPath) {
       try {
-        await this.loadModel(config.originModelPath)
+        await this.loadModel(originPath)
       } catch (error) {
         console.warn('[EditorViewer] 加载原始模型失败:', error)
       }
     }
     
     // 加载底座模型
-    if (config.baseModelPath) {
+    const basePath =
+      this._projectManager?.resolveModelPath?.('base') ||
+      config?.models?.base?.path ||
+      config?.baseModelPath
+    if (basePath) {
       try {
-        await this.loadModel(config.baseModelPath, { name: 'base' })
+        await this.loadModel(basePath, { name: 'base' })
       } catch (error) {
         console.warn('[EditorViewer] 加载底座模型失败:', error)
       }

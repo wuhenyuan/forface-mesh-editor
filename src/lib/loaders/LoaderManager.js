@@ -51,6 +51,9 @@ export class LoaderManager {
         case 'obj':
           model = await this._loadOBJ(source, material)
           break
+        case 'zip':
+          model = await this._loadZipModel(source, material)
+          break
         default:
           throw new Error(`不支持的文件格式: ${format}`)
       }
@@ -146,6 +149,62 @@ export class LoaderManager {
   }
 
   /**
+   * 加载 ZIP（内含 OBJ 或 STL）
+   * - 典型用途：models[].url 指向 *.zip（线上或 zip 包内资源）
+   * - 约定：zip 内至少包含一个 .obj 或 .stl（若两者都有，优先 obj）
+   * @private
+   */
+  async _loadZipModel(source, material) {
+    const { default: JSZip } = await import('jszip')
+
+    const zipInput =
+      typeof source === 'string'
+        ? await this._fetchArrayBuffer(source)
+        : source
+
+    const zip = await JSZip.loadAsync(zipInput)
+    const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir)
+
+    const objName = fileNames.find((n) => n.toLowerCase().endsWith('.obj'))
+    const stlName = fileNames.find((n) => n.toLowerCase().endsWith('.stl'))
+    const targetName = objName || stlName
+
+    if (!targetName) {
+      throw new Error('ZIP 中未找到 .obj 或 .stl 文件')
+    }
+
+    if (targetName.toLowerCase().endsWith('.stl')) {
+      const buffer = await zip.file(targetName).async('arraybuffer')
+      const geometry = this.stlLoader.parse(buffer)
+      geometry.computeVertexNormals()
+
+      const mat = material || new THREE.MeshStandardMaterial({
+        color: 0xcccccc,
+        metalness: 0.3,
+        roughness: 0.6
+      })
+      return new THREE.Mesh(geometry, mat)
+    }
+
+    const objText = await zip.file(targetName).async('text')
+    const group = this.objLoader.parse(objText)
+    if (material) {
+      group.traverse((child) => {
+        if (child.isMesh) child.material = material
+      })
+    }
+    return group
+  }
+
+  async _fetchArrayBuffer(url) {
+    const res = await fetch(url)
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${res.statusText}`)
+    }
+    return await res.arrayBuffer()
+  }
+
+  /**
    * 检测文件格式
    * @private
    */
@@ -157,11 +216,16 @@ export class LoaderManager {
     } else if (source instanceof File) {
       filename = source.name.toLowerCase()
     } else if (source instanceof Blob) {
-      return source.type?.includes('stl') ? 'stl' : 'obj'
+      const type = (source.type || '').toLowerCase()
+      if (type.includes('zip')) return 'zip'
+      if (type.includes('stl')) return 'stl'
+      if (type.includes('obj')) return 'obj'
+      return 'unknown'
     }
 
     if (filename.endsWith('.stl')) return 'stl'
     if (filename.endsWith('.obj')) return 'obj'
+    if (filename.endsWith('.zip')) return 'zip'
     
     return 'unknown'
   }

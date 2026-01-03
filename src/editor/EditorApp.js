@@ -452,6 +452,32 @@ export class EditorApp {
     this._syncStateToProject()
     this.projectManager.exportProjectFile(filename || this.projectManager.getProjectName())
   }
+
+  /**
+   * 导出项目 ZIP 包（project.json + models/*）
+   * @param {string} filename
+   * @param {Object} options 透传到 ProjectManager.exportProjectPackage
+   */
+  async exportProjectPackage(filename, options = {}) {
+    this._syncStateToProject()
+    return await this.projectManager.exportProjectPackage({
+      filename: filename || this.projectManager.getProjectName(),
+      ...options
+    })
+  }
+
+  /**
+   * 导出“本地全量包”(ZIP)：project.json + model/*
+   * @param {string} filename
+   * @param {Object} options 透传到 ProjectManager.exportLocalFullPackage
+   */
+  async exportLocalFullPackage(filename, options = {}) {
+    this._syncStateToProject()
+    return await this.projectManager.exportLocalFullPackage({
+      filename: filename || this.projectManager.getProjectName(),
+      ...options
+    })
+  }
   
   async importProjectFile(file) {
     const data = await this.projectManager.importProjectFile(file)
@@ -610,17 +636,25 @@ export class EditorApp {
     const config = projectData.config
     this._clearScene()
     
-    if (config.originModelPath) {
+    const originPath =
+      this.projectManager?.resolveModelPath?.('origin') ||
+      config?.models?.origin?.path ||
+      config?.originModelPath
+    if (originPath) {
       try {
-        await this.loadModel(config.originModelPath)
+        await this.loadModel(originPath)
       } catch (error) {
         console.warn('[EditorApp] 加载原始模型失败:', error)
       }
     }
     
-    if (config.baseModelPath) {
+    const basePath =
+      this.projectManager?.resolveModelPath?.('base') ||
+      config?.models?.base?.path ||
+      config?.baseModelPath
+    if (basePath) {
       try {
-        await this.loadModel(config.baseModelPath, { name: 'base' })
+        await this.loadModel(basePath, { name: 'base' })
       } catch (error) {
         console.warn('[EditorApp] 加载底座模型失败:', error)
       }

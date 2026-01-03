@@ -3,6 +3,7 @@
  * 处理编辑器状态的保存和恢复
  */
 import { surfaceIdentifier } from './SurfaceIdentifier.js'
+import { normalizeConfig, serializeConfig } from '../../../config/config.js'
 
 export class ConfigManager {
   constructor(surfaceTextManager) {
@@ -62,7 +63,7 @@ export class ConfigManager {
       }
     }
     
-    return config
+    return serializeConfig(config)
   }
 
   /**
@@ -70,23 +71,29 @@ export class ConfigManager {
    * @param {Object} config - 配置对象
    */
   async importConfig(config) {
-    if (!config || !config.metadata || config.metadata.version !== '1.0') {
+    const source = config && typeof config === 'object' ? config : null
+    if (!source) return false
+
+    const configSource = source.config && typeof source.config === 'object' ? source.config : source
+    const normalized = normalizeConfig(configSource)
+
+    if (!normalized?.metadata || normalized.metadata.version !== '1.0') {
       console.warn('不支持的配置版本')
       return false
     }
     
     try {
       // 1. 导入表面标识配置
-      if (config.lookupTable) {
-        surfaceIdentifier.importConfig(config.lookupTable)
+      if (normalized.lookupTable) {
+        surfaceIdentifier.importConfig(normalized.lookupTable)
       }
       
       // 2. 清除现有文字
       await this.clearAllTexts()
       
       // 3. 导入文字配置
-      if (config.texts && Array.isArray(config.texts)) {
-        await this.surfaceTextManager.importTextConfig(config.texts)
+      if (Array.isArray(normalized.texts)) {
+        await this.surfaceTextManager.importTextConfig(normalized.texts)
       }
       
       console.log('配置导入成功')

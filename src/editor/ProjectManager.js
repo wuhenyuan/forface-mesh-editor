@@ -2,12 +2,12 @@
  * 项目管理器
  * 负责项目的创建、保存、加载、导出配置等
  */
-import defaultConfig from '../../config/config.js'
+import defaultConfig, { normalizeConfig, serializeConfig } from '../../config/config.js'
 
 export class ProjectManager {
   constructor() {
     // 当前项目配置（深拷贝默认配置）
-    this.config = this._deepClone(defaultConfig)
+    this.config = normalizeConfig(this._deepClone(defaultConfig))
     
     // 项目元信息
     this.projectInfo = {
@@ -25,6 +25,9 @@ export class ProjectManager {
     this.onChange = null
     this.onSave = null
     this.onLoad = null
+
+    // ZIP 项目包导入时的资源映射：zip 内路径 -> blob:URL
+    this._packageObjectUrls = new Map()
   }
 
   /**
@@ -36,8 +39,9 @@ export class ProjectManager {
     const { name = '未命名项目', originModelPath = '' } = options
     
     // 重置为默认配置
-    this.config = this._deepClone(defaultConfig)
-    this.config.originModelPath = originModelPath
+    this._revokePackageObjectUrls()
+    this.config = normalizeConfig(this._deepClone(defaultConfig))
+    this.config.models.origin.path = originModelPath || ''
     this.config.status = 'draft'
     
     // 设置项目信息
@@ -67,6 +71,13 @@ export class ProjectManager {
     }
   }
 
+  _getPersistedProjectData(configOverride) {
+    return {
+      projectInfo: { ...this.projectInfo },
+      config: serializeConfig(configOverride || this.config)
+    }
+  }
+
   /**
    * 保存项目到本地存储
    * @param {string} key - 存储键名
@@ -74,11 +85,19 @@ export class ProjectManager {
    */
   saveToLocal(key = 'editor_project') {
     try {
-      const data = this.getProjectData()
-      data.projectInfo.updateTime = Date.now()
+      const nextUpdateTime = Date.now()
+      const projectInfoForSave = { ...this.projectInfo, updateTime: nextUpdateTime }
+      const configForSave = this._deepClone(this.config)
+      configForSave.status = 'synced'
+
+      const data = {
+        projectInfo: projectInfoForSave,
+        config: serializeConfig(configForSave)
+      }
       
       localStorage.setItem(key, JSON.stringify(data))
-      
+
+      this.projectInfo.updateTime = nextUpdateTime
       this._isDirty = false
       this.config.status = 'synced'
       this.onSave?.({ type: 'local', key, data })
@@ -117,21 +136,36 @@ export class ProjectManager {
    * @param {Object} data - 项目数据
    * @returns {Object} 加载后的项目数据
    */
-  loadProject(data) {
-    if (!data || !data.config) {
-      throw new Error('无效的项目数据')
-    }
-    
-    // 合并配置（保留默认值）
-    this.config = {
-      ...this._deepClone(defaultConfig),
-      ...data.config
-    }
-    
+  loadProject(data, options = {}) {
+    const source = data && typeof data === 'object' ? data : null
+    if (!source) throw new Error('无效的项目数据')
+
+    const isProjectWrapper = !!(source.config && typeof source.config === 'object')
+    const configSource = isProjectWrapper ? source.config : source
+
+    // 合并配置（保留默认值 + 兼容旧字段升级）
+    this._revokePackageObjectUrls()
+    this.config = normalizeConfig(this._deepClone(configSource))
+
     // 加载项目信息
-    this.projectInfo = {
-      ...this.projectInfo,
-      ...data.projectInfo
+    if (isProjectWrapper) {
+      this.projectInfo = {
+        ...this.projectInfo,
+        ...source.projectInfo
+      }
+    } else {
+      const now = Date.now()
+      const inferredName =
+        typeof options?.name === 'string' && options.name.trim()
+          ? options.name.trim()
+          : '导入项目'
+      this.projectInfo = {
+        id: this._generateId(),
+        name: inferredName,
+        createTime: now,
+        updateTime: now,
+        version: 1
+      }
     }
     
     this._isDirty = false
@@ -146,7 +180,7 @@ export class ProjectManager {
    * @param {string} filename - 文件名
    */
   exportProjectFile(filename = 'project') {
-    const data = this.getProjectData()
+    const data = this._getPersistedProjectData()
     const json = JSON.stringify(data, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     
@@ -160,13 +194,18 @@ export class ProjectManager {
    * @returns {Promise<Object>} 项目数据
    */
   async importProjectFile(file) {
+    if (file?.name && /\.zip$/i.test(file.name)) {
+      return await this.importProjectPackage(file)
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       
       reader.onload = (e) => {
         try {
           const data = JSON.parse(e.target.result)
-          const project = this.loadProject(data)
+          const inferredName = file?.name ? this._stripExt(file.name) : undefined
+          const project = this.loadProject(data, { name: inferredName })
           resolve(project)
         } catch (error) {
           reject(new Error('无效的项目文件'))
@@ -178,6 +217,200 @@ export class ProjectManager {
     })
   }
 
+  /**
+   * 导出“全量项目包”(ZIP)：project.json + models/*
+   * - 生产模式：只保存 project.json（models.path 指向网络地址）
+   * - 离线模式：把 models 里引用的模型文件一起打包，path 改为包内相对路径
+   *
+   * @param {Object} options
+   * @param {string} [options.filename]
+   * @param {boolean|string[]} [options.includeModels=true]
+   *   - true: 打包 config.models 中所有有 path 的模型（全量导出，导出后全部变相对路径）
+   *   - false: 只导出 project.json（轻量包）
+   *   - string[]: 只打包指定 key（例如 ['final']：json + 最终模型，其它保持网络 URL）
+   * @param {'v3'|'config2'} [options.format='v3']
+   *   - v3: 当前项目结构（projectInfo + config/features[]）
+   *   - config2: 你定义的新结构（version/createTime/models[]/texts[]），并把模型文件写到 `model/*`
+   * @param {string} [options.projectFileName='project.json'] ZIP 内配置文件名
+   * @param {RequestInit} [options.fetchOptions] fetch 选项（如 credentials/headers）
+   */
+  async exportProjectPackage(options = {}) {
+    const {
+      filename = this.getProjectName() || 'project',
+      includeModels = true,
+      format = 'v3',
+      projectFileName = 'project.json',
+      fetchOptions = undefined
+    } = options
+
+    const { default: JSZip } = await import('jszip')
+    const zip = new JSZip()
+
+    const packageConfig = this._deepClone(this.config)
+    const modelKeysToInclude = this._resolvePackageModelKeys(packageConfig?.models, includeModels)
+
+    if (modelKeysToInclude.length > 0 && packageConfig?.models) {
+      const usedNames = new Set()
+      const modelDir = format === 'config2' ? 'model' : 'models'
+      const packagedPathByKey = new Map()
+
+      for (const key of modelKeysToInclude) {
+        const model = packageConfig.models[key]
+        const configuredPath = model?.path
+        if (!configuredPath) continue
+
+        const runtimePath = this.resolveModelPath(key)
+        const blob = await this._fetchAsBlob(runtimePath, { modelKey: key, fetchOptions })
+
+        const fileName = format === 'config2'
+          ? this._inferConfig2PackageFileName({ key, configuredPath, blob, usedNames })
+          : this._inferPackageFileName({ key, configuredPath, blob, usedNames })
+
+        const zipPath = `${modelDir}/${fileName}`
+        zip.file(zipPath, blob)
+
+        packagedPathByKey.set(key, zipPath)
+
+        if (format === 'v3') {
+          // 写回包内相对路径（持久化路径）
+          model.path = zipPath
+        }
+      }
+
+      if (format === 'config2') {
+        zip.file(
+          projectFileName,
+          JSON.stringify(this._buildConfig2ForPackage({ packageConfig, packagedPathByKey }), null, 2)
+        )
+      }
+    }
+
+    if (format === 'v3') {
+      const packageData = this._getPersistedProjectData(packageConfig)
+      zip.file(projectFileName, JSON.stringify(packageData, null, 2))
+    } else if (!zip.file(projectFileName)) {
+      zip.file(projectFileName, JSON.stringify(this._buildConfig2ForPackage({ packageConfig }), null, 2))
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' })
+    this._downloadBlob(zipBlob, `${filename}.zip`)
+
+    console.log(`[ProjectManager] 项目包已导出: ${filename}.zip`)
+    return true
+  }
+
+  /**
+   * 导出“本地全量包”(ZIP)：project.json + model/*
+   * - 会把所有引用到的模型（含 *.zip 模型）打包进 zip
+   * - project.json 使用 config2 的 models[]/texts[] 结构，并把 url 统一改成相对路径（从 zip 加载）
+   */
+  async exportLocalFullPackage(options = {}) {
+    return await this.exportProjectPackage({
+      ...options,
+      includeModels: true,
+      format: 'config2'
+    })
+  }
+
+  /**
+   * 导入“全量项目包”(ZIP)：读取 project.json，并建立 models/* -> blob:URL 映射
+   * @param {File|Blob} file zip 文件
+   * @returns {Promise<Object>} 项目数据
+   */
+  async importProjectPackage(file) {
+    const { default: JSZip } = await import('jszip')
+    const zip = await JSZip.loadAsync(file)
+
+    const projectEntry =
+      zip.file('project.json') ||
+      zip.file('project.forface.json') ||
+      zip.file('mesh-editor-config.json')
+
+    const projectFileName = projectEntry?.name ||
+      Object.keys(zip.files).find((name) => name.toLowerCase().endsWith('.json'))
+
+    if (!projectFileName) throw new Error('ZIP 内未找到 project.json')
+
+    const jsonText = projectEntry
+      ? await projectEntry.async('string')
+      : await zip.file(projectFileName).async('string')
+
+    const data = JSON.parse(jsonText)
+    const inferredName = file?.name ? this._stripExt(file.name) : undefined
+    const projectData = this.loadProject(data, { name: inferredName })
+
+    // 建立 zip 资源映射
+    this._revokePackageObjectUrls()
+    for (const [name, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue
+      if (name === projectFileName) continue
+
+      const blob = await zip.file(name).async('blob')
+      const normalized = this._normalizeZipPath(name)
+      const baseName = normalized.split('/').filter(Boolean).pop() || normalized || 'file'
+      const fileObject = typeof File !== 'undefined'
+        ? new File([blob], baseName, { type: blob.type || undefined })
+        : blob
+      const url = URL.createObjectURL(blob)
+      this._packageObjectUrls.set(normalized, { url, file: fileObject })
+    }
+
+    console.log(`[ProjectManager] 项目包已导入: ${file?.name || 'zip'}`)
+    return projectData
+  }
+
+  /**
+   * 获取某个模型的“运行时可加载路径”
+   * - 普通场景：直接返回 config.models[key].path
+   * - ZIP 导入：把包内相对路径映射为 blob:URL
+   */
+  resolveModelPath(modelKey) {
+    const configuredPath = this.config?.models?.[modelKey]?.path || ''
+    if (!configuredPath) return ''
+
+    // 带 scheme 的 URI（http/https/blob/data/...）直接返回，不走包内映射
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(configuredPath)) return configuredPath
+
+    const normalized = this._normalizeZipPath(configuredPath)
+
+    const _resolveMapped = (key) => {
+      const value = this._packageObjectUrls.get(key)
+      if (!value) return null
+      if (typeof value === 'string') return value
+      return value.file || value.url || null
+    }
+
+    const direct = _resolveMapped(normalized)
+    if (direct) return direct
+
+    // 兼容：path 可能写成 "origin.stl"，但包里是 "models/origin.stl"
+    const withModels = normalized.startsWith('models/') ? normalized : `models/${normalized}`
+    const alt1 = _resolveMapped(withModels)
+    if (alt1) return alt1
+
+    // 兼容：path 可能写成 "models/origin.stl"，但包里是 "origin.stl"
+    if (normalized.startsWith('models/')) {
+      const withoutModels = normalized.replace(/^models\//, '')
+      const alt2 = _resolveMapped(withoutModels)
+      if (alt2) return alt2
+    }
+
+    // 兜底：按文件名匹配（要求唯一）
+    const baseName = normalized.split('/').filter(Boolean).pop()
+    if (baseName) {
+      const matches = []
+      for (const [path, value] of this._packageObjectUrls.entries()) {
+        if (path === baseName || path.endsWith(`/${baseName}`)) {
+          const resolved = typeof value === 'string' ? value : (value.file || value.url)
+          if (resolved) matches.push(resolved)
+        }
+      }
+      if (matches.length === 1) return matches[0]
+    }
+
+    return configuredPath
+  }
+
   // ==================== 配置更新方法 ====================
 
   /**
@@ -185,7 +418,8 @@ export class ProjectManager {
    * @param {string} path - 模型路径
    */
   setOriginModelPath(path) {
-    this.config.originModelPath = path
+    if (!this.config.models?.origin) this.config = normalizeConfig(this.config)
+    this.config.models.origin.path = path || ''
     this._markDirty()
   }
 
@@ -194,7 +428,8 @@ export class ProjectManager {
    * @param {string} path - 模型路径
    */
   setBaseModelPath(path) {
-    this.config.baseModelPath = path
+    if (!this.config.models?.base) this.config = normalizeConfig(this.config)
+    this.config.models.base.path = path || ''
     this._markDirty()
   }
 
@@ -203,7 +438,8 @@ export class ProjectManager {
    * @param {Object} config - 模型配置
    */
   updateFinalModelConfig(config) {
-    Object.assign(this.config.finalModelConfig, config)
+    if (!this.config.models?.final) this.config = normalizeConfig(this.config)
+    Object.assign(this.config.models.final.config, config)
     this._markDirty()
   }
 
@@ -212,7 +448,8 @@ export class ProjectManager {
    * @param {Object} config - 底座配置
    */
   updateBaseModelConfig(config) {
-    Object.assign(this.config.baseModelConfig, config)
+    if (!this.config.models?.base) this.config = normalizeConfig(this.config)
+    Object.assign(this.config.models.base.config, config)
     this._markDirty()
   }
 
@@ -303,17 +540,23 @@ export class ProjectManager {
     const parts = []
     
     // 1. 最终模型配置
-    const fm = this.config.finalModelConfig
-    parts.push(`fm_scale:${fm.scale.join(',')}`)
-    parts.push(`fm_bbox:${fm.boundingBox.join(',')}`)
+    const fm = this.config.models?.final?.config || {}
+    const fmScale = Array.isArray(fm.scale) ? fm.scale : [1, 1, 1]
+    const fmBBox = Array.isArray(fm.boundingBox) ? fm.boundingBox : [0, 0, 0]
+    parts.push(`fm_scale:${fmScale.join(',')}`)
+    parts.push(`fm_bbox:${fmBBox.join(',')}`)
     
     // 2. 底座配置
-    const bm = this.config.baseModelConfig
-    if (this.config.baseModelPath) {
-      parts.push(`base:${this.config.baseModelPath}`)
-      parts.push(`bm_pos:${bm.position.join(',')}`)
-      parts.push(`bm_scale:${bm.scale.join(',')}`)
-      parts.push(`bm_rot:${bm.rotation.join(',')}`)
+    const bm = this.config.models?.base?.config || {}
+    const basePath = this.config.models?.base?.path
+    if (basePath) {
+      parts.push(`base:${basePath}`)
+      const bmPos = Array.isArray(bm.position) ? bm.position : [0, 0, 0]
+      const bmScale = Array.isArray(bm.scale) ? bm.scale : [1, 1, 1]
+      const bmRot = Array.isArray(bm.rotation) ? bm.rotation : [0, 0, 0]
+      parts.push(`bm_pos:${bmPos.join(',')}`)
+      parts.push(`bm_scale:${bmScale.join(',')}`)
+      parts.push(`bm_rot:${bmRot.join(',')}`)
     } else {
       parts.push('base:none')
     }
@@ -388,7 +631,7 @@ export class ProjectManager {
       if (this.config.texts.length > 0) {
         changes.push('文字配置')
       }
-      if (this.config.baseModelPath) {
+      if (this.config.models?.base?.path) {
         changes.push('底座配置')
       }
       changes.push('模型属性')
@@ -414,12 +657,12 @@ export class ProjectManager {
     }
     
     // 检查底座
-    if (this.config.baseModelPath) {
+    if (this.config.models?.base?.path) {
       items.push('底座设置')
     }
     
     // 检查模型缩放
-    const scale = this.config.finalModelConfig.scale
+    const scale = this.config.models?.final?.config?.scale || [1, 1, 1]
     if (scale[0] !== 1 || scale[1] !== 1 || scale[2] !== 1) {
       items.push('模型缩放')
     }
@@ -535,11 +778,198 @@ export class ProjectManager {
    * 销毁
    */
   dispose() {
+    this._revokePackageObjectUrls()
     this.config = null
     this.projectInfo = null
     this.onChange = null
     this.onSave = null
     this.onLoad = null
+  }
+
+  _revokePackageObjectUrls() {
+    if (!this._packageObjectUrls) return
+    for (const value of this._packageObjectUrls.values()) {
+      const url = typeof value === 'string' ? value : value?.url
+      if (!url) continue
+      try {
+        URL.revokeObjectURL(url)
+      } catch (_) {
+        // ignore
+      }
+    }
+    this._packageObjectUrls.clear()
+  }
+
+  _normalizeZipPath(path) {
+    if (typeof path !== 'string') return ''
+    const cleaned = path.split('#')[0].split('?')[0]
+    return cleaned.replace(/\\/g, '/').replace(/^\.\//, '')
+  }
+
+  async _fetchAsBlob(source, context = {}) {
+    if (!source) throw new Error('模型路径为空，无法打包')
+    if (source instanceof Blob) return source
+    if (typeof source !== 'string') throw new Error('不支持的模型源类型，无法打包')
+
+    try {
+      const res = await fetch(source, context.fetchOptions)
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      }
+      return await res.blob()
+    } catch (error) {
+      const keyHint = context.modelKey ? ` (${context.modelKey})` : ''
+      throw new Error(`无法下载模型文件${keyHint}: ${source}\n${error?.message || error}`)
+    }
+  }
+
+  _inferPackageFileName({ key, configuredPath, blob, usedNames }) {
+    const keyBase = this._stripExt(this._sanitizeFileName(String(key || 'model'))) || 'model'
+    const configuredExt = this._extractExt(this._extractFileName(configuredPath))
+    const ext = configuredExt || this._guessExtFromBlob(blob) || 'bin'
+    const base = keyBase
+
+    let name = `${base}.${ext}`
+    let i = 2
+    while (usedNames.has(name)) {
+      name = `${base}_${i++}.${ext}`
+    }
+    usedNames.add(name)
+    return name
+  }
+
+  _inferConfig2PackageFileName({ key, configuredPath, blob, usedNames }) {
+    const configuredName = this._extractFileName(configuredPath)
+    const configuredBase = this._stripExt(this._sanitizeFileName(configuredName))
+    const keyBase = this._stripExt(this._sanitizeFileName(String(key || 'model'))) || 'model'
+    const configuredExt = this._extractExt(configuredName)
+    const ext = configuredExt || this._guessExtFromBlob(blob) || 'bin'
+    const base = configuredBase || keyBase || 'model'
+
+    let name = `${base}.${ext}`
+    let i = 2
+    while (usedNames.has(name)) {
+      name = `${base}_${i++}.${ext}`
+    }
+    usedNames.add(name)
+    return name
+  }
+
+  _buildConfig2ForPackage({ packageConfig, packagedPathByKey } = {}) {
+    const cfg = packageConfig && typeof packageConfig === 'object' ? packageConfig : {}
+    const metadata = cfg.metadata && typeof cfg.metadata === 'object' ? cfg.metadata : {}
+
+    const version = typeof metadata.version === 'string' ? metadata.version : ''
+    const createTime = typeof metadata.created === 'string' ? metadata.created : ''
+
+    const models = []
+    const modelsObj = cfg.models && typeof cfg.models === 'object' ? cfg.models : {}
+
+    const orderedKeys = []
+    for (const key of ['origin', 'base', 'final']) {
+      if (modelsObj[key]) orderedKeys.push(key)
+    }
+    for (const key of Object.keys(modelsObj)) {
+      if (!orderedKeys.includes(key)) orderedKeys.push(key)
+    }
+
+    for (const key of orderedKeys) {
+      const model = modelsObj[key]
+      const configuredPath = model?.path
+      if (!configuredPath) continue
+
+      const zipPath = packagedPathByKey?.get?.(key)
+      const url = zipPath ? `./${zipPath}` : configuredPath
+
+      const modelConfig = model?.config && typeof model.config === 'object' ? model.config : {}
+      const position = Array.isArray(modelConfig.position) ? modelConfig.position : [0, 0, 0]
+      const scale = Array.isArray(modelConfig.scale) ? modelConfig.scale : [1, 1, 1]
+      const rotation = Array.isArray(modelConfig.rotation) ? modelConfig.rotation : [0, 0, 0]
+
+      models.push({
+        type: 'model',
+        key,
+        url,
+        position,
+        scale,
+        rotation
+      })
+    }
+
+    const texts = Array.isArray(cfg.texts) ? cfg.texts : []
+    const exportedTexts = texts
+      .filter((t) => t && typeof t === 'object')
+      .map((t) => {
+        const { index: _ignored, ...rest } = t
+        return rest
+      })
+
+    const config2 = {
+      version,
+      createTime,
+      status: cfg.status || 'draft',
+      propIdentifier: cfg.propIdentifier || '',
+      models,
+      texts: exportedTexts,
+      decorations: cfg.decorations || [],
+      lookupTable: cfg.lookupTable || {},
+      faceRepare: cfg.faceRepare ?? '0',
+      modelOptimization: cfg.modelOptimization ?? '0'
+    }
+
+    if (cfg.metadata) {
+      config2.metadata = cfg.metadata
+    }
+
+    return config2
+  }
+
+  _resolvePackageModelKeys(models, includeModels) {
+    if (!models || typeof models !== 'object') return []
+
+    if (includeModels === false) return []
+
+    if (Array.isArray(includeModels)) {
+      return includeModels
+        .filter((k) => typeof k === 'string' && k.length > 0)
+        .filter((k) => !!models[k]?.path)
+    }
+
+    // 默认：全量打包当前 config 里引用到的模型
+    return Object.entries(models)
+      .filter(([, model]) => !!model?.path)
+      .map(([key]) => key)
+  }
+
+  _extractFileName(path) {
+    if (typeof path !== 'string') return ''
+    const cleaned = path.split('#')[0].split('?')[0].replace(/\\/g, '/')
+    const parts = cleaned.split('/').filter(Boolean)
+    return parts.length ? parts[parts.length - 1] : ''
+  }
+
+  _extractExt(name) {
+    if (typeof name !== 'string') return ''
+    const m = name.toLowerCase().match(/\.([a-z0-9]+)$/)
+    return m ? m[1] : ''
+  }
+
+  _stripExt(name) {
+    if (typeof name !== 'string') return ''
+    return name.replace(/\.[a-z0-9]+$/i, '')
+  }
+
+  _sanitizeFileName(name) {
+    if (typeof name !== 'string') return ''
+    return name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim()
+  }
+
+  _guessExtFromBlob(blob) {
+    const type = blob?.type || ''
+    if (type.includes('stl')) return 'stl'
+    if (type.includes('obj')) return 'obj'
+    if (type.includes('zip')) return 'zip'
+    return ''
   }
 }
 
