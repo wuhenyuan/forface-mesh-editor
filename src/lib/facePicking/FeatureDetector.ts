@@ -1,43 +1,94 @@
 import * as THREE from 'three'
 
+interface FeatureDetectorConfig {
+  planeAngleTolerance: number
+  planeDistanceTolerance: number
+  minPlaneTriangles: number
+  cylinderAngleTolerance: number
+  cylinderRadiusTolerance: number
+  minCylinderTriangles: number
+  maxTrianglesPerFeature: number
+  enableParallelProcessing: boolean
+}
+
+interface TriangleData {
+  index: number
+  vertices: THREE.Vector3[]
+  normal: THREE.Vector3
+  center: THREE.Vector3
+  area: number
+}
+
+interface PlaneFeature {
+  id: string
+  type: 'plane'
+  normal: THREE.Vector3
+  point: THREE.Vector3
+  triangleIndices: number[]
+  area: number
+  bounds: THREE.Box3
+}
+
+interface CylinderFeature {
+  id: string
+  type: 'cylinder'
+  axis: THREE.Vector3
+  center: THREE.Vector3
+  radius: number
+  triangleIndices: number[]
+  area: number
+  bounds: THREE.Box3
+}
+
+interface FeatureInfo {
+  type: 'plane' | 'cylinder'
+  id: string
+  feature: PlaneFeature | CylinderFeature
+}
+
+export interface MeshFeatures {
+  meshId: string
+  triangleCount: number
+  planes: PlaneFeature[]
+  cylinders: CylinderFeature[]
+  faceToFeature: Map<number, FeatureInfo>
+  timestamp: number
+}
+
 /**
  * 特征检测器 - 基于原始模型预处理识别平面和圆柱面特征
  */
 export class FeatureDetector {
+  config: FeatureDetectorConfig
+  private featureCache: Map<string, MeshFeatures>
+  private processingQueue: Set<string>
+
   constructor() {
     // 特征检测参数
     this.config = {
-      // 平面检测
-      planeAngleTolerance: 0.1, // 法向量角度容差（弧度）
-      planeDistanceTolerance: 0.01, // 距离容差
-      minPlaneTriangles: 3, // 最小三角形数量
-      
-      // 圆柱面检测
-      cylinderAngleTolerance: 0.15, // 圆柱轴向角度容差
-      cylinderRadiusTolerance: 0.01, // 半径容差
-      minCylinderTriangles: 6, // 最小三角形数量
-      
-      // 性能优化
-      maxTrianglesPerFeature: 10000, // 单个特征最大三角形数
-      enableParallelProcessing: true // 启用并行处理
+      planeAngleTolerance: 0.1,
+      planeDistanceTolerance: 0.01,
+      minPlaneTriangles: 3,
+      cylinderAngleTolerance: 0.15,
+      cylinderRadiusTolerance: 0.01,
+      minCylinderTriangles: 6,
+      maxTrianglesPerFeature: 10000,
+      enableParallelProcessing: true
     }
     
-    // 特征缓存
-    this.featureCache = new Map() // meshId -> features
-    this.processingQueue = new Set() // 正在处理的网格ID
+    this.featureCache = new Map()
+    this.processingQueue = new Set()
   }
 
   /**
    * 预处理网格，识别所有特征
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @returns {Promise<Object>} 特征数据
    */
-  async preprocessMesh(mesh) {
+  async preprocessMesh(mesh: THREE.Mesh): Promise<MeshFeatures> {
     const meshId = this.generateMeshId(mesh)
     
     // 检查缓存
     if (this.featureCache.has(meshId)) {
-      return this.featureCache.get(meshId)
+      return this.featureCache.get(meshId)!
     }
     
     // 避免重复处理
@@ -68,17 +119,14 @@ export class FeatureDetector {
 
   /**
    * 检测网格中的所有特征
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @returns {Promise<Object>} 特征数据
    */
-  async detectFeatures(mesh) {
-    const geometry = mesh.geometry
+  async detectFeatures(mesh: THREE.Mesh): Promise<MeshFeatures> {
+    const geometry = mesh.geometry as THREE.BufferGeometry
     
     if (!geometry.isBufferGeometry) {
       throw new Error('仅支持 BufferGeometry')
     }
     
-    // 获取几何体数据
     const positions = geometry.getAttribute('position')
     const indices = geometry.getIndex()
     
@@ -86,13 +134,9 @@ export class FeatureDetector {
       throw new Error('几何体缺少位置属性')
     }
     
-    // 计算三角形数量
     const triangleCount = indices ? indices.count / 3 : positions.count / 3
-    
-    // 提取三角形数据
     const triangles = this.extractTriangles(positions, indices, triangleCount)
     
-    // 并行检测特征
     const [planes, cylinders] = await Promise.all([
       this.detectPlanes(triangles),
       this.detectCylinders(triangles)
@@ -103,7 +147,6 @@ export class FeatureDetector {
       triangleCount,
       planes,
       cylinders,
-      // 快速查找表：faceIndex -> featureId
       faceToFeature: this.buildFaceToFeatureMap(planes, cylinders),
       timestamp: Date.now()
     }
@@ -111,20 +154,20 @@ export class FeatureDetector {
 
   /**
    * 提取三角形数据
-   * @param {THREE.BufferAttribute} positions - 位置属性
-   * @param {THREE.BufferAttribute} indices - 索引属性
-   * @param {number} triangleCount - 三角形数量
-   * @returns {Array} 三角形数据数组
    */
-  extractTriangles(positions, indices, triangleCount) {
-    const triangles = []
+  private extractTriangles(
+    positions: THREE.BufferAttribute, 
+    indices: THREE.BufferAttribute | null, 
+    triangleCount: number
+  ): TriangleData[] {
+    const triangles: TriangleData[] = []
     
     for (let i = 0; i < triangleCount; i++) {
-      const triangle = {
+      const triangle: TriangleData = {
         index: i,
         vertices: [],
-        normal: null,
-        center: null,
+        normal: new THREE.Vector3(),
+        center: new THREE.Vector3(),
         area: 0
       }
       
@@ -162,17 +205,14 @@ export class FeatureDetector {
 
   /**
    * 检测平面特征
-   * @param {Array} triangles - 三角形数据
-   * @returns {Promise<Array>} 平面特征数组
    */
-  async detectPlanes(triangles) {
-    const planes = []
-    const processed = new Set()
+  private async detectPlanes(triangles: TriangleData[]): Promise<PlaneFeature[]> {
+    const planes: PlaneFeature[] = []
+    const processed = new Set<number>()
     
     for (let i = 0; i < triangles.length; i++) {
       if (processed.has(i)) continue
       
-      const seedTriangle = triangles[i]
       const plane = this.growPlane(triangles, i, processed)
       
       if (plane.triangleIndices.length >= this.config.minPlaneTriangles) {
@@ -187,14 +227,12 @@ export class FeatureDetector {
 
   /**
    * 从种子三角形生长平面
-   * @param {Array} triangles - 所有三角形
-   * @param {number} seedIndex - 种子三角形索引
-   * @param {Set} processed - 已处理的三角形集合
-   * @returns {Object} 平面特征
    */
-  growPlane(triangles, seedIndex, processed) {
+  private growPlane(triangles: TriangleData[], seedIndex: number, processed: Set<number>): PlaneFeature {
     const seedTriangle = triangles[seedIndex]
-    const plane = {
+    const plane: PlaneFeature = {
+      id: '',
+      type: 'plane',
       normal: seedTriangle.normal.clone(),
       point: seedTriangle.center.clone(),
       triangleIndices: [seedIndex],
@@ -205,20 +243,16 @@ export class FeatureDetector {
     processed.add(seedIndex)
     plane.bounds.expandByPoint(seedTriangle.center)
     
-    // 使用队列进行区域生长
     const queue = [seedIndex]
     
     while (queue.length > 0) {
-      const currentIndex = queue.shift()
-      const currentTriangle = triangles[currentIndex]
+      const currentIndex = queue.shift()!
       
-      // 查找相邻的共面三角形
       for (let i = 0; i < triangles.length; i++) {
         if (processed.has(i)) continue
         
         const triangle = triangles[i]
         
-        // 检查是否共面
         if (this.isCoplanar(plane, triangle)) {
           processed.add(i)
           plane.triangleIndices.push(i)
@@ -226,10 +260,8 @@ export class FeatureDetector {
           plane.bounds.expandByPoint(triangle.center)
           queue.push(i)
           
-          // 更新平面参数（加权平均）
           this.updatePlaneParameters(plane, triangle)
           
-          // 防止特征过大
           if (plane.triangleIndices.length >= this.config.maxTrianglesPerFeature) {
             break
           }
@@ -242,52 +274,40 @@ export class FeatureDetector {
 
   /**
    * 检查三角形是否与平面共面
-   * @param {Object} plane - 平面特征
-   * @param {Object} triangle - 三角形
-   * @returns {boolean} 是否共面
    */
-  isCoplanar(plane, triangle) {
-    // 检查法向量角度
+  private isCoplanar(plane: PlaneFeature, triangle: TriangleData): boolean {
     const angleDiff = plane.normal.angleTo(triangle.normal)
     if (angleDiff > this.config.planeAngleTolerance && 
         Math.PI - angleDiff > this.config.planeAngleTolerance) {
       return false
     }
     
-    // 检查点到平面距离
     const distance = Math.abs(plane.normal.dot(triangle.center.clone().sub(plane.point)))
     return distance <= this.config.planeDistanceTolerance
   }
 
   /**
    * 更新平面参数
-   * @param {Object} plane - 平面特征
-   * @param {Object} triangle - 新三角形
    */
-  updatePlaneParameters(plane, triangle) {
+  private updatePlaneParameters(plane: PlaneFeature, triangle: TriangleData): void {
     const totalTriangles = plane.triangleIndices.length
     const weight = 1 / totalTriangles
     
-    // 加权平均更新法向量
     plane.normal.multiplyScalar(1 - weight)
     plane.normal.add(triangle.normal.clone().multiplyScalar(weight))
     plane.normal.normalize()
     
-    // 加权平均更新参考点
     plane.point.multiplyScalar(1 - weight)
     plane.point.add(triangle.center.clone().multiplyScalar(weight))
   }
 
   /**
    * 检测圆柱面特征
-   * @param {Array} triangles - 三角形数据
-   * @returns {Promise<Array>} 圆柱面特征数组
    */
-  async detectCylinders(triangles) {
-    const cylinders = []
-    const processed = new Set()
+  private async detectCylinders(triangles: TriangleData[]): Promise<CylinderFeature[]> {
+    const cylinders: CylinderFeature[] = []
+    const processed = new Set<number>()
     
-    // 简化实现：基于法向量模式检测圆柱面
     for (let i = 0; i < triangles.length; i++) {
       if (processed.has(i)) continue
       
@@ -305,20 +325,16 @@ export class FeatureDetector {
 
   /**
    * 从种子三角形生长圆柱面
-   * @param {Array} triangles - 所有三角形
-   * @param {number} seedIndex - 种子三角形索引
-   * @param {Set} processed - 已处理的三角形集合
-   * @returns {Object} 圆柱面特征
    */
-  growCylinder(triangles, seedIndex, processed) {
+  private growCylinder(triangles: TriangleData[], seedIndex: number, processed: Set<number>): CylinderFeature {
     const seedTriangle = triangles[seedIndex]
     
-    // 估算圆柱轴向（简化：使用第一个三角形的切向量）
     const edge1 = seedTriangle.vertices[1].clone().sub(seedTriangle.vertices[0])
-    const edge2 = seedTriangle.vertices[2].clone().sub(seedTriangle.vertices[0])
     const axis = edge1.cross(seedTriangle.normal).normalize()
     
-    const cylinder = {
+    const cylinder: CylinderFeature = {
+      id: '',
+      type: 'cylinder',
       axis: axis,
       center: seedTriangle.center.clone(),
       radius: 0,
@@ -330,11 +346,10 @@ export class FeatureDetector {
     processed.add(seedIndex)
     cylinder.bounds.expandByPoint(seedTriangle.center)
     
-    // 区域生长（简化实现）
     const queue = [seedIndex]
     
     while (queue.length > 0 && cylinder.triangleIndices.length < this.config.maxTrianglesPerFeature) {
-      const currentIndex = queue.shift()
+      const currentIndex = queue.shift()!
       
       for (let i = 0; i < triangles.length; i++) {
         if (processed.has(i)) continue
@@ -358,23 +373,16 @@ export class FeatureDetector {
 
   /**
    * 检查三角形是否属于圆柱面
-   * @param {Object} cylinder - 圆柱面特征
-   * @param {Object} triangle - 三角形
-   * @returns {boolean} 是否属于圆柱面
    */
-  isCylindrical(cylinder, triangle) {
-    // 简化检测：检查法向量是否垂直于轴向
+  private isCylindrical(cylinder: CylinderFeature, triangle: TriangleData): boolean {
     const axisAngle = Math.abs(cylinder.axis.dot(triangle.normal))
     return axisAngle <= this.config.cylinderAngleTolerance
   }
 
   /**
    * 更新圆柱面参数
-   * @param {Object} cylinder - 圆柱面特征
-   * @param {Object} triangle - 新三角形
    */
-  updateCylinderParameters(cylinder, triangle) {
-    // 简化实现：更新中心点
+  private updateCylinderParameters(cylinder: CylinderFeature, triangle: TriangleData): void {
     const totalTriangles = cylinder.triangleIndices.length
     const weight = 1 / totalTriangles
     
@@ -384,14 +392,10 @@ export class FeatureDetector {
 
   /**
    * 构建面索引到特征的映射表
-   * @param {Array} planes - 平面特征
-   * @param {Array} cylinders - 圆柱面特征
-   * @returns {Map} faceIndex -> featureId
    */
-  buildFaceToFeatureMap(planes, cylinders) {
-    const map = new Map()
+  private buildFaceToFeatureMap(planes: PlaneFeature[], cylinders: CylinderFeature[]): Map<number, FeatureInfo> {
+    const map = new Map<number, FeatureInfo>()
     
-    // 添加平面映射
     planes.forEach(plane => {
       plane.triangleIndices.forEach(faceIndex => {
         map.set(faceIndex, {
@@ -402,7 +406,6 @@ export class FeatureDetector {
       })
     })
     
-    // 添加圆柱面映射
     cylinders.forEach(cylinder => {
       cylinder.triangleIndices.forEach(faceIndex => {
         map.set(faceIndex, {
@@ -418,11 +421,8 @@ export class FeatureDetector {
 
   /**
    * 根据面索引快速查找特征
-   * @param {string} meshId - 网格ID
-   * @param {number} faceIndex - 面索引
-   * @returns {Object|null} 特征信息
    */
-  getFeatureByFaceIndex(meshId, faceIndex) {
+  getFeatureByFaceIndex(meshId: string, faceIndex: number): FeatureInfo | null {
     const features = this.featureCache.get(meshId)
     if (!features) return null
     
@@ -431,29 +431,23 @@ export class FeatureDetector {
 
   /**
    * 获取网格的所有特征
-   * @param {string} meshId - 网格ID
-   * @returns {Object|null} 特征数据
    */
-  getFeatures(meshId) {
+  getFeatures(meshId: string): MeshFeatures | null {
     return this.featureCache.get(meshId) || null
   }
 
   /**
    * 生成网格唯一ID
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @returns {string} 网格ID
    */
-  generateMeshId(mesh) {
-    // 基于几何体特征生成稳定的ID
-    const geometry = mesh.geometry
+  generateMeshId(mesh: THREE.Mesh): string {
+    const geometry = mesh.geometry as THREE.BufferGeometry
     const positions = geometry.getAttribute('position')
     
     if (!positions) return mesh.uuid
     
-    // 使用顶点数量和边界框生成哈希
     const vertexCount = positions.count
     geometry.computeBoundingBox()
-    const bbox = geometry.boundingBox
+    const bbox = geometry.boundingBox!
     
     const hash = `mesh_${vertexCount}_${bbox.min.x.toFixed(3)}_${bbox.max.x.toFixed(3)}_${bbox.min.y.toFixed(3)}_${bbox.max.y.toFixed(3)}_${bbox.min.z.toFixed(3)}_${bbox.max.z.toFixed(3)}`
     
@@ -462,15 +456,13 @@ export class FeatureDetector {
 
   /**
    * 等待处理完成
-   * @param {string} meshId - 网格ID
-   * @returns {Promise<Object>} 特征数据
    */
-  async waitForProcessing(meshId) {
+  private async waitForProcessing(meshId: string): Promise<MeshFeatures> {
     return new Promise((resolve) => {
       const checkInterval = setInterval(() => {
         if (!this.processingQueue.has(meshId)) {
           clearInterval(checkInterval)
-          resolve(this.featureCache.get(meshId))
+          resolve(this.featureCache.get(meshId)!)
         }
       }, 10)
     })
@@ -478,9 +470,8 @@ export class FeatureDetector {
 
   /**
    * 清理缓存
-   * @param {string} meshId - 网格ID（可选）
    */
-  clearCache(meshId = null) {
+  clearCache(meshId: string | null = null): void {
     if (meshId) {
       this.featureCache.delete(meshId)
     } else {
@@ -490,9 +481,13 @@ export class FeatureDetector {
 
   /**
    * 获取缓存统计信息
-   * @returns {Object} 统计信息
    */
-  getCacheStats() {
+  getCacheStats(): {
+    cachedMeshes: number
+    processingQueue: number
+    totalFeatures: number
+    totalTriangles: number
+  } {
     const stats = {
       cachedMeshes: this.featureCache.size,
       processingQueue: this.processingQueue.size,

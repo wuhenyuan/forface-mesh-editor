@@ -2,10 +2,25 @@
  * 历史管理器
  * 提供撤销/重做功能
  */
-import { CompositeCommand } from './CompositeCommand.js'
+import { CompositeCommand } from './CompositeCommand'
+import type { ICommand, CommandSnapshot } from '../../types/history'
+
+export interface HistoryManagerOptions {
+  maxSize?: number
+  onChange?: ((snapshot: CommandSnapshot) => void) | null
+}
 
 export class HistoryManager {
-  constructor(options = {}) {
+  undoStack: ICommand[]
+  redoStack: ICommand[]
+  maxSize: number
+  isBusy: boolean
+  isApplying: boolean
+  
+  private _transaction: CompositeCommand | null
+  private _onChange: ((snapshot: CommandSnapshot) => void) | null
+
+  constructor(options: HistoryManagerOptions = {}) {
     const { maxSize = 50, onChange = null } = options
 
     this.undoStack = []
@@ -21,12 +36,12 @@ export class HistoryManager {
     this._notify()
   }
 
-  _notify() {
+  private _notify(): void {
     if (!this._onChange) return
     this._onChange(this.getSnapshot())
   }
 
-  getSnapshot() {
+  getSnapshot(): CommandSnapshot {
     return {
       undoCount: this.undoStack.length,
       redoCount: this.redoStack.length,
@@ -34,26 +49,27 @@ export class HistoryManager {
       canRedo: this.canRedo(),
       isBusy: this.isBusy,
       isApplying: this.isApplying,
-      transactionName: this._transaction?.description || null
+      transactionName: this._transaction?.description || null,
+      lastError: null
     }
   }
 
-  canUndo() {
+  canUndo(): boolean {
     return this.undoStack.length > 0
   }
 
-  canRedo() {
+  canRedo(): boolean {
     return this.redoStack.length > 0
   }
 
-  clear() {
+  clear(): void {
     this.undoStack = []
     this.redoStack = []
     this._transaction = null
     this._notify()
   }
 
-  _pushUndo(command) {
+  private _pushUndo(command: ICommand): void {
     this.undoStack.push(command)
     this.redoStack = []
 
@@ -64,7 +80,7 @@ export class HistoryManager {
     this._notify()
   }
 
-  capture(command) {
+  capture(command: ICommand | null): void {
     if (!command) return
 
     if (this._transaction) {
@@ -76,7 +92,7 @@ export class HistoryManager {
     this._pushUndo(command)
   }
 
-  async execute(command) {
+  async execute(command: ICommand | null): Promise<void> {
     if (!command) return
     if (this.isBusy) throw new Error('HistoryManager is busy')
 
@@ -99,11 +115,11 @@ export class HistoryManager {
     }
   }
 
-  async undo() {
+  async undo(): Promise<ICommand | null> {
     if (this.isBusy) throw new Error('HistoryManager is busy')
     if (!this.canUndo()) return null
 
-    const command = this.undoStack.pop()
+    const command = this.undoStack.pop()!
     this.isBusy = true
     this.isApplying = true
     this._notify()
@@ -119,11 +135,11 @@ export class HistoryManager {
     }
   }
 
-  async redo() {
+  async redo(): Promise<ICommand | null> {
     if (this.isBusy) throw new Error('HistoryManager is busy')
     if (!this.canRedo()) return null
 
-    const command = this.redoStack.pop()
+    const command = this.redoStack.pop()!
     this.isBusy = true
     this.isApplying = true
     this._notify()
@@ -143,13 +159,13 @@ export class HistoryManager {
     }
   }
 
-  beginTransaction(name = 'Transaction') {
+  beginTransaction(name: string = 'Transaction'): void {
     if (this._transaction) throw new Error('Transaction already in progress')
     this._transaction = new CompositeCommand(name)
     this._notify()
   }
 
-  commitTransaction() {
+  commitTransaction(): void {
     if (!this._transaction) return
     const tx = this._transaction
     this._transaction = null
@@ -160,7 +176,7 @@ export class HistoryManager {
     }
   }
 
-  async rollbackTransaction() {
+  async rollbackTransaction(): Promise<void> {
     if (!this._transaction) return
     const tx = this._transaction
     this._transaction = null

@@ -1,12 +1,19 @@
 const config = {
   version: '',
   createTime: '',
-  models: [{
+  // exportModels: [{}],
+  outputUrl: '',
+  feature: [{
     type: 'model',
     url: './model/1.obj',
     position: [0,0,0],
     scale: [0,0,0],
     rotation: [0,0,0],
+    boolean: 'union',
+    // 编辑器业务信息，业务强相关
+    meta: {
+      type: 'origin'
+    }
   },
   {
     type: 'model',
@@ -14,21 +21,24 @@ const config = {
     position: [0,0,0],
     scale: [0,0,0],
     rotation: [0,0,0],
-  }
-  ],
-  texts: [
+    boolean: 'union',
+    // 编辑器业务信息，业务强相关
+    meta: {
+      type: 'base'
+    }
+  },
     {
       id: '文字1',
-      type: 'Ailias',
+      type: 'text',
+      textType: 'Ailias',
       text: '我是文字内容',
       size: 33,
       depth: 3,
-      effect: 'Embossed',
+      boolean: 'substract' | 'union',
       color: '#ff00ff',
       position: [0, 0, 0],
       rotate: [0, 0, 0],
       wrap: 'surface Project',
-      attachmentSurface: 'in0in1100'
     }
-  ]
+  ],
 }

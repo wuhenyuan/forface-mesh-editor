@@ -1,22 +1,58 @@
 import * as THREE from 'three'
-import { FeatureDetector } from './FeatureDetector.js'
+import { FeatureDetector, MeshFeatures } from './FeatureDetector'
+
+interface FeaturePoolConfig {
+  enableAutoPreprocessing: boolean
+  maxCacheSize: number
+  enableLRU: boolean
+  preprocessingBatchSize: number
+}
+
+interface FeaturePoolStats {
+  totalMeshes: number
+  totalFeatures: number
+  totalTriangles: number
+  cacheHits: number
+  cacheMisses: number
+  preprocessingTime: number
+}
+
+interface FeatureInfo {
+  meshId: string
+  faceIndex: number
+  type: 'plane' | 'cylinder'
+  id: string
+  feature: unknown
+}
+
+interface BatchPreprocessResult {
+  meshId: string
+  success: boolean
+  features?: MeshFeatures
+  error?: unknown
+}
 
 /**
  * 特征池 - 缓存和管理所有网格的特征数据
  * 提供 O(1) 的特征查找性能
  */
 export class FeaturePool {
+  featureDetector: FeatureDetector
+  private meshFeatures: Map<string, MeshFeatures>
+  private faceToFeature: Map<string, FeatureInfo>
+  private registeredMeshes: Map<string, THREE.Mesh>
+  private stats: FeaturePoolStats
+  private config: FeaturePoolConfig
+  private accessOrder: Map<string, number>
+
   constructor() {
     this.featureDetector = new FeatureDetector()
     
-    // 特征缓存
-    this.meshFeatures = new Map() // meshId -> features
-    this.faceToFeature = new Map() // `${meshId}_${faceIndex}` -> feature
+    this.meshFeatures = new Map()
+    this.faceToFeature = new Map()
+    this.registeredMeshes = new Map()
+    this.accessOrder = new Map()
     
-    // 网格注册表
-    this.registeredMeshes = new Map() // meshId -> mesh
-    
-    // 性能监控
     this.stats = {
       totalMeshes: 0,
       totalFeatures: 0,
@@ -26,40 +62,30 @@ export class FeaturePool {
       preprocessingTime: 0
     }
     
-    // 配置
     this.config = {
-      enableAutoPreprocessing: true, // 自动预处理新网格
-      maxCacheSize: 100, // 最大缓存网格数量
-      enableLRU: true, // 启用LRU缓存策略
-      preprocessingBatchSize: 5 // 批处理大小
+      enableAutoPreprocessing: true,
+      maxCacheSize: 100,
+      enableLRU: true,
+      preprocessingBatchSize: 5
     }
-    
-    // LRU 缓存管理
-    this.accessOrder = new Map() // meshId -> timestamp
   }
 
   /**
    * 注册网格到特征池
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @param {boolean} autoPreprocess - 是否自动预处理
-   * @returns {Promise<string>} 网格ID
    */
-  async registerMesh(mesh, autoPreprocess = true) {
+  async registerMesh(mesh: THREE.Mesh, autoPreprocess: boolean = true): Promise<string> {
     const meshId = this.featureDetector.generateMeshId(mesh)
     
-    // 检查是否已注册
     if (this.registeredMeshes.has(meshId)) {
       console.log(`网格已注册: ${meshId}`)
       return meshId
     }
     
-    // 注册网格
     this.registeredMeshes.set(meshId, mesh)
     this.stats.totalMeshes++
     
     console.log(`注册网格: ${mesh.name || meshId}`)
     
-    // 自动预处理
     if (autoPreprocess && this.config.enableAutoPreprocessing) {
       await this.preprocessMesh(meshId)
     }
@@ -69,20 +95,17 @@ export class FeaturePool {
 
   /**
    * 预处理网格特征
-   * @param {string} meshId - 网格ID
-   * @returns {Promise<Object>} 特征数据
    */
-  async preprocessMesh(meshId) {
+  async preprocessMesh(meshId: string): Promise<MeshFeatures> {
     const mesh = this.registeredMeshes.get(meshId)
     if (!mesh) {
       throw new Error(`网格未注册: ${meshId}`)
     }
     
-    // 检查缓存
     if (this.meshFeatures.has(meshId)) {
       this.updateAccessTime(meshId)
       this.stats.cacheHits++
-      return this.meshFeatures.get(meshId)
+      return this.meshFeatures.get(meshId)!
     }
     
     this.stats.cacheMisses++
@@ -90,13 +113,10 @@ export class FeaturePool {
     try {
       const startTime = performance.now()
       
-      // 执行特征检测
       const features = await this.featureDetector.preprocessMesh(mesh)
       
-      // 缓存特征数据
       this.cacheFeatures(meshId, features)
       
-      // 更新统计信息
       const processingTime = performance.now() - startTime
       this.stats.preprocessingTime += processingTime
       this.stats.totalFeatures += features.planes.length + features.cylinders.length
@@ -114,20 +134,15 @@ export class FeaturePool {
 
   /**
    * 缓存特征数据
-   * @param {string} meshId - 网格ID
-   * @param {Object} features - 特征数据
    */
-  cacheFeatures(meshId, features) {
-    // 检查缓存大小限制
+  private cacheFeatures(meshId: string, features: MeshFeatures): void {
     if (this.config.enableLRU && this.meshFeatures.size >= this.config.maxCacheSize) {
       this.evictLRU()
     }
     
-    // 缓存网格特征
     this.meshFeatures.set(meshId, features)
     this.updateAccessTime(meshId)
     
-    // 构建快速查找表
     this.buildFastLookupTable(meshId, features)
     
     console.log(`特征已缓存: ${meshId}, 平面: ${features.planes.length}, 圆柱: ${features.cylinders.length}`)
@@ -135,12 +150,9 @@ export class FeaturePool {
 
   /**
    * 构建快速查找表
-   * @param {string} meshId - 网格ID
-   * @param {Object} features - 特征数据
    */
-  buildFastLookupTable(meshId, features) {
-    // 清理旧的查找表项
-    const keysToDelete = []
+  private buildFastLookupTable(meshId: string, features: MeshFeatures): void {
+    const keysToDelete: string[] = []
     for (const key of this.faceToFeature.keys()) {
       if (key.startsWith(`${meshId}_`)) {
         keysToDelete.push(key)
@@ -148,7 +160,6 @@ export class FeaturePool {
     }
     keysToDelete.forEach(key => this.faceToFeature.delete(key))
     
-    // 构建新的查找表
     features.faceToFeature.forEach((feature, faceIndex) => {
       const key = `${meshId}_${faceIndex}`
       this.faceToFeature.set(key, {
@@ -161,11 +172,8 @@ export class FeaturePool {
 
   /**
    * 根据面索引快速查找特征 - O(1) 性能
-   * @param {string} meshId - 网格ID
-   * @param {number} faceIndex - 面索引
-   * @returns {Object|null} 特征信息
    */
-  getFeatureByFace(meshId, faceIndex) {
+  getFeatureByFace(meshId: string, faceIndex: number): FeatureInfo | null {
     const key = `${meshId}_${faceIndex}`
     const feature = this.faceToFeature.get(key)
     
@@ -181,10 +189,8 @@ export class FeaturePool {
 
   /**
    * 获取网格的所有特征
-   * @param {string} meshId - 网格ID
-   * @returns {Object|null} 特征数据
    */
-  getMeshFeatures(meshId) {
+  getMeshFeatures(meshId: string): MeshFeatures | null {
     const features = this.meshFeatures.get(meshId)
     
     if (features) {
@@ -199,19 +205,14 @@ export class FeaturePool {
 
   /**
    * 获取特征的详细信息
-   * @param {string} meshId - 网格ID
-   * @param {string} featureId - 特征ID
-   * @returns {Object|null} 特征详细信息
    */
-  getFeatureDetails(meshId, featureId) {
+  getFeatureDetails(meshId: string, featureId: string): unknown {
     const features = this.getMeshFeatures(meshId)
     if (!features) return null
     
-    // 在平面中查找
     const plane = features.planes.find(p => p.id === featureId)
     if (plane) return plane
     
-    // 在圆柱面中查找
     const cylinder = features.cylinders.find(c => c.id === featureId)
     if (cylinder) return cylinder
     
@@ -220,47 +221,35 @@ export class FeaturePool {
 
   /**
    * 获取特征的所有面索引
-   * @param {string} meshId - 网格ID
-   * @param {string} featureId - 特征ID
-   * @returns {Array} 面索引数组
    */
-  getFeatureTriangles(meshId, featureId) {
-    const feature = this.getFeatureDetails(meshId, featureId)
-    return feature ? feature.triangleIndices : []
+  getFeatureTriangles(meshId: string, featureId: string): number[] {
+    const feature = this.getFeatureDetails(meshId, featureId) as { triangleIndices?: number[] } | null
+    return feature?.triangleIndices || []
   }
 
   /**
    * 检查面是否属于同一特征
-   * @param {string} meshId - 网格ID
-   * @param {number} faceIndex1 - 面索引1
-   * @param {number} faceIndex2 - 面索引2
-   * @returns {boolean} 是否属于同一特征
    */
-  areFacesInSameFeature(meshId, faceIndex1, faceIndex2) {
+  areFacesInSameFeature(meshId: string, faceIndex1: number, faceIndex2: number): boolean {
     const feature1 = this.getFeatureByFace(meshId, faceIndex1)
     const feature2 = this.getFeatureByFace(meshId, faceIndex2)
     
-    return feature1 && feature2 && feature1.id === feature2.id
+    return feature1 !== null && feature2 !== null && feature1.id === feature2.id
   }
 
   /**
    * 获取特征的邻近面
-   * @param {string} meshId - 网格ID
-   * @param {number} faceIndex - 面索引
-   * @param {number} radius - 搜索半径（面数）
-   * @returns {Array} 邻近面索引数组
    */
-  getNearbyFaces(meshId, faceIndex, radius = 1) {
+  getNearbyFaces(meshId: string, faceIndex: number, radius: number = 1): number[] {
     const feature = this.getFeatureByFace(meshId, faceIndex)
     if (!feature) return []
     
-    const featureTriangles = feature.feature.triangleIndices
+    const featureTriangles = this.getFeatureTriangles(meshId, feature.id)
     const currentIndex = featureTriangles.indexOf(faceIndex)
     
     if (currentIndex === -1) return []
     
-    // 简单实现：返回特征内的相邻面
-    const nearbyFaces = []
+    const nearbyFaces: number[] = []
     const start = Math.max(0, currentIndex - radius)
     const end = Math.min(featureTriangles.length, currentIndex + radius + 1)
     
@@ -275,17 +264,15 @@ export class FeaturePool {
 
   /**
    * 批量预处理网格
-   * @param {Array<string>} meshIds - 网格ID数组
-   * @returns {Promise<Array>} 处理结果数组
    */
-  async batchPreprocess(meshIds) {
-    const results = []
+  async batchPreprocess(meshIds: string[]): Promise<BatchPreprocessResult[]> {
+    const results: BatchPreprocessResult[] = []
     const batchSize = this.config.preprocessingBatchSize
     
     for (let i = 0; i < meshIds.length; i += batchSize) {
       const batch = meshIds.slice(i, i + batchSize)
       
-      const batchPromises = batch.map(async (meshId) => {
+      const batchPromises = batch.map(async (meshId): Promise<BatchPreprocessResult> => {
         try {
           const features = await this.preprocessMesh(meshId)
           return { meshId, success: true, features }
@@ -298,7 +285,6 @@ export class FeaturePool {
       const batchResults = await Promise.all(batchPromises)
       results.push(...batchResults)
       
-      // 避免阻塞主线程
       if (i + batchSize < meshIds.length) {
         await new Promise(resolve => setTimeout(resolve, 0))
       }
@@ -309,9 +295,8 @@ export class FeaturePool {
 
   /**
    * 更新访问时间（LRU）
-   * @param {string} meshId - 网格ID
    */
-  updateAccessTime(meshId) {
+  private updateAccessTime(meshId: string): void {
     if (this.config.enableLRU) {
       this.accessOrder.set(meshId, Date.now())
     }
@@ -320,11 +305,10 @@ export class FeaturePool {
   /**
    * 驱逐最近最少使用的缓存项
    */
-  evictLRU() {
+  private evictLRU(): void {
     if (this.accessOrder.size === 0) return
     
-    // 找到最旧的访问时间
-    let oldestMeshId = null
+    let oldestMeshId: string | null = null
     let oldestTime = Infinity
     
     for (const [meshId, accessTime] of this.accessOrder) {
@@ -342,15 +326,14 @@ export class FeaturePool {
 
   /**
    * 驱逐指定网格的缓存
-   * @param {string} meshId - 网格ID
    */
-  evictMesh(meshId) {
-    // 清理特征缓存
+  private evictMesh(meshId: string): void {
+    const features = this.meshFeatures.get(meshId)
+    
     this.meshFeatures.delete(meshId)
     this.accessOrder.delete(meshId)
     
-    // 清理快速查找表
-    const keysToDelete = []
+    const keysToDelete: string[] = []
     for (const key of this.faceToFeature.keys()) {
       if (key.startsWith(`${meshId}_`)) {
         keysToDelete.push(key)
@@ -358,8 +341,6 @@ export class FeaturePool {
     }
     keysToDelete.forEach(key => this.faceToFeature.delete(key))
     
-    // 更新统计信息
-    const features = this.meshFeatures.get(meshId)
     if (features) {
       this.stats.totalFeatures -= features.planes.length + features.cylinders.length
       this.stats.totalTriangles -= features.triangleCount
@@ -369,12 +350,11 @@ export class FeaturePool {
   /**
    * 清理所有缓存
    */
-  clearCache() {
+  clearCache(): void {
     this.meshFeatures.clear()
     this.faceToFeature.clear()
     this.accessOrder.clear()
     
-    // 重置统计信息
     this.stats.totalFeatures = 0
     this.stats.totalTriangles = 0
     this.stats.cacheHits = 0
@@ -383,12 +363,17 @@ export class FeaturePool {
 
   /**
    * 获取性能统计信息
-   * @returns {Object} 统计信息
    */
-  getStats() {
+  getStats(): FeaturePoolStats & {
+    cacheEfficiency: string
+    averagePreprocessingTime: string | number
+    cachedMeshes: number
+    registeredMeshes: number
+    lookupTableSize: number
+  } {
     const cacheEfficiency = this.stats.cacheHits + this.stats.cacheMisses > 0
       ? (this.stats.cacheHits / (this.stats.cacheHits + this.stats.cacheMisses) * 100).toFixed(2)
-      : 0
+      : '0'
     
     return {
       ...this.stats,
@@ -404,15 +389,13 @@ export class FeaturePool {
 
   /**
    * 导出特征数据
-   * @param {string} meshId - 网格ID（可选）
-   * @returns {Object} 特征数据
    */
-  exportFeatures(meshId = null) {
+  exportFeatures(meshId: string | null = null): MeshFeatures | Record<string, MeshFeatures> | null {
     if (meshId) {
       return this.getMeshFeatures(meshId)
     }
     
-    const allFeatures = {}
+    const allFeatures: Record<string, MeshFeatures> = {}
     for (const [id, features] of this.meshFeatures) {
       allFeatures[id] = features
     }
@@ -422,9 +405,8 @@ export class FeaturePool {
 
   /**
    * 导入特征数据
-   * @param {Object} featuresData - 特征数据
    */
-  importFeatures(featuresData) {
+  importFeatures(featuresData: Record<string, MeshFeatures>): void {
     for (const [meshId, features] of Object.entries(featuresData)) {
       this.cacheFeatures(meshId, features)
     }
@@ -434,18 +416,16 @@ export class FeaturePool {
 
   /**
    * 验证特征数据完整性
-   * @param {string} meshId - 网格ID
-   * @returns {Object} 验证结果
    */
-  validateFeatures(meshId) {
+  validateFeatures(meshId: string): { valid: boolean; error?: string; warnings: string[]; stats: unknown } {
     const features = this.getMeshFeatures(meshId)
     if (!features) {
-      return { valid: false, error: '特征数据不存在' }
+      return { valid: false, error: '特征数据不存在', warnings: [], stats: null }
     }
     
     const validation = {
       valid: true,
-      warnings: [],
+      warnings: [] as string[],
       stats: {
         planes: features.planes.length,
         cylinders: features.cylinders.length,
@@ -454,12 +434,10 @@ export class FeaturePool {
       }
     }
     
-    // 检查映射完整性
     if (features.faceToFeature.size === 0) {
       validation.warnings.push('面到特征的映射表为空')
     }
     
-    // 检查特征数量
     if (features.planes.length === 0 && features.cylinders.length === 0) {
       validation.warnings.push('未检测到任何特征')
     }
@@ -469,17 +447,15 @@ export class FeaturePool {
 
   /**
    * 获取特征检测配置
-   * @returns {Object} 配置对象
    */
-  getDetectorConfig() {
+  getDetectorConfig(): unknown {
     return this.featureDetector.config
   }
 
   /**
    * 更新特征检测配置
-   * @param {Object} config - 配置更新
    */
-  updateDetectorConfig(config) {
+  updateDetectorConfig(config: Partial<typeof this.featureDetector.config>): void {
     Object.assign(this.featureDetector.config, config)
     console.log('特征检测配置已更新:', config)
   }
@@ -487,7 +463,7 @@ export class FeaturePool {
   /**
    * 销毁特征池
    */
-  destroy() {
+  destroy(): void {
     this.clearCache()
     this.registeredMeshes.clear()
     this.featureDetector.clearCache()

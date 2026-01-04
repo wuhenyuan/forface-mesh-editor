@@ -1,9 +1,39 @@
+import type { FacePicker } from './FacePicker'
+
+interface MouseState {
+  isDown: boolean
+  lastPosition: { x: number; y: number }
+  dragThreshold: number
+  isDragging: boolean
+}
+
+interface KeyState {
+  ctrl: boolean
+  shift: boolean
+  alt: boolean
+}
+
+interface MousePosition {
+  client: { x: number; y: number }
+  offset: { x: number; y: number }
+  normalized: { x: number; y: number }
+  rect: DOMRect
+}
+
 /**
  * 事件处理器
  * 负责管理面拾取相关的所有用户交互事件
  */
 export class EventHandler {
-  constructor(facePicker, domElement) {
+  private facePicker: FacePicker
+  private domElement: HTMLElement
+  private isEnabled: boolean
+  private mouseState: MouseState
+  private keyState: KeyState
+  private throttleDelay: number
+  private lastMouseMoveTime: number
+
+  constructor(facePicker: FacePicker, domElement: HTMLElement) {
     this.facePicker = facePicker
     this.domElement = domElement
     
@@ -12,7 +42,7 @@ export class EventHandler {
     this.mouseState = {
       isDown: false,
       lastPosition: { x: 0, y: 0 },
-      dragThreshold: 5, // 像素
+      dragThreshold: 5,
       isDragging: false
     }
     
@@ -26,7 +56,7 @@ export class EventHandler {
     // 事件节流
     this.throttleDelay = 16 // ~60fps
     this.lastMouseMoveTime = 0
-    
+
     // 绑定事件处理方法
     this.handleMouseDown = this.handleMouseDown.bind(this)
     this.handleMouseUp = this.handleMouseUp.bind(this)
@@ -44,7 +74,7 @@ export class EventHandler {
   /**
    * 启用事件处理
    */
-  enable() {
+  enable(): void {
     if (this.isEnabled) return
     
     this.isEnabled = true
@@ -68,13 +98,13 @@ export class EventHandler {
     
     // 设置DOM元素属性
     this.domElement.style.cursor = 'crosshair'
-    this.domElement.tabIndex = 0 // 使元素可以接收键盘焦点
+    ;(this.domElement as HTMLElement).tabIndex = 0
   }
   
   /**
    * 禁用事件处理
    */
-  disable() {
+  disable(): void {
     if (!this.isEnabled) return
     
     this.isEnabled = false
@@ -100,12 +130,11 @@ export class EventHandler {
     // 重置状态
     this.resetState()
   }
-  
+
   /**
    * 处理鼠标按下事件
-   * @param {MouseEvent} event - 鼠标事件
    */
-  handleMouseDown(event) {
+  handleMouseDown(event: MouseEvent): void {
     if (!this.isEnabled) return
     
     this.mouseState.isDown = true
@@ -126,9 +155,8 @@ export class EventHandler {
   
   /**
    * 处理鼠标抬起事件
-   * @param {MouseEvent} event - 鼠标事件
    */
-  handleMouseUp(event) {
+  handleMouseUp(event: MouseEvent): void {
     if (!this.isEnabled) return
     
     this.mouseState.isDown = false
@@ -147,9 +175,8 @@ export class EventHandler {
   
   /**
    * 处理鼠标移动事件
-   * @param {MouseEvent} event - 鼠标事件
    */
-  handleMouseMove(event) {
+  handleMouseMove(event: MouseEvent): void {
     if (!this.isEnabled) return
     
     // 事件节流
@@ -201,12 +228,11 @@ export class EventHandler {
       })
     }
   }
-  
+
   /**
    * 处理点击事件
-   * @param {MouseEvent} event - 鼠标事件
    */
-  handleClick(event) {
+  handleClick(event: MouseEvent): void {
     console.log('EventHandler.handleClick 被调用', {
       enabled: this.isEnabled,
       isDragging: this.mouseState.isDragging,
@@ -236,9 +262,8 @@ export class EventHandler {
   
   /**
    * 处理双击事件
-   * @param {MouseEvent} event - 鼠标事件
    */
-  handleDoubleClick(event) {
+  handleDoubleClick(event: MouseEvent): void {
     if (!this.isEnabled) return
     
     // 发出双击事件
@@ -249,15 +274,13 @@ export class EventHandler {
       modifiers: this.getModifierState()
     })
     
-    // 可以在这里添加双击特殊逻辑，比如全选相邻面
     event.preventDefault()
   }
   
   /**
    * 处理右键菜单事件
-   * @param {MouseEvent} event - 鼠标事件
    */
-  handleContextMenu(event) {
+  handleContextMenu(event: MouseEvent): void {
     if (!this.isEnabled) return
     
     // 发出右键菜单事件
@@ -267,15 +290,13 @@ export class EventHandler {
       modifiers: this.getModifierState()
     })
     
-    // 默认阻止浏览器右键菜单
     event.preventDefault()
   }
   
   /**
    * 处理键盘按下事件
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  handleKeyDown(event) {
+  handleKeyDown(event: KeyboardEvent): void {
     if (!this.isEnabled) return
     
     // 更新修饰键状态
@@ -298,9 +319,8 @@ export class EventHandler {
   
   /**
    * 处理键盘抬起事件
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  handleKeyUp(event) {
+  handleKeyUp(event: KeyboardEvent): void {
     if (!this.isEnabled) return
     
     // 更新修饰键状态
@@ -314,12 +334,11 @@ export class EventHandler {
       modifiers: this.getModifierState()
     })
   }
-  
+
   /**
    * 处理鼠标滚轮事件
-   * @param {WheelEvent} event - 滚轮事件
    */
-  handleWheel(event) {
+  handleWheel(event: WheelEvent): void {
     if (!this.isEnabled) return
     
     // 发出滚轮事件
@@ -342,14 +361,12 @@ export class EventHandler {
   
   /**
    * 处理窗口大小变化事件
-   * @param {Event} event - 窗口事件
    */
-  handleResize(event) {
+  handleResize(_event: Event): void {
     if (!this.isEnabled) return
     
     // 发出窗口大小变化事件
     this.facePicker.emit('resize', {
-      event,
       size: {
         width: window.innerWidth,
         height: window.innerHeight
@@ -359,9 +376,8 @@ export class EventHandler {
   
   /**
    * 处理页面可见性变化事件
-   * @param {Event} event - 可见性事件
    */
-  handleVisibilityChange(event) {
+  handleVisibilityChange(_event: Event): void {
     if (!this.isEnabled) return
     
     // 当页面变为不可见时，重置状态
@@ -371,61 +387,65 @@ export class EventHandler {
     
     // 发出可见性变化事件
     this.facePicker.emit('visibilityChange', {
-      event,
       hidden: document.hidden
     })
   }
   
   /**
    * 处理快捷键
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  handleShortcuts(event) {
-    const { key, ctrlKey, metaKey, shiftKey, altKey } = event
+  private handleShortcuts(event: KeyboardEvent): void {
+    const { key, ctrlKey, metaKey, shiftKey } = event
     const isCtrl = ctrlKey || metaKey
     
-    // 定义快捷键映射
-    const shortcuts = {
-      // 选择操作
-      'Escape': () => this.facePicker.clearSelection(),
-      'a': () => isCtrl && this.handleSelectAll(event),
-      
-      // 历史操作
-      'z': () => isCtrl && !shiftKey && this.facePicker.undo(),
-      'z': () => isCtrl && shiftKey && this.facePicker.redo(),
-      'y': () => isCtrl && this.facePicker.redo(),
-      
-      // 视图操作
-      'f': () => this.handleFocusSelection(event),
-      'h': () => this.handleToggleHighlight(event),
-      
-      // 调试操作
-      'i': () => isCtrl && shiftKey && this.handleShowInfo(event)
-    }
-    
-    // 执行对应的快捷键操作
-    const handler = shortcuts[key.toLowerCase()]
-    if (handler) {
-      handler()
+    // 处理快捷键
+    switch (key.toLowerCase()) {
+      case 'escape':
+        this.facePicker.clearSelection()
+        break
+      case 'a':
+        if (isCtrl) {
+          this.handleSelectAll(event)
+        }
+        break
+      case 'z':
+        if (isCtrl && !shiftKey) {
+          this.facePicker.undo()
+        } else if (isCtrl && shiftKey) {
+          this.facePicker.redo()
+        }
+        break
+      case 'y':
+        if (isCtrl) {
+          this.facePicker.redo()
+        }
+        break
+      case 'f':
+        this.handleFocusSelection()
+        break
+      case 'h':
+        this.handleToggleHighlight()
+        break
+      case 'i':
+        if (isCtrl && shiftKey) {
+          this.handleShowInfo(event)
+        }
+        break
     }
   }
   
   /**
    * 处理全选操作
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  handleSelectAll(event) {
-    // 这里可以实现全选逻辑
+  private handleSelectAll(event: KeyboardEvent): void {
     console.log('全选功能待实现')
     event.preventDefault()
   }
   
   /**
    * 处理聚焦到选择
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  handleFocusSelection(event) {
-    // 这里可以实现聚焦到选中面的逻辑
+  private handleFocusSelection(): void {
     const selectedFaces = this.facePicker.getSelectedFaces()
     if (selectedFaces.length > 0) {
       console.log('聚焦到选中面:', selectedFaces.length)
@@ -434,18 +454,15 @@ export class EventHandler {
   
   /**
    * 处理切换高亮显示
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  handleToggleHighlight(event) {
-    // 这里可以实现切换高亮显示的逻辑
+  private handleToggleHighlight(): void {
     console.log('切换高亮显示')
   }
   
   /**
    * 处理显示信息
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  handleShowInfo(event) {
+  private handleShowInfo(event: KeyboardEvent): void {
     const stats = this.facePicker.getSelectionStats()
     const highlightStats = this.facePicker.getHighlightStats()
     
@@ -455,13 +472,11 @@ export class EventHandler {
     
     event.preventDefault()
   }
-  
+
   /**
    * 获取鼠标位置
-   * @param {MouseEvent} event - 鼠标事件
-   * @returns {Object} 鼠标位置信息
    */
-  getMousePosition(event) {
+  private getMousePosition(event: MouseEvent): MousePosition {
     const rect = this.domElement.getBoundingClientRect()
     
     return {
@@ -480,9 +495,8 @@ export class EventHandler {
   
   /**
    * 更新修饰键状态
-   * @param {KeyboardEvent} event - 键盘事件
    */
-  updateModifierState(event) {
+  private updateModifierState(event: KeyboardEvent): void {
     this.keyState.ctrl = event.ctrlKey || event.metaKey
     this.keyState.shift = event.shiftKey
     this.keyState.alt = event.altKey
@@ -490,16 +504,15 @@ export class EventHandler {
   
   /**
    * 获取修饰键状态
-   * @returns {Object} 修饰键状态
    */
-  getModifierState() {
+  getModifierState(): KeyState {
     return { ...this.keyState }
   }
   
   /**
    * 重置所有状态
    */
-  resetState() {
+  resetState(): void {
     this.mouseState.isDown = false
     this.mouseState.isDragging = false
     this.keyState.ctrl = false
@@ -509,25 +522,27 @@ export class EventHandler {
   
   /**
    * 设置事件节流延迟
-   * @param {number} delay - 延迟时间（毫秒）
    */
-  setThrottleDelay(delay) {
+  setThrottleDelay(delay: number): void {
     this.throttleDelay = Math.max(0, delay)
   }
   
   /**
    * 设置拖拽阈值
-   * @param {number} threshold - 阈值（像素）
    */
-  setDragThreshold(threshold) {
+  setDragThreshold(threshold: number): void {
     this.mouseState.dragThreshold = Math.max(0, threshold)
   }
   
   /**
    * 获取事件处理器状态
-   * @returns {Object} 状态信息
    */
-  getState() {
+  getState(): {
+    isEnabled: boolean
+    mouseState: MouseState
+    keyState: KeyState
+    throttleDelay: number
+  } {
     return {
       isEnabled: this.isEnabled,
       mouseState: { ...this.mouseState },

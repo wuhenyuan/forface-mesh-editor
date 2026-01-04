@@ -7,42 +7,60 @@ import * as THREE from 'three'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 
+export interface LoadOptions {
+  modelId?: string
+  centerModel?: boolean
+  material?: THREE.Material | null
+}
+
+export interface ModelMetadata {
+  vertexCount: number
+  faceCount: number
+  boundingBox: {
+    min: number[]
+    max: number[]
+  }
+  size: number[]
+}
+
+export interface LoadResult {
+  model: THREE.Object3D
+  modelId: string
+  format: string
+  metadata: ModelMetadata
+}
+
+export type FileSource = string | File | Blob
+
 export class LoaderManager {
+  stlLoader: STLLoader
+  objLoader: OBJLoader
+  loadCounter: number
+  loadedModels: Map<string, LoadResult>
+  onProgress: ((event: ProgressEvent) => void) | null
+  onError: ((error: Error) => void) | null
+
   constructor() {
-    // Loaders
     this.stlLoader = new STLLoader()
     this.objLoader = new OBJLoader()
-    
-    // 加载计数器（用于生成 ID）
     this.loadCounter = 0
-    
-    // 已加载模型缓存
-    this.loadedModels = new Map() // modelId -> LoadResult
-    
-    // 事件回调
+    this.loadedModels = new Map()
     this.onProgress = null
     this.onError = null
   }
 
-  /**
-   * 加载模型（统一入口）
-   * @param {string|File|Blob} source - 文件路径、File 对象或 Blob
-   * @param {Object} options - 加载选项
-   * @returns {Promise<Object>} 加载结果
-   */
-  async load(source, options = {}) {
+  async load(source: FileSource, options: LoadOptions = {}): Promise<LoadResult> {
     const {
       modelId = this._generateModelId(),
       centerModel = true,
       material = null
     } = options
 
-    // 判断文件格式
     const format = this._detectFormat(source)
     
     console.log(`[LoaderManager] 加载模型: ${modelId}, 格式: ${format}`)
 
-    let model
+    let model: THREE.Object3D
     try {
       switch (format) {
         case 'stl':
@@ -58,39 +76,31 @@ export class LoaderManager {
           throw new Error(`不支持的文件格式: ${format}`)
       }
     } catch (error) {
-      this.onError?.(error)
+      this.onError?.(error as Error)
       throw error
     }
 
-    // 居中模型
     if (centerModel) {
       this._centerModel(model)
     }
 
-    // 生成元数据
     const metadata = this._extractMetadata(model)
 
-    // 构建结果
-    const result = {
+    const result: LoadResult = {
       model,
       modelId,
       format,
       metadata
     }
 
-    // 缓存
     this.loadedModels.set(modelId, result)
 
     return result
   }
 
-  /**
-   * 加载 STL 文件
-   * @private
-   */
-  async _loadSTL(source, material) {
+  private async _loadSTL(source: FileSource, material: THREE.Material | null): Promise<THREE.Mesh> {
     return new Promise((resolve, reject) => {
-      const onLoad = (geometry) => {
+      const onLoad = (geometry: THREE.BufferGeometry) => {
         geometry.computeVertexNormals()
         
         const mat = material || new THREE.MeshStandardMaterial({
@@ -103,64 +113,63 @@ export class LoaderManager {
         resolve(mesh)
       }
 
-      if (source instanceof Blob || source instanceof File) {
+      if (typeof source !== 'string') {
         const reader = new FileReader()
         reader.onload = (e) => {
-          const geometry = this.stlLoader.parse(e.target.result)
+          const geometry = this.stlLoader.parse(e.target!.result as ArrayBuffer)
           onLoad(geometry)
         }
-        reader.onerror = reject
-        reader.readAsArrayBuffer(source)
+        reader.onerror = () => reject(reader.error)
+        reader.readAsArrayBuffer(source as Blob)
       } else {
-        this.stlLoader.load(source, onLoad, this.onProgress, reject)
+        this.stlLoader.load(
+          source, 
+          onLoad, 
+          this.onProgress || undefined, 
+          (error) => reject(error)
+        )
       }
     })
   }
 
-  /**
-   * 加载 OBJ 文件
-   * @private
-   */
-  async _loadOBJ(source, material) {
+  private async _loadOBJ(source: FileSource, material: THREE.Material | null): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
-      const onLoad = (group) => {
+      const onLoad = (group: THREE.Group) => {
         if (material) {
           group.traverse((child) => {
-            if (child.isMesh) {
-              child.material = material
+            if ((child as THREE.Mesh).isMesh) {
+              (child as THREE.Mesh).material = material
             }
           })
         }
         resolve(group)
       }
 
-      if (source instanceof Blob || source instanceof File) {
+      if (typeof source !== 'string') {
         const reader = new FileReader()
         reader.onload = (e) => {
-          const group = this.objLoader.parse(e.target.result)
+          const group = this.objLoader.parse(e.target!.result as string)
           onLoad(group)
         }
-        reader.onerror = reject
-        reader.readAsText(source)
+        reader.onerror = () => reject(reader.error)
+        reader.readAsText(source as Blob)
       } else {
-        this.objLoader.load(source, onLoad, this.onProgress, reject)
+        this.objLoader.load(
+          source, 
+          onLoad, 
+          this.onProgress || undefined, 
+          (error) => reject(error)
+        )
       }
     })
   }
 
-  /**
-   * 加载 ZIP（内含 OBJ 或 STL）
-   * - 典型用途：models[].url 指向 *.zip（线上或 zip 包内资源）
-   * - 约定：zip 内至少包含一个 .obj 或 .stl（若两者都有，优先 obj）
-   * @private
-   */
-  async _loadZipModel(source, material) {
+  private async _loadZipModel(source: FileSource, material: THREE.Material | null): Promise<THREE.Object3D> {
     const { default: JSZip } = await import('jszip')
 
-    const zipInput =
-      typeof source === 'string'
-        ? await this._fetchArrayBuffer(source)
-        : source
+    const zipInput = typeof source === 'string'
+      ? await this._fetchArrayBuffer(source)
+      : source
 
     const zip = await JSZip.loadAsync(zipInput)
     const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir)
@@ -174,7 +183,7 @@ export class LoaderManager {
     }
 
     if (targetName.toLowerCase().endsWith('.stl')) {
-      const buffer = await zip.file(targetName).async('arraybuffer')
+      const buffer = await zip.file(targetName)!.async('arraybuffer')
       const geometry = this.stlLoader.parse(buffer)
       geometry.computeVertexNormals()
 
@@ -186,17 +195,19 @@ export class LoaderManager {
       return new THREE.Mesh(geometry, mat)
     }
 
-    const objText = await zip.file(targetName).async('text')
+    const objText = await zip.file(targetName)!.async('text')
     const group = this.objLoader.parse(objText)
     if (material) {
       group.traverse((child) => {
-        if (child.isMesh) child.material = material
+        if ((child as THREE.Mesh).isMesh) {
+          (child as THREE.Mesh).material = material
+        }
       })
     }
     return group
   }
 
-  async _fetchArrayBuffer(url) {
+  private async _fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
     const res = await fetch(url)
     if (!res.ok) {
       throw new Error(`HTTP ${res.status} ${res.statusText}`)
@@ -204,11 +215,7 @@ export class LoaderManager {
     return await res.arrayBuffer()
   }
 
-  /**
-   * 检测文件格式
-   * @private
-   */
-  _detectFormat(source) {
+  private _detectFormat(source: FileSource): string {
     let filename = ''
     
     if (typeof source === 'string') {
@@ -230,11 +237,7 @@ export class LoaderManager {
     return 'unknown'
   }
 
-  /**
-   * 居中模型
-   * @private
-   */
-  _centerModel(model) {
+  private _centerModel(model: THREE.Object3D): void {
     const box = new THREE.Box3().setFromObject(model)
     const center = box.getCenter(new THREE.Vector3())
     
@@ -244,19 +247,16 @@ export class LoaderManager {
     model.position.y -= newBox.min.y
   }
 
-  /**
-   * 提取模型元数据
-   * @private
-   */
-  _extractMetadata(model) {
+  private _extractMetadata(model: THREE.Object3D): ModelMetadata {
     let vertexCount = 0
     let faceCount = 0
     const boundingBox = new THREE.Box3().setFromObject(model)
     const size = boundingBox.getSize(new THREE.Vector3())
 
     model.traverse((child) => {
-      if (child.isMesh && child.geometry) {
-        const geo = child.geometry
+      const mesh = child as THREE.Mesh
+      if (mesh.isMesh && mesh.geometry) {
+        const geo = mesh.geometry
         const positions = geo.getAttribute('position')
         if (positions) {
           vertexCount += positions.count
@@ -276,32 +276,19 @@ export class LoaderManager {
     }
   }
 
-  /**
-   * 生成模型 ID
-   * @private
-   */
-  _generateModelId() {
+  private _generateModelId(): string {
     return `model_${++this.loadCounter}_${Date.now()}`
   }
 
-  /**
-   * 获取已加载的模型
-   */
-  getModel(modelId) {
+  getModel(modelId: string): LoadResult | null {
     return this.loadedModels.get(modelId) || null
   }
 
-  /**
-   * 移除模型
-   */
-  removeModel(modelId) {
+  removeModel(modelId: string): void {
     this.loadedModels.delete(modelId)
   }
 
-  /**
-   * 清理所有
-   */
-  dispose() {
+  dispose(): void {
     this.loadedModels.clear()
   }
 }

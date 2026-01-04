@@ -1,11 +1,25 @@
 import * as THREE from 'three'
 
+interface HighlightColors {
+  selection: number
+  hover: number
+  multiSelection: number
+}
+
 /**
  * 高亮渲染管理器
  * 负责管理面级高亮显示和悬停效果
  */
 export class HighlightRenderer {
-  constructor(scene) {
+  private scene: THREE.Scene
+  private highlightMeshes: Map<string, THREE.Mesh>
+  private hoverMeshes: Map<string, THREE.Mesh>
+  private colors: HighlightColors
+  private materialCache: Map<string, THREE.Material>
+  private highlightGroup: THREE.Group
+  private hoverGroup: THREE.Group
+
+  constructor(scene: THREE.Scene) {
     this.scene = scene
     
     // 高亮网格存储 - key: meshId_faceIndex, value: highlightMesh
@@ -37,13 +51,8 @@ export class HighlightRenderer {
   
   /**
    * 高亮显示面
-   * @param {THREE.Mesh} mesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色（可选）
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {boolean} 是否成功创建高亮
    */
-  highlightFace(mesh, faceIndex, color = null, isHover = false) {
+  highlightFace(mesh: THREE.Mesh, faceIndex: number, color: number | null = null, isHover: boolean = false): boolean {
     if (!mesh || !mesh.geometry || faceIndex < 0) {
       console.warn('无效的网格或面索引')
       return false
@@ -72,23 +81,16 @@ export class HighlightRenderer {
   
   /**
    * 移除面高亮
-   * @param {THREE.Mesh} mesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {boolean} 是否成功移除
    */
-  removeHighlight(mesh, faceIndex, isHover = false) {
+  removeHighlight(mesh: THREE.Mesh, faceIndex: number, isHover: boolean = false): boolean {
     const highlightId = this.generateHighlightId(mesh, faceIndex)
     return this.removeHighlightById(highlightId, isHover)
   }
   
   /**
    * 根据ID移除高亮
-   * @param {string} highlightId - 高亮ID
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {boolean} 是否成功移除
    */
-  removeHighlightById(highlightId, isHover = false) {
+  removeHighlightById(highlightId: string, isHover: boolean = false): boolean {
     const targetGroup = isHover ? this.hoverGroup : this.highlightGroup
     const targetMap = isHover ? this.hoverMeshes : this.highlightMeshes
     
@@ -117,17 +119,16 @@ export class HighlightRenderer {
   
   /**
    * 清除所有高亮
-   * @param {boolean} includeHover - 是否包括悬停效果
    */
-  clearAllHighlights(includeHover = false) {
+  clearAllHighlights(includeHover: boolean = false): void {
     // 清除选择高亮
-    this.highlightMeshes.forEach((mesh, id) => {
+    this.highlightMeshes.forEach((_mesh, id) => {
       this.removeHighlightById(id, false)
     })
     
     // 清除悬停高亮
     if (includeHover) {
-      this.hoverMeshes.forEach((mesh, id) => {
+      this.hoverMeshes.forEach((_mesh, id) => {
         this.removeHighlightById(id, true)
       })
     }
@@ -135,25 +136,20 @@ export class HighlightRenderer {
   
   /**
    * 显示悬停效果
-   * @param {THREE.Mesh} mesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @returns {boolean} 是否成功显示
    */
-  showHoverEffect(mesh, faceIndex) {
+  showHoverEffect(mesh: THREE.Mesh, faceIndex: number): boolean {
     return this.highlightFace(mesh, faceIndex, this.colors.hover, true)
   }
   
   /**
    * 隐藏悬停效果
-   * @param {THREE.Mesh} mesh - 原始网格（可选）
-   * @param {number} faceIndex - 面索引（可选）
    */
-  hideHoverEffect(mesh = null, faceIndex = null) {
+  hideHoverEffect(mesh: THREE.Mesh | null = null, faceIndex: number | null = null): void {
     if (mesh !== null && faceIndex !== null) {
       this.removeHighlight(mesh, faceIndex, true)
     } else {
       // 清除所有悬停效果
-      this.hoverMeshes.forEach((highlightMesh, id) => {
+      this.hoverMeshes.forEach((_highlightMesh, id) => {
         this.removeHighlightById(id, true)
       })
     }
@@ -161,19 +157,17 @@ export class HighlightRenderer {
   
   /**
    * 创建面高亮网格
-   * @param {THREE.Mesh} originalMesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Mesh|null} 高亮网格或null
    */
-  createFaceHighlightMesh(originalMesh, faceIndex, color, isHover) {
+  private createFaceHighlightMesh(
+    originalMesh: THREE.Mesh, 
+    faceIndex: number, 
+    color: number | null, 
+    isHover: boolean
+  ): THREE.Mesh | null {
     const geometry = originalMesh.geometry
     
-    if (geometry.isBufferGeometry) {
+    if (geometry instanceof THREE.BufferGeometry) {
       return this.createBufferGeometryHighlight(originalMesh, faceIndex, color, isHover)
-    } else if (geometry.isGeometry) {
-      return this.createGeometryHighlight(originalMesh, faceIndex, color, isHover)
     }
     
     console.warn('不支持的几何体类型')
@@ -182,14 +176,14 @@ export class HighlightRenderer {
   
   /**
    * 为BufferGeometry创建面高亮
-   * @param {THREE.Mesh} originalMesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Mesh|null} 高亮网格
    */
-  createBufferGeometryHighlight(originalMesh, faceIndex, color, isHover) {
-    const originalGeometry = originalMesh.geometry
+  private createBufferGeometryHighlight(
+    originalMesh: THREE.Mesh, 
+    faceIndex: number, 
+    color: number | null, 
+    isHover: boolean
+  ): THREE.Mesh | null {
+    const originalGeometry = originalMesh.geometry as THREE.BufferGeometry
     const positionAttribute = originalGeometry.getAttribute('position')
     const normalAttribute = originalGeometry.getAttribute('normal')
     const uvAttribute = originalGeometry.getAttribute('uv')
@@ -204,7 +198,7 @@ export class HighlightRenderer {
     const highlightGeometry = new THREE.BufferGeometry()
     
     // 获取面的顶点索引
-    let vertexIndices = []
+    const vertexIndices: number[] = []
     
     if (indexAttribute) {
       // 有索引的几何体
@@ -221,9 +215,9 @@ export class HighlightRenderer {
     }
     
     // 提取面的顶点数据
-    const positions = []
-    const normals = []
-    const uvs = []
+    const positions: number[] = []
+    const normals: number[] = []
+    const uvs: number[] = []
     
     vertexIndices.forEach(index => {
       // 位置
@@ -281,72 +275,13 @@ export class HighlightRenderer {
   }
   
   /**
-   * 为传统Geometry创建面高亮
-   * @param {THREE.Mesh} originalMesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Mesh|null} 高亮网格
-   */
-  createGeometryHighlight(originalMesh, faceIndex, color, isHover) {
-    const originalGeometry = originalMesh.geometry
-    
-    if (!originalGeometry.faces || faceIndex >= originalGeometry.faces.length) {
-      console.warn('无效的面索引')
-      return null
-    }
-    
-    const face = originalGeometry.faces[faceIndex]
-    const vertices = originalGeometry.vertices
-    
-    // 创建新的几何体
-    const highlightGeometry = new THREE.Geometry()
-    
-    // 添加面的顶点
-    highlightGeometry.vertices.push(
-      vertices[face.a].clone(),
-      vertices[face.b].clone(),
-      vertices[face.c].clone()
-    )
-    
-    // 添加面
-    const newFace = new THREE.Face3(0, 1, 2)
-    newFace.normal.copy(face.normal)
-    newFace.vertexNormals = face.vertexNormals.slice()
-    highlightGeometry.faces.push(newFace)
-    
-    // 复制UV坐标（如果存在）
-    if (originalGeometry.faceVertexUvs && originalGeometry.faceVertexUvs[0]) {
-      const faceUvs = originalGeometry.faceVertexUvs[0][faceIndex]
-      if (faceUvs) {
-        highlightGeometry.faceVertexUvs[0] = [faceUvs.slice()]
-      }
-    }
-    
-    // 创建高亮材质
-    const highlightMaterial = this.createHighlightMaterial(originalMesh.material, color, isHover)
-    
-    // 创建高亮网格
-    const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial)
-    
-    // 复制原始网格的变换
-    highlightMesh.matrix.copy(originalMesh.matrix)
-    highlightMesh.matrixAutoUpdate = false
-    
-    // 设置渲染顺序
-    highlightMesh.renderOrder = originalMesh.renderOrder + (isHover ? 2 : 1)
-    
-    return highlightMesh
-  }
-  
-  /**
    * 创建高亮材质
-   * @param {THREE.Material} originalMaterial - 原始材质
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Material} 高亮材质
    */
-  createHighlightMaterial(originalMaterial, color, isHover) {
+  private createHighlightMaterial(
+    originalMaterial: THREE.Material | THREE.Material[], 
+    color: number | null, 
+    isHover: boolean
+  ): THREE.Material {
     // 确定高亮颜色
     const highlightColor = color || (isHover ? this.colors.hover : this.colors.selection)
     
@@ -354,14 +289,17 @@ export class HighlightRenderer {
     const cacheKey = `${highlightColor}_${isHover ? 'hover' : 'selection'}`
     
     // 检查缓存
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey)
+    const cachedMaterial = this.materialCache.get(cacheKey)
+    if (cachedMaterial) {
+      return cachedMaterial
     }
     
     // 创建高亮材质
-    let highlightMaterial
+    let highlightMaterial: THREE.Material
     
-    if (originalMaterial.isMeshStandardMaterial || originalMaterial.isMeshPhongMaterial) {
+    const material = Array.isArray(originalMaterial) ? originalMaterial[0] : originalMaterial
+    
+    if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhongMaterial) {
       // 对于标准材质，创建发光效果
       highlightMaterial = new THREE.MeshStandardMaterial({
         color: highlightColor,
@@ -393,19 +331,15 @@ export class HighlightRenderer {
   
   /**
    * 生成高亮ID
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @param {number} faceIndex - 面索引
-   * @returns {string} 高亮ID
    */
-  generateHighlightId(mesh, faceIndex) {
+  private generateHighlightId(mesh: THREE.Mesh, faceIndex: number): string {
     return `${mesh.uuid}_face_${faceIndex}`
   }
   
   /**
    * 更新高亮颜色配置
-   * @param {Object} colors - 颜色配置对象
    */
-  updateColors(colors) {
+  updateColors(colors: Partial<HighlightColors>): void {
     Object.assign(this.colors, colors)
     
     // 清除材质缓存，强制重新创建
@@ -415,9 +349,13 @@ export class HighlightRenderer {
   
   /**
    * 获取高亮统计信息
-   * @returns {Object} 统计信息
    */
-  getHighlightStats() {
+  getHighlightStats(): {
+    selectionHighlights: number
+    hoverHighlights: number
+    totalHighlights: number
+    cachedMaterials: number
+  } {
     return {
       selectionHighlights: this.highlightMeshes.size,
       hoverHighlights: this.hoverMeshes.size,
@@ -429,7 +367,7 @@ export class HighlightRenderer {
   /**
    * 销毁高亮渲染器，清理所有资源
    */
-  destroy() {
+  destroy(): void {
     // 清除所有高亮
     this.clearAllHighlights(true)
     

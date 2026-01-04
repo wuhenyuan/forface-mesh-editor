@@ -5,10 +5,60 @@
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { EventManager } from './EventManager.js'
+import { EventManager } from './EventManager'
+import type { 
+  ViewerOptions, 
+  AddMeshOptions, 
+  ScreenshotOptions 
+} from '../../types/viewer'
+import type { ViewerClickEvent } from '../../types/events'
+
+export interface CylinderOptions {
+  radiusTop?: number
+  radiusBottom?: number
+  height?: number
+  segments?: number
+  color?: number
+  position?: [number, number, number]
+  name?: string
+}
+
+export interface BoxOptions {
+  width?: number
+  height?: number
+  depth?: number
+  color?: number
+  position?: [number, number, number]
+  name?: string
+}
+
+export interface SphereOptions {
+  radius?: number
+  segments?: number
+  color?: number
+  position?: [number, number, number]
+  name?: string
+}
 
 export class Viewer {
-  constructor(container, options = {}) {
+  container: HTMLElement
+  options: ViewerOptions
+  scene: THREE.Scene | null
+  camera: THREE.PerspectiveCamera | null
+  renderer: THREE.WebGLRenderer | null
+  controls: OrbitControls | null
+  events: EventManager
+  
+  private _animationId: number | null
+  private _isDisposed: boolean
+  private _meshes: THREE.Mesh[]
+  private _selectableObjects: THREE.Object3D[]
+  private _selectedObject: THREE.Object3D | null
+  private _hoveredObject: THREE.Object3D | null
+  private _raycaster: THREE.Raycaster
+  private _mouse: THREE.Vector2
+
+  constructor(container: HTMLElement, options: ViewerOptions = {}) {
     this.container = container
     this.options = {
       backgroundColor: 0xf2f3f5,
@@ -17,71 +67,57 @@ export class Viewer {
       ...options
     }
     
-    // 核心对象
     this.scene = null
     this.camera = null
     this.renderer = null
     this.controls = null
-    
-    // 事件管理器
     this.events = new EventManager()
     
-    // 状态
     this._animationId = null
     this._isDisposed = false
-    
-    // 对象管理
-    this._meshes = []           // 所有网格对象
-    this._selectableObjects = [] // 可选择的对象
+    this._meshes = []
+    this._selectableObjects = []
     this._selectedObject = null
     this._hoveredObject = null
-    
-    // 交互
     this._raycaster = new THREE.Raycaster()
     this._mouse = new THREE.Vector2()
     
-    // 初始化
     this._init()
     this._bindEvents()
     this._animate()
   }
   
-  // ==================== 初始化 ====================
-  
-  _init() {
+  private _init(): void {
     const rect = this.container.getBoundingClientRect()
     
-    // 渲染器
     this.renderer = new THREE.WebGLRenderer({ 
       antialias: true,
       preserveDrawingBuffer: true
     })
     this.renderer.setSize(rect.width, rect.height)
     this.renderer.setPixelRatio(window.devicePixelRatio)
-    this.renderer.shadowMap.enabled = this.options.enableShadow
+    this.renderer.shadowMap.enabled = this.options.enableShadow ?? true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.container.appendChild(this.renderer.domElement)
     
-    // 场景
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(this.options.backgroundColor)
     
-    // 相机
     this.camera = new THREE.PerspectiveCamera(60, rect.width / rect.height, 0.1, 1000)
     this.camera.position.set(30, 30, 60)
     
-    // 控制器
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = false
     
-    // 默认场景设置
     this._setupLighting()
     if (this.options.enableGrid) {
       this._setupGrid()
     }
   }
   
-  _setupLighting() {
+  private _setupLighting(): void {
+    if (!this.scene) return
+    
     const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1)
     this.scene.add(hemi)
     
@@ -96,15 +132,16 @@ export class Viewer {
     this.scene.add(dir)
   }
   
-  _setupGrid() {
+  private _setupGrid(): void {
+    if (!this.scene) return
+    
     const grid = new THREE.GridHelper(20, 20, 0xcccccc, 0xeeeeee)
     grid.userData.isHelper = true
     this.scene.add(grid)
   }
   
-  // ==================== 事件绑定 ====================
-  
-  _bindEvents() {
+  private _bindEvents(): void {
+    if (!this.renderer) return
     const canvas = this.renderer.domElement
     
     this._onClick = this._onClick.bind(this)
@@ -127,7 +164,8 @@ export class Viewer {
     window.addEventListener('keydown', this._onKeyDown)
   }
   
-  _unbindEvents() {
+  private _unbindEvents(): void {
+    if (!this.renderer) return
     const canvas = this.renderer.domElement
     
     canvas.removeEventListener('click', this._onClick)
@@ -141,29 +179,29 @@ export class Viewer {
     window.removeEventListener('keydown', this._onKeyDown)
   }
   
-  // ==================== 事件处理 ====================
-  
-  _updateMouse(event) {
+  private _updateMouse(event: MouseEvent): void {
+    if (!this.renderer) return
     const rect = this.renderer.domElement.getBoundingClientRect()
     this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
     this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
   }
   
-  _raycast(objects = null) {
+  private _raycast(objects: THREE.Object3D[] | null = null): THREE.Intersection[] {
+    if (!this.camera) return []
     this._raycaster.setFromCamera(this._mouse, this.camera)
     const targets = objects || this._selectableObjects.filter(obj => obj.visible)
     return this._raycaster.intersectObjects(targets, true)
   }
   
-  _getTargetType(object) {
+  private _getTargetType(object: THREE.Object3D | null): 'text' | 'surface' | 'object' | 'empty' {
     if (!object) return 'empty'
     if (object.userData.isText) return 'text'
     if (object.userData.isSurface || object.userData.isMesh) return 'surface'
     return 'object'
   }
   
-  _findSelectableParent(object) {
-    let current = object
+  private _findSelectableParent(object: THREE.Object3D): THREE.Object3D {
+    let current: THREE.Object3D | null = object
     while (current) {
       if (this._selectableObjects.includes(current)) {
         return current
@@ -173,7 +211,7 @@ export class Viewer {
     return object
   }
   
-  _onClick(event) {
+  private _onClick(event: MouseEvent): void {
     this._updateMouse(event)
     const intersects = this._raycast()
     
@@ -181,21 +219,21 @@ export class Viewer {
       const hit = intersects[0]
       const target = this._findSelectableParent(hit.object)
       
-      this.events.emit('click', {
+      this.events.emit<ViewerClickEvent>('click', {
         target,
         targetType: this._getTargetType(target),
         point: hit.point,
         faceIndex: hit.faceIndex,
-        face: hit.face,
+        face: hit.face as THREE.Face,
         uv: hit.uv,
         event
       })
     } else {
-      this.events.emit('click', { target: null, targetType: 'empty', event })
+      this.events.emit<ViewerClickEvent>('click', { target: null, targetType: 'empty', event })
     }
   }
   
-  _onDblClick(event) {
+  private _onDblClick(event: MouseEvent): void {
     this._updateMouse(event)
     const intersects = this._raycast()
     
@@ -214,15 +252,15 @@ export class Viewer {
     }
   }
   
-  _onContextMenu(event) {
+  private _onContextMenu(event: MouseEvent): void {
     event.preventDefault()
     this._updateMouse(event)
     const intersects = this._raycast()
     
-    let target = null
-    let targetType = 'empty'
-    let point = null
-    let faceIndex = null
+    let target: THREE.Object3D | null = null
+    let targetType: 'text' | 'surface' | 'object' | 'empty' = 'empty'
+    let point: THREE.Vector3 | null = null
+    let faceIndex: number | undefined = undefined
     
     if (intersects.length > 0) {
       const hit = intersects[0]
@@ -243,7 +281,7 @@ export class Viewer {
     })
   }
   
-  _onMouseMove(event) {
+  private _onMouseMove(event: MouseEvent): void {
     this._updateMouse(event)
     const intersects = this._raycast()
     
@@ -271,15 +309,16 @@ export class Viewer {
     this.events.emit('mousemove', { event, intersects })
   }
   
-  _onMouseDown(event) {
+  private _onMouseDown(event: MouseEvent): void {
     this.events.emit('mousedown', { event })
   }
   
-  _onMouseUp(event) {
+  private _onMouseUp(event: MouseEvent): void {
     this.events.emit('mouseup', { event })
   }
   
-  _onResize() {
+  private _onResize(): void {
+    if (!this.camera || !this.renderer) return
     const rect = this.container.getBoundingClientRect()
     this.camera.aspect = rect.width / rect.height
     this.camera.updateProjectionMatrix()
@@ -288,7 +327,7 @@ export class Viewer {
     this.events.emit('resize', { width: rect.width, height: rect.height })
   }
   
-  _onKeyDown(event) {
+  private _onKeyDown(event: KeyboardEvent): void {
     this.events.emit('keydown', { key: event.key, event })
     
     if (event.key === 'Escape') {
@@ -301,28 +340,23 @@ export class Viewer {
     }
   }
   
-  // ==================== 渲染循环 ====================
-  
-  _animate() {
+  private _animate(): void {
     if (this._isDisposed) return
     
     this._animationId = requestAnimationFrame(() => this._animate())
-    this.controls.update()
-    this.renderer.render(this.scene, this.camera)
+    this.controls?.update()
+    if (this.renderer && this.scene && this.camera) {
+      this.renderer.render(this.scene, this.camera)
+    }
   }
   
-  // ==================== 对象管理 ====================
-  
-  /**
-   * 添加网格到场景
-   */
-  addMesh(mesh, options = {}) {
+  addMesh(mesh: THREE.Mesh, options: AddMeshOptions = {}): THREE.Mesh {
     const { selectable = true, castShadow = true, receiveShadow = true } = options
     
     mesh.castShadow = castShadow
     mesh.receiveShadow = receiveShadow
     
-    this.scene.add(mesh)
+    this.scene?.add(mesh)
     this._meshes.push(mesh)
     
     if (selectable && !mesh.userData.isHelper) {
@@ -333,11 +367,8 @@ export class Viewer {
     return mesh
   }
   
-  /**
-   * 移除网格
-   */
-  removeMesh(mesh) {
-    this.scene.remove(mesh)
+  removeMesh(mesh: THREE.Mesh): void {
+    this.scene?.remove(mesh)
     
     const meshIndex = this._meshes.indexOf(mesh)
     if (meshIndex > -1) this._meshes.splice(meshIndex, 1)
@@ -349,7 +380,6 @@ export class Viewer {
       this._selectedObject = null
     }
     
-    // 清理资源
     if (mesh.geometry) mesh.geometry.dispose()
     if (mesh.material) {
       if (Array.isArray(mesh.material)) {
@@ -362,26 +392,15 @@ export class Viewer {
     this.events.emit('meshRemoved', { mesh })
   }
   
-  /**
-   * 获取所有网格
-   */
-  getMeshes() {
+  getMeshes(): THREE.Mesh[] {
     return [...this._meshes]
   }
   
-  /**
-   * 根据名称查找网格
-   */
-  getMeshByName(name) {
+  getMeshByName(name: string): THREE.Mesh | undefined {
     return this._meshes.find(m => m.name === name)
   }
   
-  // ==================== 几何体创建 ====================
-  
-  /**
-   * 创建圆柱体
-   */
-  createCylinder(options = {}) {
+  createCylinder(options: CylinderOptions = {}): THREE.Mesh {
     const {
       radiusTop = 5,
       radiusBottom = 5,
@@ -406,10 +425,7 @@ export class Viewer {
     return this.addMesh(mesh)
   }
   
-  /**
-   * 创建立方体
-   */
-  createBox(options = {}) {
+  createBox(options: BoxOptions = {}): THREE.Mesh {
     const {
       width = 5,
       height = 5,
@@ -429,10 +445,7 @@ export class Viewer {
     return this.addMesh(mesh)
   }
   
-  /**
-   * 创建球体
-   */
-  createSphere(options = {}) {
+  createSphere(options: SphereOptions = {}): THREE.Mesh {
     const {
       radius = 3,
       segments = 64,
@@ -451,12 +464,7 @@ export class Viewer {
     return this.addMesh(mesh)
   }
   
-  // ==================== 选择管理 ====================
-  
-  /**
-   * 选中对象
-   */
-  select(object) {
+  select(object: THREE.Object3D | null): void {
     if (this._selectedObject === object) return
     
     const previous = this._selectedObject
@@ -474,10 +482,7 @@ export class Viewer {
     }
   }
   
-  /**
-   * 清除选择
-   */
-  clearSelection() {
+  clearSelection(): void {
     if (this._selectedObject) {
       const previous = this._selectedObject
       this._selectedObject = null
@@ -486,30 +491,20 @@ export class Viewer {
     }
   }
   
-  /**
-   * 获取选中对象
-   */
-  getSelectedObject() {
+  getSelectedObject(): THREE.Object3D | null {
     return this._selectedObject
   }
   
-  // ==================== 相机控制 ====================
-  
-  /**
-   * 重置视图
-   */
-  resetView() {
+  resetView(): void {
+    if (!this.camera || !this.controls) return
     this.camera.position.set(30, 30, 60)
     this.camera.lookAt(0, 0, 0)
     this.controls.reset()
     this.events.emit('viewReset')
   }
   
-  /**
-   * 聚焦到对象
-   */
-  focusOn(object) {
-    if (!object) return
+  focusOn(object: THREE.Object3D | null): void {
+    if (!object || !this.camera || !this.controls) return
     
     const box = new THREE.Box3().setFromObject(object)
     const center = box.getCenter(new THREE.Vector3())
@@ -528,74 +523,55 @@ export class Viewer {
     this.events.emit('focusChanged', { target: object })
   }
   
-  /**
-   * 启用/禁用相机控制
-   */
-  setControlsEnabled(enabled) {
-    this.controls.enabled = enabled
+  setControlsEnabled(enabled: boolean): void {
+    if (this.controls) {
+      this.controls.enabled = enabled
+    }
   }
   
-  // ==================== 材质操作 ====================
-  
-  /**
-   * 修改对象颜色
-   */
-  setObjectColor(object, color) {
-    if (!object || !object.material) return
+  setObjectColor(object: THREE.Object3D | null, color: string | number): void {
+    if (!object || !(object as THREE.Mesh).material) return
     
+    const mesh = object as THREE.Mesh
     const colorValue = typeof color === 'string' 
       ? parseInt(color.replace('#', ''), 16) 
       : color
     
-    if (Array.isArray(object.material)) {
-      object.material.forEach(m => m.color.setHex(colorValue))
+    if (Array.isArray(mesh.material)) {
+      mesh.material.forEach(m => (m as THREE.MeshStandardMaterial).color.setHex(colorValue))
     } else {
-      object.material.color.setHex(colorValue)
+      (mesh.material as THREE.MeshStandardMaterial).color.setHex(colorValue)
     }
     
     this.events.emit('colorChanged', { object, color: colorValue })
   }
   
-  /**
-   * 设置对象可见性
-   */
-  setObjectVisible(object, visible) {
+  setObjectVisible(object: THREE.Object3D | null, visible: boolean): void {
     if (!object) return
     object.visible = visible
     this.events.emit('visibilityChanged', { object, visible })
   }
   
-  // ==================== 工具方法 ====================
-  
-  /**
-   * 获取 canvas 元素
-   */
-  getCanvas() {
-    return this.renderer.domElement
+  getCanvas(): HTMLCanvasElement | null {
+    return this.renderer?.domElement ?? null
   }
   
-  /**
-   * 获取容器尺寸
-   */
-  getSize() {
+  getSize(): { width: number; height: number } {
     const rect = this.container.getBoundingClientRect()
     return { width: rect.width, height: rect.height }
   }
   
-  /**
-   * 截图
-   */
-  screenshot(options = {}) {
+  screenshot(options: ScreenshotOptions = {}): string {
     const { width, height, type = 'image/png', quality = 1 } = options
     
-    if (width && height) {
+    if (width && height && this.renderer && this.camera) {
       this.renderer.setSize(width, height)
       this.camera.aspect = width / height
       this.camera.updateProjectionMatrix()
-      this.renderer.render(this.scene, this.camera)
+      this.renderer.render(this.scene!, this.camera)
     }
     
-    const dataUrl = this.renderer.domElement.toDataURL(type, quality)
+    const dataUrl = this.renderer?.domElement.toDataURL(type, quality) ?? ''
     
     if (width && height) {
       this._onResize()
@@ -604,9 +580,7 @@ export class Viewer {
     return dataUrl
   }
   
-  // ==================== 销毁 ====================
-  
-  dispose() {
+  dispose(): void {
     this._isDisposed = true
     
     if (this._animationId) {
@@ -629,10 +603,10 @@ export class Viewer {
     this._meshes = []
     this._selectableObjects = []
     
-    this.controls.dispose()
-    this.renderer.dispose()
+    this.controls?.dispose()
+    this.renderer?.dispose()
     
-    if (this.container.contains(this.renderer.domElement)) {
+    if (this.renderer && this.container.contains(this.renderer.domElement)) {
       this.container.removeChild(this.renderer.domElement)
     }
     

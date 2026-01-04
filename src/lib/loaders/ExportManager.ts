@@ -7,7 +7,39 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 
+export interface STLExportOptions {
+  binary?: boolean
+}
+
+export interface GLTFExportOptions {
+  binary?: boolean
+  includeCustomExtensions?: boolean
+  trs?: boolean
+  onlyVisible?: boolean
+  truncateDrawRange?: boolean
+  maxTextureSize?: number
+}
+
+export interface ExportOptions extends STLExportOptions, GLTFExportOptions {}
+
+export interface ExportFormat {
+  id: string
+  name: string
+  extension: string
+  description: string
+}
+
 export class ExportManager {
+  stlExporter: STLExporter | null
+  objExporter: OBJExporter | null
+  gltfExporter: GLTFExporter | null
+  config: {
+    stl: STLExportOptions
+    gltf: GLTFExportOptions
+  }
+  onProgress: ((event: ProgressEvent) => void) | null
+  onError: ((error: Error) => void) | null
+
   constructor() {
     this.stlExporter = new STLExporter()
     this.objExporter = new OBJExporter()
@@ -29,10 +61,7 @@ export class ExportManager {
     this.onError = null
   }
 
-  /**
-   * 导出模型
-   */
-  async export(objects, format, options = {}) {
+  async export(objects: THREE.Object3D | THREE.Object3D[], format: string, options: ExportOptions = {}): Promise<Blob> {
     const objectsArray = Array.isArray(objects) ? objects : [objects]
     
     if (objectsArray.length === 0) {
@@ -53,49 +82,53 @@ export class ExportManager {
           throw new Error(`不支持的导出格式: ${format}`)
       }
     } catch (error) {
-      this.onError?.(error)
+      this.onError?.(error as Error)
       throw error
     }
   }
 
-  async exportSTL(objects, options = {}) {
+  async exportSTL(objects: THREE.Object3D[], options: STLExportOptions = {}): Promise<Blob> {
     const { binary = this.config.stl.binary } = options
     const exportScene = this._createExportScene(objects)
     
     try {
-      const result = this.stlExporter.parse(exportScene, { binary })
-      return binary 
-        ? new Blob([result], { type: 'application/octet-stream' })
-        : new Blob([result], { type: 'text/plain' })
+      const result = this.stlExporter!.parse(exportScene, { binary })
+      if (binary) {
+        // Binary mode returns DataView
+        return new Blob([result as unknown as BlobPart], { type: 'application/octet-stream' })
+      } else {
+        return new Blob([result as string], { type: 'text/plain' })
+      }
     } finally {
       this._disposeExportScene(exportScene)
     }
   }
 
-  async exportOBJ(objects, options = {}) {
+  async exportOBJ(objects: THREE.Object3D[], _options: ExportOptions = {}): Promise<Blob> {
     const exportScene = this._createExportScene(objects)
     
     try {
-      const result = this.objExporter.parse(exportScene)
+      const result = this.objExporter!.parse(exportScene)
       return new Blob([result], { type: 'text/plain' })
     } finally {
       this._disposeExportScene(exportScene)
     }
   }
 
-  async exportGLTF(objects, options = {}) {
+  async exportGLTF(objects: THREE.Object3D[], options: GLTFExportOptions = {}): Promise<Blob> {
     const exportOptions = { ...this.config.gltf, ...options }
     const exportScene = this._createExportScene(objects)
     
     return new Promise((resolve, reject) => {
-      this.gltfExporter.parse(
+      this.gltfExporter!.parse(
         exportScene,
-        (result) => {
+        (result: ArrayBuffer | object) => {
           this._disposeExportScene(exportScene)
-          resolve(exportOptions.binary
-            ? new Blob([result], { type: 'application/octet-stream' })
-            : new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
-          )
+          if (exportOptions.binary) {
+            resolve(new Blob([result as ArrayBuffer], { type: 'application/octet-stream' }))
+          } else {
+            resolve(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }))
+          }
         },
         (error) => {
           this._disposeExportScene(exportScene)
@@ -106,19 +139,13 @@ export class ExportManager {
     })
   }
 
-  /**
-   * 导出并下载
-   */
-  async exportAndDownload(objects, format, filename = 'model', options = {}) {
+  async exportAndDownload(objects: THREE.Object3D | THREE.Object3D[], format: string, filename: string = 'model', options: ExportOptions = {}): Promise<void> {
     const blob = await this.export(objects, format, options)
     const extension = this._getExtension(format)
     this._downloadBlob(blob, `${filename}.${extension}`)
   }
 
-  /**
-   * 获取支持的格式
-   */
-  getSupportedFormats() {
+  getSupportedFormats(): ExportFormat[] {
     return [
       { id: 'stl', name: 'STL', extension: '.stl', description: '立体光刻格式' },
       { id: 'obj', name: 'OBJ', extension: '.obj', description: 'Wavefront OBJ' },
@@ -127,21 +154,22 @@ export class ExportManager {
     ]
   }
 
-  _createExportScene(objects) {
+  private _createExportScene(objects: THREE.Object3D[]): THREE.Scene {
     const scene = new THREE.Scene()
     objects.forEach(obj => scene.add(obj.clone()))
     return scene
   }
 
-  _disposeExportScene(scene) {
+  private _disposeExportScene(scene: THREE.Scene): void {
     scene.clear()
   }
 
-  _getExtension(format) {
-    return { stl: 'stl', obj: 'obj', gltf: 'gltf', glb: 'glb' }[format.toLowerCase()] || format
+  private _getExtension(format: string): string {
+    const extensions: Record<string, string> = { stl: 'stl', obj: 'obj', gltf: 'gltf', glb: 'glb' }
+    return extensions[format.toLowerCase()] || format
   }
 
-  _downloadBlob(blob, filename) {
+  private _downloadBlob(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -152,7 +180,7 @@ export class ExportManager {
     setTimeout(() => URL.revokeObjectURL(url), 100)
   }
 
-  dispose() {
+  dispose(): void {
     this.stlExporter = null
     this.objExporter = null
     this.gltfExporter = null

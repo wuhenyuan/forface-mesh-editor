@@ -24,7 +24,6 @@ export default defineConfig({
       fileName: (format) => `forface-mesh-editor.${format}.js`
     },
     rollupOptions: {
-      // 外部化依赖，不打包进库
       external: ['vue', 'element-ui', 'three'],
       output: {
         globals: {
