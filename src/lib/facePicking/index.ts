@@ -3,6 +3,8 @@
  * 提供3D网格面级拾取和选择功能
  */
 
+import { RaycastManager } from './RaycastManager'
+
 // 核心组件 - TypeScript
 export { RaycastManager } from './RaycastManager'
 export { SelectionManager } from './SelectionManager'
@@ -22,3 +24,7 @@ export { VertexBasedIdentifier } from './VertexBasedIdentifier'
 export type { FaceInfoExtended, IntersectOptions, GeometryCompatibility } from './RaycastManager'
 export type { FaceInfoWithId, SelectionSummary, SelectionState, SelectionStats } from './SelectionManager'
 export type { LogLevel, LogEntry, PerformanceMonitor } from './DebugLogger'
+
+export const FacePickingUtils = {
+  validateMesh: RaycastManager.validateMesh
+}

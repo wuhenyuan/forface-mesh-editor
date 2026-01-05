@@ -57,95 +57,95 @@
   - 运行 tsc --noEmit 检查类型错误
   - 确保 vite dev 可以启动
 
-- [-] 5. 迁移 src/lib/facePicking 模块
-  - [-] 5.1 迁移核心文件 (FacePicker.js, OptimizedFacePicker.js, RaycastManager.js)
+- [x] 5. 迁移 src/lib/facePicking 模块
+  - [x] 5.1 迁移核心文件 (FacePicker.js, OptimizedFacePicker.js, RaycastManager.js)
     - 添加 FaceInfo 类型
     - _Requirements: 4.1, 4.2_
-  - [ ] 5.2 迁移特征检测 (FeatureDetector.js, FeatureBasedNaming.js, FeaturePool.js)
+  - [x] 5.2 迁移特征检测 (FeatureDetector.js, FeatureBasedNaming.js, FeaturePool.js)
     - 添加 Feature 类型
     - _Requirements: 4.1, 4.2_
-  - [ ] 5.3 迁移辅助文件 (SelectionManager.js, HighlightRenderer.js, EventHandler.js, DebugLogger.js, VertexBasedIdentifier.js, index.js)
+  - [x] 5.3 迁移辅助文件 (SelectionManager.js, HighlightRenderer.js, EventHandler.js, DebugLogger.js, VertexBasedIdentifier.js, index.js)
     - _Requirements: 4.1, 4.2_
 
-- [ ] 6. 迁移 src/lib/surfaceText 模块
-  - [ ] 6.1 迁移核心文件 (SurfaceTextManager.js, TextGeometryGenerator.js)
+- [x] 6. 迁移 src/lib/surfaceText 模块
+  - [x] 6.1 迁移核心文件 (SurfaceTextManager.js, TextGeometryGenerator.js)
     - 添加 TextConfig, TextObject 类型
     - _Requirements: 4.1, 4.2_
-  - [ ] 6.2 迁移几何生成 (CurvedTextGeometry.js, CylinderTextGeometry.js, CSGCylinderText.js)
+  - [x] 6.2 迁移几何生成 (CurvedTextGeometry.js, CylinderTextGeometry.js, CSGCylinderText.js)
     - _Requirements: 4.1, 4.2_
-  - [ ] 6.3 迁移辅助文件 (BooleanOperator.js, ConfigManager.js, CylinderSurfaceHelper.js, SimpleCylinderDetector.js, SurfaceIdentifier.js, FeatureBasedIdentifier.js)
+  - [x] 6.3 迁移辅助文件 (BooleanOperator.js, ConfigManager.js, CylinderSurfaceHelper.js, SimpleCylinderDetector.js, SurfaceIdentifier.js, FeatureBasedIdentifier.js)
     - _Requirements: 4.1, 4.2_
-  - [ ] 6.4 迁移 UI 相关 (TextInputOverlay.js, TextPropertyPanel.js, TextTransformControls.js, index.js)
-    - _Requirements: 4.1, 4.2_
-
-- [ ] 7. 迁移 src/lib/objectSelection 模块
-  - [ ] 7.1 迁移所有文件 (ObjectSelectionManager.js, ObjectSelector.js, ObjectTransformControls.js, index.js)
+  - [x] 6.4 迁移 UI 相关 (TextInputOverlay.js, TextPropertyPanel.js, TextTransformControls.js, index.js)
     - _Requirements: 4.1, 4.2_
 
-- [ ] 8. 迁移 src/lib/index.js
+- [x] 7. 迁移 src/lib/objectSelection 模块
+  - [x] 7.1 迁移所有文件 (ObjectSelectionManager.js, ObjectSelector.js, ObjectTransformControls.js, index.js)
+    - _Requirements: 4.1, 4.2_
+
+- [x] 8. 迁移 src/lib/index.js
   - 更新为 index.ts
   - 确保所有导出正确
   - _Requirements: 4.4_
 
-- [ ] 9. Checkpoint - 验证 lib 模块
+- [x] 9. Checkpoint - 验证 lib 模块
   - 运行 tsc --noEmit 检查类型错误
   - 确保无循环依赖问题
 
-- [ ] 10. 迁移 src/core 模块
-  - [ ] 10.1 迁移核心文件 (Viewer.js, EditorViewer.js, EventManager.js)
+- [x] 10. 迁移 src/core 模块
+  - [x] 10.1 迁移核心文件 (Viewer.js, EditorViewer.js, EventManager.js)
     - _Requirements: 2.1, 2.2, 2.4_
-  - [ ] 10.2 迁移管理器 (LoaderManager.js, ExportManager.js, ProjectManager.js)
+  - [x] 10.2 迁移管理器 (LoaderManager.js, ExportManager.js, ProjectManager.js)
     - _Requirements: 2.1, 2.2_
-  - [ ] 10.3 迁移 src/core/facePicking 子模块 (所有文件)
+  - [x] 10.3 迁移 src/core/facePicking 子模块 (所有文件)
     - _Requirements: 2.1, 2.2_
-  - [ ] 10.4 迁移 src/core/history 子模块 (所有文件，包括 TextCommand.js, TransformCommand.js)
+  - [x] 10.4 迁移 src/core/history 子模块 (所有文件，包括 TextCommand.js, TransformCommand.js)
     - _Requirements: 2.1, 2.2_
-  - [ ] 10.5 迁移 src/core/objectSelection 子模块 (所有文件)
+  - [x] 10.5 迁移 src/core/objectSelection 子模块 (所有文件)
     - _Requirements: 2.1, 2.2_
-  - [ ] 10.6 迁移 src/core/surfaceText 子模块 (所有文件)
+  - [x] 10.6 迁移 src/core/surfaceText 子模块 (所有文件)
     - _Requirements: 2.1, 2.2_
-  - [ ] 10.7 迁移 src/core/index.js
+  - [x] 10.7 迁移 src/core/index.js
     - _Requirements: 2.1, 2.5_
 
-- [ ] 11. 迁移 src/editor 模块
-  - [ ] 11.1 迁移 EditorApp.js
+- [x] 11. 迁移 src/editor 模块
+  - [x] 11.1 迁移 EditorApp.js
     - 添加完整类型注解
     - _Requirements: 3.1, 3.2_
-  - [ ] 11.2 迁移 StateManager.js, ProjectManager.js
+  - [x] 11.2 迁移 StateManager.js, ProjectManager.js
     - _Requirements: 3.1, 3.2_
-  - [ ] 11.3 迁移 src/editor/commands (TextCommand.js, TransformCommand.js, index.js)
+  - [x] 11.3 迁移 src/editor/commands (TextCommand.js, TransformCommand.js, index.js)
     - 实现 ICommand 接口
     - _Requirements: 3.1, 3.3_
-  - [ ] 11.4 迁移 src/editor/index.js
+  - [x] 11.4 迁移 src/editor/index.js
     - _Requirements: 3.1_
 
-- [ ] 12. 迁移 src/store 模块
-  - [ ] 12.1 迁移 editorStore.js
+- [x] 12. 迁移 src/store 模块
+  - [x] 12.1 迁移 editorStore.js
     - 使用 EditorState 接口
     - 添加 getter/action 类型
     - _Requirements: 5.1, 5.2, 5.3_
-  - [ ] 12.2 迁移 transformStore.js
+  - [x] 12.2 迁移 transformStore.js
     - _Requirements: 5.1, 5.2_
-  - [ ] 12.3 迁移 src/store/index.js
+  - [x] 12.3 迁移 src/store/index.js
     - _Requirements: 5.1, 5.4_
 
-- [ ] 13. 迁移配置文件
-  - [ ] 13.1 迁移 config/config.js 和 config/config2.js
+- [x] 13. 迁移配置文件
+  - [x] 13.1 迁移 config/config.js 和 config/config2.js
     - 定义配置接口
     - _Requirements: 6.1, 6.2, 6.3_
 
-- [ ] 14. 迁移入口文件
-  - [ ] 14.1 迁移 src/main.js 为 src/main.ts
+- [x] 14. 迁移入口文件
+  - [x] 14.1 迁移 src/main.js 为 src/main.ts
     - 添加 Vue 类型注解
     - _Requirements: 7.1, 7.2_
-  - [ ] 14.2 迁移 src/index.js 为 src/index.ts
+  - [x] 14.2 迁移 src/index.js 为 src/index.ts
     - 更新导出
     - _Requirements: 7.1_
-  - [ ] 14.3 更新 vite.config.ts 入口引用
+  - [x] 14.3 更新 vite.config.ts 入口引用
     - 修改 lib.entry 为 src/main.ts
     - _Requirements: 7.3_
 
-- [ ] 15. Final Checkpoint - 完整验证
+- [x] 15. Final Checkpoint - 完整验证
   - 运行 tsc --noEmit 确保无类型错误
   - 运行 npm run build 确保构建成功
   - 运行 npm run dev 确保开发服务器正常

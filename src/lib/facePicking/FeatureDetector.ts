@@ -156,7 +156,7 @@ export class FeatureDetector {
    * 提取三角形数据
    */
   private extractTriangles(
-    positions: THREE.BufferAttribute, 
+    positions: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, 
     indices: THREE.BufferAttribute | null, 
     triangleCount: number
   ): TriangleData[] {

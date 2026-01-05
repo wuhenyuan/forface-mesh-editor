@@ -182,7 +182,7 @@
 
 <script>
 import { ref, computed, watch, reactive } from 'vue'
-import { useEditorStore } from '../store/index.js'
+import { useEditorStore } from '../store'
 
 export default {
   name: 'PropertyPanel',

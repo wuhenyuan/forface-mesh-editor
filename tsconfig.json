@@ -16,8 +16,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "allowJs": true,
-    "checkJs": false,
+    "allowJs": false,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
@@ -30,10 +29,9 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.d.ts",
-    "src/**/*.js",
     "src/**/*.vue",
     "config/**/*.ts",
-    "config/**/*.js"
+    "config/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

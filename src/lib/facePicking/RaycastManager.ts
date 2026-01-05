@@ -48,6 +48,8 @@ export class RaycastManager {
     return new THREE.Vector2(x, y)
   }
   
+  intersectFaces(mousePosition: THREE.Vector2, meshes: THREE.Mesh[], options?: { returnAll?: false }): FaceInfoExtended | null
+  intersectFaces(mousePosition: THREE.Vector2, meshes: THREE.Mesh[], options: { returnAll: true }): FaceInfoExtended[] | null
   intersectFaces(mousePosition: THREE.Vector2, meshes: THREE.Mesh[], options: IntersectOptions = {}): FaceInfoExtended | FaceInfoExtended[] | null {
     if (!this.validateInput(mousePosition, meshes)) {
       return null
@@ -125,11 +127,16 @@ export class RaycastManager {
     
     const meshObj = mesh as THREE.Mesh
     const geometry = meshObj.geometry
-    
+
+    const safeFace: THREE.Face =
+      face && typeof face === 'object'
+        ? (face as THREE.Face)
+        : { a: 0, b: 0, c: 0, normal: new THREE.Vector3(), materialIndex: 0 }
+
     const faceInfo: FaceInfoExtended = {
       mesh: meshObj,
       faceIndex: faceIndex ?? 0,
-      face: face as THREE.Face,
+      face: safeFace,
       point: point.clone(),
       normal: new THREE.Vector3(),
       distance: distance,

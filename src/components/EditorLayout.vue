@@ -26,7 +26,7 @@
 
 <script>
 import { computed, ref, onMounted, watch } from 'vue'
-import { useEditorStore } from '../store/index.js'
+import { useEditorStore } from '../store'
 import ToolbarPanel from './ToolbarPanel.vue'
 import FeaturePanel from './FeaturePanel.vue'
 import FeatureMenu from './FeatureMenu.vue'

@@ -36,7 +36,7 @@
 
 <script>
 import { computed, watch } from 'vue'
-import { useEditorStore } from '../store/index.js'
+import { useEditorStore } from '../store'
 
 export default {
   name: 'FeatureMenu',

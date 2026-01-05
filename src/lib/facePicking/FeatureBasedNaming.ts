@@ -54,7 +54,7 @@ interface NamedFeature {
   center: THREE.Vector3
 }
 
-interface StoredFeature extends Feature {
+type StoredFeature = Feature & {
   name: string
   mesh: THREE.Mesh
   meshId: string
@@ -124,7 +124,7 @@ export class FeatureBasedNaming {
         type: feature.type,
         triangleCount: feature.triangles.length,
         area: feature.area,
-        center: feature.center
+        center: feature.type === 'plane' ? feature.point : feature.center
       })
     })
     
@@ -348,7 +348,7 @@ export class FeatureBasedNaming {
         meshId: feature.meshId,
         triangleCount: feature.triangles.length,
         area: feature.area,
-        center: feature.center.toArray()
+        center: (feature.type === 'plane' ? feature.point : feature.center).toArray()
       }
     })
     

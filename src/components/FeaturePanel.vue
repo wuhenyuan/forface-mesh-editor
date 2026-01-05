@@ -11,7 +11,7 @@
 
 <script>
 import { computed } from 'vue'
-import { useEditorStore } from '../store/index.js'
+import { useEditorStore } from '../store'
 
 export default {
   name: 'FeaturePanel',

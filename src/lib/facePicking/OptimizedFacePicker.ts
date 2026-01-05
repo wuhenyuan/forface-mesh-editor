@@ -500,10 +500,31 @@ export class OptimizedFacePicker {
     
     relatedFaces.forEach(faceInfo => {
       const id = `${faceInfo.mesh.uuid}_${faceInfo.faceIndex}`
+
+      let point = new THREE.Vector3()
+      const geometry = faceInfo.mesh.geometry as THREE.BufferGeometry
+      if (geometry?.isBufferGeometry) {
+        const vertices = this.raycastManager.getBufferGeometryFaceVertices(geometry, faceInfo.faceIndex)
+        if (vertices.length > 0) {
+          point = this.raycastManager.calculateFaceCenter(vertices).applyMatrix4(faceInfo.mesh.matrixWorld)
+        }
+      }
+
+      const baseFaceInfo = this.raycastManager.buildFaceInfo({
+        object: faceInfo.mesh,
+        faceIndex: faceInfo.faceIndex,
+        face: { a: 0, b: 0, c: 0, normal: new THREE.Vector3(), materialIndex: 0 },
+        point,
+        distance: 0
+      } as unknown as THREE.Intersection)
+
+      if (!baseFaceInfo) return
+
       const faceInfoWithId: FaceInfoWithId = {
-        ...faceInfo,
-        id
-      } as FaceInfoWithId
+        ...baseFaceInfo,
+        id,
+        featureId: faceInfo.featureId
+      }
       this.selectionManager.addFace(faceInfoWithId)
       this.highlightRenderer.highlightFace(faceInfo.mesh, faceInfo.faceIndex)
     })

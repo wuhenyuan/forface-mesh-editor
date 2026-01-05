@@ -32,7 +32,7 @@
 
 <script>
 import { computed, ref } from 'vue'
-import { useEditorStore } from '../../store/index.js'
+import { useEditorStore } from '../../store'
 
 export default {
   name: 'EditMenu',

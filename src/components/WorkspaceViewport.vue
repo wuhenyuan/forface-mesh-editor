@@ -14,10 +14,10 @@
 
 <script>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { EditorApp } from '../editor/index.js'
-import { TextCommand, TransformCommand } from '../editor/commands/index.js'
-import { useEditorStore } from '../store/index.js'
-import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating/index.js'
+import { EditorApp } from '../editor'
+import { TextCommand, TransformCommand } from '../editor/commands'
+import { useEditorStore } from '../store'
+import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating'
 
 export default {
   name: 'WorkspaceViewport',

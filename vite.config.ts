@@ -13,19 +13,20 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    open: true
+    open: !process.env.CI
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
     lib: {
-      entry: resolve(__dirname, 'src/main.js'),
+      entry: resolve(__dirname, 'src/main.ts'),
       name: 'ForfaceMeshEditor',
       fileName: (format) => `forface-mesh-editor.${format}.js`
     },
     rollupOptions: {
       external: ['vue', 'element-ui', 'three'],
       output: {
+        exports: 'named',
         globals: {
           vue: 'Vue',
           'element-ui': 'ElementUI',
