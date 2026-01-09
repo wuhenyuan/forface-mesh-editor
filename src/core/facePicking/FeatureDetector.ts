@@ -31,10 +31,43 @@ export class FeatureDetector {
 
   /**
    * 预处理网格，识别所有特征
+   * @param {THREE.Mesh|THREE.Group|THREE.Object3D} object - 网格或组对象
+   * @returns {Promise<Object>} 特征数据
+   */
+  async preprocessMesh(object) {
+    // 如果是 Group 或其他容器，遍历找到所有 Mesh
+    if (!object.isMesh) {
+      const meshes: THREE.Mesh[] = []
+      object.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && (child as THREE.Mesh).geometry) {
+          meshes.push(child as THREE.Mesh)
+        }
+      })
+      
+      if (meshes.length === 0) {
+        console.warn('对象中未找到有效的 Mesh，跳过特征检测')
+        return null
+      }
+      
+      // 对每个 mesh 进行特征检测
+      const results = await Promise.all(meshes.map(mesh => this._preprocessSingleMesh(mesh)))
+      return results.filter(Boolean)
+    }
+    
+    return this._preprocessSingleMesh(object)
+  }
+
+  /**
+   * 预处理单个网格
    * @param {THREE.Mesh} mesh - 网格对象
    * @returns {Promise<Object>} 特征数据
    */
-  async preprocessMesh(mesh) {
+  async _preprocessSingleMesh(mesh) {
+    if (!mesh.geometry) {
+      console.warn('Mesh 缺少 geometry，跳过特征检测:', mesh.name)
+      return null
+    }
+    
     const meshId = this.generateMeshId(mesh)
     
     // 检查缓存

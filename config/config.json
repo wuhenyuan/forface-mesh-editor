@@ -1,0 +1,45 @@
+ {
+  "version": "",
+  "createTime": "",
+  "outputUrl": "",
+  "documentName": "",
+  "feature": [
+    {
+      "type": "model",
+      "id": "personModel",
+      "resources": "./model/1.obj",
+      "position": [0,0,0],
+      "scale": [0,0,0],
+      "rotation": [0,0,0],
+      "boolean": "union",
+      "meta": {
+        "type": "origin"
+      }
+    },
+    {
+      "type": "model",
+      "id": "baseModel",
+      "resources": "./model/2.stl",
+      "position": [0,0,0],
+      "scale": [0,0,0],
+      "rotation": [0,0,0],
+      "boolean": "union",
+      "meta": {
+        "type": "base"
+      }
+    },
+    {
+      "id": "文字1",
+      "type": "text",
+      "textType": "Ailias",
+      "text": "我是文字内容",
+      "size": 33,
+      "depth": 3,
+      "booleanOperation": "substract",
+      "color": "#ff00ff",
+      "position": [0, 0, 0],
+      "rotate": [0, 0, 0],
+      "wrap": "surface Project"
+    }
+  ]
+}

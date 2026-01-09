@@ -16,6 +16,9 @@
         {{ viewModeLabel }}
       </el-button>
       <el-divider direction="vertical"></el-divider>
+      <el-button size="mini" :loading="exportingOBJ" @click="handleExportOBJ">导出OBJ</el-button>
+      <el-button size="mini" :loading="exportingSTL" @click="handleExportSTL">导出STL</el-button>
+      <el-divider direction="vertical"></el-divider>
       <el-button size="mini">模型尺寸</el-button>
       <el-button size="mini">设计交流</el-button>
       <el-button size="mini">分享</el-button>
@@ -36,6 +39,8 @@ export default {
   setup() {
     const store = useEditorStore()
     const projectName = ref('人物模型编辑器')
+    const exportingOBJ = ref(false)
+    const exportingSTL = ref(false)
     
     const isBusy = computed(() => store.isHistoryBusy?.() || false)
     const viewModeBusy = computed(() => store.state.viewModeBusy)
@@ -75,6 +80,46 @@ export default {
       }
     }
     
+    // 导出 OBJ (ZIP 包含 OBJ + MTL + 贴图)
+    const handleExportOBJ = async () => {
+      const workspace = store.state.workspaceRef?.value
+      const viewer = workspace?.getViewer?.()
+      if (!viewer) {
+        console.error('编辑器未就绪')
+        return
+      }
+      
+      exportingOBJ.value = true
+      try {
+        await viewer.exportScene('obj-zip', 'model')
+        console.log('✅ OBJ 导出成功')
+      } catch (error) {
+        console.error('导出 OBJ 失败:', error)
+      } finally {
+        exportingOBJ.value = false
+      }
+    }
+    
+    // 导出 STL
+    const handleExportSTL = async () => {
+      const workspace = store.state.workspaceRef?.value
+      const viewer = workspace?.getViewer?.()
+      if (!viewer) {
+        console.error('编辑器未就绪')
+        return
+      }
+      
+      exportingSTL.value = true
+      try {
+        await viewer.exportScene('stl', 'model')
+        console.log('✅ STL 导出成功')
+      } catch (error) {
+        console.error('导出 STL 失败:', error)
+      } finally {
+        exportingSTL.value = false
+      }
+    }
+    
     return { 
       projectName,
       canUndo,
@@ -82,10 +127,14 @@ export default {
       isBusy,
       viewModeBusy,
       viewModeLabel,
+      exportingOBJ,
+      exportingSTL,
       handleUndo,
       handleRedo,
       handleResetView,
-      handleToggleViewMode
+      handleToggleViewMode,
+      handleExportOBJ,
+      handleExportSTL
     }
   }
 }

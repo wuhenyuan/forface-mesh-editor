@@ -1,11 +1,12 @@
 /**
  * 模型加载管理器（纯净版）
- * 支持 STL、OBJ 等格式的加载
+ * 支持 STL、OBJ、GLB/GLTF 等格式的加载
  * 不包含业务逻辑（如特征检测）
  */
 import * as THREE from 'three'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 export interface LoadOptions {
   modelId?: string
@@ -35,6 +36,7 @@ export type FileSource = string | File | Blob
 export class LoaderManager {
   stlLoader: STLLoader
   objLoader: OBJLoader
+  gltfLoader: GLTFLoader
   loadCounter: number
   loadedModels: Map<string, LoadResult>
   onProgress: ((event: ProgressEvent) => void) | null
@@ -43,6 +45,7 @@ export class LoaderManager {
   constructor() {
     this.stlLoader = new STLLoader()
     this.objLoader = new OBJLoader()
+    this.gltfLoader = new GLTFLoader()
     this.loadCounter = 0
     this.loadedModels = new Map()
     this.onProgress = null
@@ -68,6 +71,10 @@ export class LoaderManager {
           break
         case 'obj':
           model = await this._loadOBJ(source, material)
+          break
+        case 'glb':
+        case 'gltf':
+          model = await this._loadGLTF(source)
           break
         case 'zip':
           model = await this._loadZipModel(source, material)
@@ -164,6 +171,41 @@ export class LoaderManager {
     })
   }
 
+  private async _loadGLTF(source: FileSource): Promise<THREE.Object3D> {
+    return new Promise((resolve, reject) => {
+      const onLoad = (gltf: any) => {
+        const model = gltf.scene || gltf.scenes?.[0]
+        if (!model) {
+          reject(new Error('GLTF 文件中未找到场景'))
+          return
+        }
+        resolve(model)
+      }
+
+      if (typeof source !== 'string') {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const arrayBuffer = e.target!.result as ArrayBuffer
+          this.gltfLoader.parse(
+            arrayBuffer,
+            '',
+            onLoad,
+            (error) => reject(error)
+          )
+        }
+        reader.onerror = () => reject(reader.error)
+        reader.readAsArrayBuffer(source as Blob)
+      } else {
+        this.gltfLoader.load(
+          source,
+          onLoad,
+          this.onProgress || undefined,
+          (error) => reject(error)
+        )
+      }
+    })
+  }
+
   private async _loadZipModel(source: FileSource, material: THREE.Material | null): Promise<THREE.Object3D> {
     const { default: JSZip } = await import('jszip')
 
@@ -232,6 +274,8 @@ export class LoaderManager {
 
     if (filename.endsWith('.stl')) return 'stl'
     if (filename.endsWith('.obj')) return 'obj'
+    if (filename.endsWith('.glb')) return 'glb'
+    if (filename.endsWith('.gltf')) return 'gltf'
     if (filename.endsWith('.zip')) return 'zip'
     
     return 'unknown'

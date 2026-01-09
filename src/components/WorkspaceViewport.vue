@@ -74,11 +74,40 @@ export default {
     
     // ==================== 初始化 ====================
     
-    const initViewer = () => {
+    const initViewer = async () => {
       viewer = new EditorApp(container.value)
       
-      // 创建测试圆柱体
-      viewer.createCylinder({ name: 'TestCylinder' })
+      // 加载默认模型
+      try {
+        // 1. 加载 shiba.glb
+        await viewer.loadModel('/src/assets/model/shiba.glb', { 
+          name: 'DefaultModel',
+          detectFeatures: false 
+        })
+        console.log('✅ 默认模型 shiba.glb 已加载')
+
+        // 2. 加载 model.obj（偏移 X 轴）
+        const objResult = await viewer.loadModel('/src/assets/model/model/model.obj', { 
+          name: 'ObjModel',
+          detectFeatures: false 
+        })
+        if (objResult?.model) {
+          objResult.model.position.x = 0.15
+          console.log('✅ model.obj 已加载，偏移 X=0.15')
+        }
+
+        // 3. 加载 model.stl（偏移 X 轴另一侧）
+        const stlResult = await viewer.loadModel('/src/assets/model/model/model.stl', { 
+          name: 'StlModel',
+          detectFeatures: false 
+        })
+        if (stlResult?.model) {
+          stlResult.model.position.x = -0.15
+          console.log('✅ model.stl 已加载，偏移 X=-0.15')
+        }
+      } catch (error) {
+        console.error('加载默认模型失败:', error)
+      }
       
       // 初始化子系统
       viewer.initTextSystem()
@@ -87,11 +116,6 @@ export default {
       // 绑定事件
       bindViewerEvents()
       
-      // 创建默认文字（开发测试用）
-      createInitialText().finally(() => {
-        isInitializing = false
-      })
-      
       // 注册到 store
       store.setWorkspaceRef({ value: getExposedMethods() })
 
@@ -99,6 +123,8 @@ export default {
       store.setViewMode(store.state.viewMode, { force: true }).catch(err => {
         console.error('同步 viewMode 失败:', err)
       })
+      
+      isInitializing = false
       
       // 挂载到 window 供调试
       if (import.meta.env.DEV) {
