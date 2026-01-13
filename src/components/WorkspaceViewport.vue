@@ -14,7 +14,7 @@
 
 <script>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { EditorApp } from '../editor'
+import { EditorCore } from '../core'
 import { TextCommand, TransformCommand } from '../editor/commands'
 import { useEditorStore } from '../store'
 import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating'
@@ -44,8 +44,9 @@ export default {
   setup(props, { emit, expose }) {
     const container = ref(null)
     const store = useEditorStore()
-    
+    let core = null
     let viewer = null
+    let document = null
     let isInitializing = true
 
     let selectedObject = null
@@ -75,60 +76,42 @@ export default {
     // ==================== 初始化 ====================
     
     const initViewer = async () => {
-      viewer = new EditorApp(container.value)
-      
-      // 加载默认模型
-      try {
-        // 1. 加载 shiba.glb
-        await viewer.loadModel('/src/assets/model/shiba.glb', { 
-          name: 'DefaultModel',
-          detectFeatures: false 
-        })
-        console.log('✅ 默认模型 shiba.glb 已加载')
+      core = new EditorCore(container.value)
+      viewer = core.documentVisual
+      document = core.document
 
-        // 2. 加载 model.obj（偏移 X 轴）
-        const objResult = await viewer.loadModel('/src/assets/model/model/model.obj', { 
-          name: 'ObjModel',
-          detectFeatures: false 
-        })
-        if (objResult?.model) {
-          objResult.model.position.x = 0.15
-          console.log('✅ model.obj 已加载，偏移 X=0.15')
-        }
+      // bind events
+      bindViewerEvents()
 
-        // 3. 加载 model.stl（偏移 X 轴另一侧）
-        const stlResult = await viewer.loadModel('/src/assets/model/model/model.stl', { 
-          name: 'StlModel',
-          detectFeatures: false 
-        })
-        if (stlResult?.model) {
-          stlResult.model.position.x = -0.15
-          console.log('✅ model.stl 已加载，偏移 X=-0.15')
-        }
-      } catch (error) {
-        console.error('加载默认模型失败:', error)
-      }
-      
-      // 初始化子系统
+      // register default model sources
+      document.addModelSource('default', '/src/assets/model/shiba.glb', {
+        loaderOptions: { detectFeatures: false }
+      })
+      document.addModelSource('objModel', '/src/assets/model/model/model.obj', {
+        loaderOptions: { detectFeatures: false }
+      })
+      document.addModelSource('stlModel', '/src/assets/model/model/model.stl', {
+        loaderOptions: { detectFeatures: false }
+      })
+
+      // init subsystems
       viewer.initTextSystem()
       viewer.initObjectSelection()
-      
-      // 绑定事件
-      bindViewerEvents()
-      
-      // 注册到 store
+
+      // register store
       store.setWorkspaceRef({ value: getExposedMethods() })
 
-      // 同步 store 的 viewMode 到运行时（首次挂载时需要 force）
+      // sync viewMode (force on first mount)
       store.setViewMode(store.state.viewMode, { force: true }).catch(err => {
-        console.error('同步 viewMode 失败:', err)
+        console.error('Failed to sync viewMode:', err)
       })
-      
+
       isInitializing = false
-      
-      // 挂载到 window 供调试
+
+      // dev helpers
       if (import.meta.env.DEV) {
         window.viewer = viewer
+        window.editorCore = core
         window.debugTextData = {
           get textObjects() { return viewer.getTextObjects() },
           get targetMeshes() { return viewer.getMeshes() },
@@ -143,6 +126,26 @@ export default {
       // 右键菜单
       viewer.events.on('contextmenu', ({ x, y, target, targetType }) => {
         store.showContextMenu({ x, y, target, targetType })
+      })
+
+      viewer.events.on('modelLoaded', ({ modelId, model }) => {
+        if (!model) return
+        if (modelId === 'default') {
+          model.name = 'DefaultModel'
+          console.log('Default model loaded: shiba.glb')
+          return
+        }
+        if (modelId === 'objModel') {
+          model.name = 'ObjModel'
+          model.position.x = 0.15
+          console.log('OBJ model loaded (x=0.15)')
+          return
+        }
+        if (modelId === 'stlModel') {
+          model.name = 'StlModel'
+          model.position.x = -0.15
+          console.log('STL model loaded (x=-0.15)')
+        }
       })
       
       // 点击事件
@@ -439,7 +442,9 @@ export default {
       getMeshes: () => viewer?.getMeshes() || [],
       
       // 原始 viewer 访问（高级用法）
-      getViewer: () => viewer
+      getViewer: () => viewer,
+      getDocument: () => document,
+      getCore: () => core
     })
     
     // 暴露给父组件
@@ -452,10 +457,12 @@ export default {
     })
     
     onBeforeUnmount(() => {
-      if (viewer) {
-        viewer.dispose()
-        viewer = null
+      if (core) {
+        core.dispose()
+        core = null
       }
+      viewer = null
+      document = null
     })
     
     return {

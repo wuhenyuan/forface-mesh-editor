@@ -190,7 +190,10 @@ export class EditorViewer extends Viewer {
    * @param {Object} options - 导出选项
    */
   async exportScene(format: string, filename: string = 'scene', options: Record<string, any> = {}) {
-    const blob = await this._exportManager.exportScene(this.scene, format, options)
+    const blob = await this._exportManager.exportScene(this.scene, format, {
+      ...options,
+      filename
+    })
     this._exportManager._downloadBlob(blob, `${filename}.${this._exportManager._getExtension(format)}`)
     this.events.emit('sceneExported', { format, filename })
   }

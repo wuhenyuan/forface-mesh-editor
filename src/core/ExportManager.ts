@@ -69,6 +69,9 @@ export class ExportManager {
         case 'obj':
           result = await this.exportOBJ(objectsArray, options)
           break
+        case 'obj-zip':
+          result = await this.exportOBJWithMaterials(objectsArray, options?.filename || 'model')
+          break
         case 'gltf':
           result = await this.exportGLTF(objectsArray, { ...options, binary: false })
           break
@@ -130,6 +133,139 @@ export class ExportManager {
       return new Blob([result], { type: 'text/plain' })
     } finally {
       this._disposeExportScene(exportScene)
+    }
+  }
+
+  /**
+   * å¯¼å‡º OBJ + MTL + è´´å›¾ ZIP åŒ?
+   */
+  async exportOBJWithMaterials(objects: any[], filename: string = 'model') {
+    const { default: JSZip } = await import('jszip')
+    const zip = new JSZip()
+
+    const exportScene = this._createExportScene(objects)
+
+    try {
+      const { materials, textures } = this._collectMaterialsAndTextures(exportScene)
+
+      const objContent = this.objExporter.parse(exportScene)
+      const objWithMtl = `mtllib ${filename}.mtl\n${objContent}`
+      zip.file(`${filename}.obj`, objWithMtl)
+
+      const mtlContent = this._generateMTL(materials)
+      zip.file(`${filename}.mtl`, mtlContent)
+
+      for (const [textureName, textureData] of textures) {
+        zip.file(textureName, textureData)
+      }
+
+      return await zip.generateAsync({ type: 'blob' })
+    } finally {
+      this._disposeExportScene(exportScene)
+    }
+  }
+
+  _collectMaterialsAndTextures(scene: any) {
+    const materials = new Map()
+    const textures = new Map()
+
+    scene.traverse((object) => {
+      if (!object?.isMesh) return
+      const mesh = object
+      const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+
+      for (const material of meshMaterials) {
+        if (!material) continue
+
+        const matName = material.name || `material_${material.uuid.substring(0, 8)}`
+        materials.set(matName, material)
+
+        const textureProps = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']
+        for (const prop of textureProps) {
+          const texture = material[prop]
+          if (texture?.image) {
+            const textureName = this._getTextureName(texture, prop)
+            const textureBlob = this._textureToBlob(texture)
+            if (textureBlob) {
+              textures.set(textureName, textureBlob)
+            }
+          }
+        }
+      }
+    })
+
+    return { materials, textures }
+  }
+
+  _generateMTL(materials: Map<string, any>) {
+    const lines = ['# MTL file exported by ExportManager']
+
+    for (const [name, material] of materials) {
+      lines.push('')
+      lines.push(`newmtl ${name}`)
+
+      const mat = material
+      if (mat.color) {
+        const c = mat.color
+        lines.push(`Kd ${c.r.toFixed(6)} ${c.g.toFixed(6)} ${c.b.toFixed(6)}`)
+        lines.push(`Ka ${(c.r * 0.2).toFixed(6)} ${(c.g * 0.2).toFixed(6)} ${(c.b * 0.2).toFixed(6)}`)
+      }
+
+      lines.push('Ks 0.500000 0.500000 0.500000')
+      const shininess = mat.roughness !== undefined ? (1 - mat.roughness) * 100 : 30
+      lines.push(`Ns ${shininess.toFixed(6)}`)
+
+      const opacity = mat.opacity !== undefined ? mat.opacity : 1
+      lines.push(`d ${opacity.toFixed(6)}`)
+      lines.push('illum 2')
+
+      if (mat.map?.image) {
+        const texName = this._getTextureName(mat.map, 'map')
+        lines.push(`map_Kd ${texName}`)
+      }
+
+      if (mat.normalMap?.image) {
+        const texName = this._getTextureName(mat.normalMap, 'normalMap')
+        lines.push(`map_Bump ${texName}`)
+      }
+    }
+
+    return lines.join('\n')
+  }
+
+  _getTextureName(texture: any, propName: string) {
+    if (texture.name) {
+      return texture.name.includes('.') ? texture.name : `${texture.name}.png`
+    }
+    return `${propName}_${texture.uuid.substring(0, 8)}.png`
+  }
+
+  _textureToBlob(texture: any) {
+    const image = texture?.image
+    if (!image) return null
+
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width || 256
+      canvas.height = image.height || 256
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+
+      ctx.drawImage(image, 0, 0)
+
+      const dataUrl = canvas.toDataURL('image/png')
+      const base64 = dataUrl.split(',')[1]
+      const binary = atob(base64)
+      const array = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i)
+      }
+
+      return new Blob([array], { type: 'image/png' })
+    } catch (e) {
+      console.warn('Texture export failed:', e)
+      return null
     }
   }
 
@@ -325,6 +461,7 @@ export class ExportManager {
     const extensions = {
       'stl': 'stl',
       'obj': 'obj',
+      'obj-zip': 'zip',
       'gltf': 'gltf',
       'glb': 'glb'
     }
