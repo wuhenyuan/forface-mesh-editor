@@ -13,10 +13,33 @@ export interface DocumentModelSource {
   source: DocumentAssetSource;
   loaderOptions?: Record<string, any>;
   visualOptions?: Record<string, any>;
+  transform?: DocumentTransform;
 }
 
 export interface DocumentFontSource {
   source: DocumentAssetSource;
+}
+
+export interface DocumentTransform {
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
+}
+
+export interface DocumentEntityPatch {
+  source?: DocumentAssetSource;
+  loaderOptions?: Record<string, any>;
+  visualOptions?: Record<string, any>;
+  transform?: DocumentTransform;
+}
+
+export interface DocumentEventBus {
+  on: (event: string, callback: (...args: any[]) => void) => () => void;
+  once: (event: string, callback: (...args: any[]) => void) => () => void;
+  off: (event: string, callback?: (...args: any[]) => void) => void;
+  emit: (event: string, data?: any) => void;
+  onAny: (callback: (event: string, data?: any) => void) => () => void;
+  clear: () => void;
 }
 
 export interface DocumentData {
@@ -27,7 +50,7 @@ export interface DocumentData {
 }
 
 export default class Document {
-  events: EventManager;
+  events: DocumentEventBus;
   exportManager: ExportManager;
   projectManager: ProjectManager;
   private _config: DocumentConfig | null = null;
@@ -36,8 +59,8 @@ export default class Document {
   private _fonts: Map<string, DocumentFontSource> = new Map();
   private _objectUrls: Map<string, string> = new Map();
 
-  constructor() {
-    this.events = new EventManager();
+  constructor(options: { events?: DocumentEventBus } = {}) {
+    this.events = options.events || new EventManager();
     this.exportManager = new ExportManager();
     this.projectManager = new ProjectManager();
 
@@ -162,9 +185,38 @@ export default class Document {
       source,
       loaderOptions: options.loaderOptions,
       visualOptions: options.visualOptions,
+      transform: options.transform,
     };
     this._models.set(key, entry);
     this.events.emit('modelSourceAdded', { key, entry });
+    this.events.emit('entityAdded', { key, entry, type: 'model' });
+  }
+
+  addEntity(key: string, source: DocumentAssetSource, options: Record<string, any> = {}) {
+    return this.addModelSource(key, source, options);
+  }
+
+  updateEntity(key: string, patch: DocumentEntityPatch = {}) {
+    const entry = this._models.get(key);
+    if (!entry) return false;
+
+    if (patch.source !== undefined) entry.source = patch.source;
+    if (patch.loaderOptions) {
+      entry.loaderOptions = { ...(entry.loaderOptions || {}), ...patch.loaderOptions };
+    }
+    if (patch.visualOptions) {
+      entry.visualOptions = { ...(entry.visualOptions || {}), ...patch.visualOptions };
+    }
+    if (patch.transform) {
+      entry.transform = { ...(entry.transform || {}), ...patch.transform };
+    }
+
+    const reload = patch.source !== undefined || !!patch.loaderOptions;
+
+    this.events.emit('modelSourceUpdated', { key, entry, patch, reload });
+    this.events.emit('entityUpdated', { key, entry, patch, reload, type: 'model' });
+
+    return true;
   }
 
   removeModelSource(key: string) {
@@ -173,7 +225,12 @@ export default class Document {
     this._models.delete(key);
     this._revokeObjectUrlForKey('model', key);
     this.events.emit('modelSourceRemoved', { key, entry });
+    this.events.emit('entityRemoved', { key, entry, type: 'model' });
     return true;
+  }
+
+  removeEntity(key: string) {
+    return this.removeModelSource(key);
   }
 
   addFontSource(key: string, source: DocumentAssetSource) {

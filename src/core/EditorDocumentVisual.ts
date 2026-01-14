@@ -21,7 +21,12 @@ export class EditorDocumentVisual extends EditorViewer {
     container: HTMLElement,
     options: Record<string, any> = {}
   ) {
-    super(container, { ...options, document, assetsManager });
+    super(container, {
+      ...options,
+      document,
+      assetsManager,
+      events: options?.events || document?.events,
+    });
 
     this.document = document;
     this.assetsManager = assetsManager;
@@ -98,6 +103,8 @@ export class EditorDocumentVisual extends EditorViewer {
   }
 
   private _bindDocumentEvents() {
+    const shouldForward = this.document.events !== this.events;
+
     this._documentSubscriptions.push(
       this.document.events.on('documentLoaded', (payload) => this._onDocumentLoaded(payload))
     );
@@ -115,30 +122,38 @@ export class EditorDocumentVisual extends EditorViewer {
       })
     );
     this._documentSubscriptions.push(
-      this.document.events.on('exportProgress', (payload) => {
-        this.events.emit('exportProgress', payload);
+      this.document.events.on('entityUpdated', ({ key, entry, patch, reload }) => {
+        this._handleEntityUpdated(key, entry, patch, reload);
       })
     );
-    this._documentSubscriptions.push(
-      this.document.events.on('exportError', (payload) => {
-        this.events.emit('exportError', payload);
-      })
-    );
-    this._documentSubscriptions.push(
-      this.document.events.on('projectChanged', (payload) => {
-        this.events.emit('projectChanged', payload);
-      })
-    );
-    this._documentSubscriptions.push(
-      this.document.events.on('projectSaved', (payload) => {
-        this.events.emit('projectSaved', payload);
-      })
-    );
-    this._documentSubscriptions.push(
-      this.document.events.on('projectLoaded', (payload) => {
-        this.events.emit('projectLoaded', payload);
-      })
-    );
+
+    if (shouldForward) {
+      this._documentSubscriptions.push(
+        this.document.events.on('exportProgress', (payload) => {
+          this.events.emit('exportProgress', payload);
+        })
+      );
+      this._documentSubscriptions.push(
+        this.document.events.on('exportError', (payload) => {
+          this.events.emit('exportError', payload);
+        })
+      );
+      this._documentSubscriptions.push(
+        this.document.events.on('projectChanged', (payload) => {
+          this.events.emit('projectChanged', payload);
+        })
+      );
+      this._documentSubscriptions.push(
+        this.document.events.on('projectSaved', (payload) => {
+          this.events.emit('projectSaved', payload);
+        })
+      );
+      this._documentSubscriptions.push(
+        this.document.events.on('projectLoaded', (payload) => {
+          this.events.emit('projectLoaded', payload);
+        })
+      );
+    }
   }
 
   private _onDocumentLoaded(payload: any) {
@@ -173,7 +188,11 @@ export class EditorDocumentVisual extends EditorViewer {
 
       if (this._loadTokens.get(key) !== token || this._isDisposed) return;
 
+      result.model.userData = result.model.userData || {};
+      result.model.userData.entityKey = key;
+
       this._loadedModels.set(key, result.model);
+      this._applyTransform(result.model, entry.transform);
       if (addToScene) {
         this.addMesh(result.model, meshOptions);
       }
@@ -191,6 +210,47 @@ export class EditorDocumentVisual extends EditorViewer {
         this._loadTokens.delete(key);
       }
     }
+  }
+
+  private _handleEntityUpdated(
+    key: string,
+    entry: DocumentModelSource,
+    patch: Record<string, any> = {},
+    reload: boolean = false
+  ) {
+    if (!entry) return;
+    if (reload) {
+      this._reloadModelSource(key, entry);
+      return;
+    }
+
+    const model = this._loadedModels.get(key);
+    if (!model) return;
+
+    const nextTransform = patch?.transform || entry.transform;
+    if (nextTransform) {
+      this._applyTransform(model, nextTransform);
+    }
+  }
+
+  private _applyTransform(target: any, transform?: { position?: number[]; rotation?: number[]; scale?: number[] }) {
+    if (!target || !transform) return;
+
+    const { position, rotation, scale } = transform;
+    if (Array.isArray(position)) {
+      const [x = 0, y = 0, z = 0] = position;
+      target.position.set(x, y, z);
+    }
+    if (Array.isArray(rotation)) {
+      const [x = 0, y = 0, z = 0] = rotation;
+      target.rotation.set(x, y, z);
+    }
+    if (Array.isArray(scale)) {
+      const [x = 1, y = 1, z = 1] = scale;
+      target.scale.set(x, y, z);
+    }
+
+    target.updateMatrixWorld?.(true);
   }
 
   private _removeLoadedModel(key: string) {

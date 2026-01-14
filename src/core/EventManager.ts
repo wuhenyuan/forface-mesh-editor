@@ -4,9 +4,11 @@
  */
 export class EventManager {
   private _listeners: Map<string, Set<(...args: any[]) => void>>;
+  private _anyListeners: Set<(event: string, data?: any) => void>;
 
   constructor() {
     this._listeners = new Map();
+    this._anyListeners = new Set();
   }
 
   /**
@@ -23,6 +25,14 @@ export class EventManager {
 
     // 返回取消监听函数
     return () => this.off(event, callback);
+  }
+
+  /**
+   * 监听所有事件
+   */
+  onAny(callback: (event: string, data?: any) => void) {
+    this._anyListeners.add(callback);
+    return () => this._anyListeners.delete(callback);
   }
 
   /**
@@ -55,6 +65,16 @@ export class EventManager {
    * @param {any} data 事件数据
    */
   emit(event: string, data?: any) {
+    if (this._anyListeners.size > 0) {
+      this._anyListeners.forEach((callback) => {
+        try {
+          callback(event, data);
+        } catch (error) {
+          console.error(`Event "${event}" handler error:`, error);
+        }
+      });
+    }
+
     if (!this._listeners.has(event)) return;
 
     this._listeners.get(event).forEach((callback) => {
@@ -71,6 +91,7 @@ export class EventManager {
    */
   clear() {
     this._listeners.clear();
+    this._anyListeners.clear();
   }
 }
 

@@ -51,6 +51,7 @@ export default {
     let selectedObject = null;
     let transformMode = 'translate';
     let transformBefore = null;
+    let lastTransformPayload = null;
 
     const snapshotTransform = (object) => {
       if (!object) return null;
@@ -83,13 +84,13 @@ export default {
       bindViewerEvents();
 
       // register default model sources
-      document.addModelSource('default', '/src/assets/model/shiba.glb', {
+      document.addEntity('default', '/src/assets/model/shiba.glb', {
         loaderOptions: { detectFeatures: false },
       });
-      document.addModelSource('objModel', '/src/assets/model/model/model.obj', {
+      document.addEntity('objModel', '/src/assets/model/model/model.obj', {
         loaderOptions: { detectFeatures: false },
       });
-      document.addModelSource('stlModel', '/src/assets/model/model/model.stl', {
+      document.addEntity('stlModel', '/src/assets/model/model/model.stl', {
         loaderOptions: { detectFeatures: false },
       });
 
@@ -128,12 +129,13 @@ export default {
     // ==================== 事件绑定 ====================
 
     const bindViewerEvents = () => {
+      const emitter = core.emitter;
       // 右键菜单
-      viewer.events.on('contextmenu', ({ x, y, target, targetType }) => {
+      emitter.on('contextmenu', ({ x, y, target, targetType }) => {
         store.showContextMenu({ x, y, target, targetType });
       });
 
-      viewer.events.on('modelLoaded', ({ modelId, model }) => {
+      emitter.on('modelLoaded', ({ modelId, model }) => {
         if (!model) return;
         if (modelId === 'default') {
           model.name = 'DefaultModel';
@@ -154,7 +156,7 @@ export default {
       });
 
       // 点击事件
-      viewer.events.on('click', ({ target, targetType }) => {
+      emitter.on('click', ({ target, targetType }) => {
         // 点击空白处关闭浮动 UI
         if (!target) {
           store.hideAllFloatingUI();
@@ -162,7 +164,7 @@ export default {
       });
 
       // 选中事件
-      viewer.events.on('select', ({ target, targetType }) => {
+      emitter.on('select', ({ target, targetType }) => {
         if (targetType === 'object') {
           // 显示编辑菜单
           const rect = container.value.getBoundingClientRect();
@@ -174,12 +176,12 @@ export default {
         }
       });
 
-      viewer.events.on('deselect', () => {
+      emitter.on('deselect', () => {
         store.hideEditMenu();
       });
 
       // 文字事件
-      viewer.events.on('textCreated', ({ textObject }) => {
+      emitter.on('textCreated', ({ textObject }) => {
         store.addText(textObject);
         emit('textCreated', textObject);
 
@@ -190,44 +192,48 @@ export default {
         store.captureCommand(new TextCommand('create', viewer, { snapshot }));
       });
 
-      viewer.events.on('textSelected', ({ textObject }) => {
+      emitter.on('textSelected', ({ textObject }) => {
         store.selectText(textObject);
         emit('textSelected', textObject);
       });
 
-      viewer.events.on('textDeselected', ({ textObject }) => {
+      emitter.on('textDeselected', ({ textObject }) => {
         store.deselectText();
         emit('textDeselected', textObject);
       });
 
-      viewer.events.on('textDeleted', ({ id, textObject }) => {
+      emitter.on('textDeleted', ({ id, textObject }) => {
         store.removeText(id);
         emit('textDeleted', { id, textObject });
       });
 
-      viewer.events.on('textContentUpdated', ({ textObject, newContent }) => {
+      emitter.on('textContentUpdated', ({ textObject, newContent }) => {
         if (!textObject?.id) return;
         store.updateTextInList(textObject.id, newContent);
       });
 
       // 物体选择事件
-      viewer.events.on('objectSelected', ({ object }) => {
+      emitter.on('objectSelected', ({ object }) => {
         selectedObject = object;
         emit('objectSelected', object);
       });
 
-      viewer.events.on('objectDeselected', ({ object }) => {
+      emitter.on('objectDeselected', ({ object }) => {
         if (selectedObject?.uuid === object?.uuid) {
           selectedObject = null;
         }
         emit('objectDeselected', object);
       });
 
-      viewer.events.on('transformModeChanged', ({ mode }) => {
+      emitter.on('objectTransformed', (data) => {
+        lastTransformPayload = data;
+      });
+
+      emitter.on('transformModeChanged', ({ mode }) => {
         transformMode = mode;
       });
 
-      viewer.events.on('objectDragging', ({ isDragging }) => {
+      emitter.on('objectDragging', ({ isDragging }) => {
         if (store.isHistoryApplying()) return;
         if (!selectedObject) return;
 
@@ -240,6 +246,7 @@ export default {
         const after = snapshotTransform(selectedObject);
         if (isSameTransform(transformBefore, after)) {
           transformBefore = null;
+          lastTransformPayload = null;
           return;
         }
 
@@ -250,10 +257,24 @@ export default {
           })
         );
         transformBefore = null;
+
+        if (lastTransformPayload?.object) {
+          const entityKey = lastTransformPayload.object?.userData?.entityKey;
+          if (entityKey) {
+            document.updateEntity(entityKey, {
+              transform: {
+                position: after?.position || [0, 0, 0],
+                rotation: after?.rotation || [0, 0, 0],
+                scale: after?.scale || [1, 1, 1],
+              },
+            });
+          }
+          lastTransformPayload = null;
+        }
       });
 
       // 悬停提示
-      viewer.events.on('hover', ({ target, targetType, event }) => {
+      emitter.on('hover', ({ target, targetType, event }) => {
         if (target?.name) {
           store.showTooltip({
             x: event.clientX,
@@ -263,17 +284,17 @@ export default {
         }
       });
 
-      viewer.events.on('hoverEnd', () => {
+      emitter.on('hoverEnd', () => {
         store.hideTooltip();
       });
 
       // 删除请求（按 Delete 键）
-      viewer.events.on('deleteRequest', ({ target }) => {
+      emitter.on('deleteRequest', ({ target }) => {
         handleDelete(target);
       });
 
       // ESC 键
-      viewer.events.on('escape', () => {
+      emitter.on('escape', () => {
         store.hideAllFloatingUI();
       });
     };

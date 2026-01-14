@@ -14,12 +14,14 @@ export class Viewer {
   [key: string]: any;
 
   constructor(container: HTMLElement, options: Record<string, any> = {}) {
+    const { events, ...viewerOptions } = options;
+
     this.container = container;
     this.options = {
       backgroundColor: 0xf2f3f5,
       enableShadow: true,
       enableGrid: true,
-      ...options,
+      ...viewerOptions,
     };
 
     // 核心对象
@@ -29,7 +31,7 @@ export class Viewer {
     this.controls = null;
 
     // 事件管理器
-    this.events = new EventManager();
+    this.events = events || new EventManager();
 
     // 状态
     this._animationId = null;
