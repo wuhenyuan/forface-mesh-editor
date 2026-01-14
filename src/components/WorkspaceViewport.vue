@@ -14,8 +14,7 @@
 
 <script>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { EditorCore } from '../core'
-import { TextCommand, TransformCommand } from '../editor/commands'
+import { EditorCore, TextCommand, TransformCommand } from '../core'
 import { useEditorStore } from '../store'
 import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating'
 

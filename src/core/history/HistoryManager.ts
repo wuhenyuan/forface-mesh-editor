@@ -31,7 +31,8 @@ export class HistoryManager {
       canRedo: this.canRedo(),
       isBusy: this.isBusy,
       isApplying: this.isApplying,
-      transactionName: this._transaction?.description || null
+      transactionName: this._transaction?.description || null,
+      lastError: null
     }
   }
 
