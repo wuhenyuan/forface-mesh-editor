@@ -25,67 +25,67 @@
 </template>
 
 <script>
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useEditorStore } from '../../store'
+  import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
+  import { useEditorStore } from '../../store';
 
-export default {
-  name: 'ContextMenu',
-  setup(_, { emit }) {
-    const store = useEditorStore()
+  export default {
+    name: 'ContextMenu',
+    setup(_, { emit }) {
+      const store = useEditorStore();
     
-    const visible = computed(() => store.state.contextMenu.visible)
-    const items = computed(() => store.state.contextMenu.items)
-    const target = computed(() => store.state.contextMenu.target)
-    const targetType = computed(() => store.state.contextMenu.targetType)
+      const visible = computed(() => store.state.contextMenu.visible);
+      const items = computed(() => store.state.contextMenu.items);
+      const target = computed(() => store.state.contextMenu.target);
+      const targetType = computed(() => store.state.contextMenu.targetType);
     
-    const menuStyle = computed(() => ({
-      left: store.state.contextMenu.x + 'px',
-      top: store.state.contextMenu.y + 'px'
-    }))
+      const menuStyle = computed(() => ({
+        left: store.state.contextMenu.x + 'px',
+        top: store.state.contextMenu.y + 'px'
+      }));
     
-    const handleClick = (item) => {
-      emit('select', {
-        key: item.key,
-        target: target.value,
-        targetType: targetType.value
-      })
-      store.hideContextMenu()
+      const handleClick = (item) => {
+        emit('select', {
+          key: item.key,
+          target: target.value,
+          targetType: targetType.value
+        });
+        store.hideContextMenu();
+      };
+    
+      // 点击外部关闭
+      const handleClickOutside = (e) => {
+        // 如果点击的是菜单内部，不关闭
+        const menu = document.querySelector('.context-menu');
+        if (menu && menu.contains(e.target)) {
+          return;
+        }
+        if (visible.value) {
+          store.hideContextMenu();
+        }
+      };
+    
+      // 监听 visible 变化来绑定/解绑事件
+      watch(visible, (newVal) => {
+        if (newVal) {
+          // 延迟绑定，避免当前事件触发关闭
+          setTimeout(() => {
+            document.addEventListener('click', handleClickOutside, true);
+            document.addEventListener('contextmenu', handleClickOutside, true);
+          }, 10);
+        } else {
+          document.removeEventListener('click', handleClickOutside, true);
+          document.removeEventListener('contextmenu', handleClickOutside, true);
+        }
+      });
+    
+      onBeforeUnmount(() => {
+        document.removeEventListener('click', handleClickOutside, true);
+        document.removeEventListener('contextmenu', handleClickOutside, true);
+      });
+    
+      return { visible, items, menuStyle, handleClick };
     }
-    
-    // 点击外部关闭
-    const handleClickOutside = (e) => {
-      // 如果点击的是菜单内部，不关闭
-      const menu = document.querySelector('.context-menu')
-      if (menu && menu.contains(e.target)) {
-        return
-      }
-      if (visible.value) {
-        store.hideContextMenu()
-      }
-    }
-    
-    // 监听 visible 变化来绑定/解绑事件
-    watch(visible, (newVal) => {
-      if (newVal) {
-        // 延迟绑定，避免当前事件触发关闭
-        setTimeout(() => {
-          document.addEventListener('click', handleClickOutside, true)
-          document.addEventListener('contextmenu', handleClickOutside, true)
-        }, 10)
-      } else {
-        document.removeEventListener('click', handleClickOutside, true)
-        document.removeEventListener('contextmenu', handleClickOutside, true)
-      }
-    })
-    
-    onBeforeUnmount(() => {
-      document.removeEventListener('click', handleClickOutside, true)
-      document.removeEventListener('contextmenu', handleClickOutside, true)
-    })
-    
-    return { visible, items, menuStyle, handleClick }
-  }
-}
+  };
 </script>
 
 <style scoped>

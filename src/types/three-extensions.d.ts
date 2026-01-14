@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import * as THREE from 'three';
 
 declare module 'three' {
   interface Object3D {
@@ -19,4 +19,4 @@ declare module 'three' {
   }
 }
 
-export {}
+export {};

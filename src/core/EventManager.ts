@@ -3,10 +3,10 @@
  * 统一管理 Viewer 内部和外部的事件通信
  */
 export class EventManager {
-  private _listeners: Map<string, Set<(...args: any[]) => void>>
+  private _listeners: Map<string, Set<(...args: any[]) => void>>;
 
   constructor() {
-    this._listeners = new Map()
+    this._listeners = new Map();
   }
   
   /**
@@ -17,12 +17,12 @@ export class EventManager {
    */
   on(event: string, callback: (...args: any[]) => void) {
     if (!this._listeners.has(event)) {
-      this._listeners.set(event, new Set())
+      this._listeners.set(event, new Set());
     }
-    this._listeners.get(event).add(callback)
+    this._listeners.get(event).add(callback);
     
     // 返回取消监听函数
-    return () => this.off(event, callback)
+    return () => this.off(event, callback);
   }
   
   /**
@@ -30,22 +30,22 @@ export class EventManager {
    */
   once(event: string, callback: (...args: any[]) => void) {
     const wrapper = (...args) => {
-      this.off(event, wrapper)
-      callback(...args)
-    }
-    return this.on(event, wrapper)
+      this.off(event, wrapper);
+      callback(...args);
+    };
+    return this.on(event, wrapper);
   }
   
   /**
    * 取消事件监听
    */
   off(event: string, callback?: (...args: any[]) => void) {
-    if (!this._listeners.has(event)) return
+    if (!this._listeners.has(event)) return;
     
     if (callback) {
-      this._listeners.get(event).delete(callback)
+      this._listeners.get(event).delete(callback);
     } else {
-      this._listeners.delete(event)
+      this._listeners.delete(event);
     }
   }
   
@@ -55,23 +55,23 @@ export class EventManager {
    * @param {any} data 事件数据
    */
   emit(event: string, data?: any) {
-    if (!this._listeners.has(event)) return
+    if (!this._listeners.has(event)) return;
     
     this._listeners.get(event).forEach(callback => {
       try {
-        callback(data)
+        callback(data);
       } catch (error) {
-        console.error(`Event "${event}" handler error:`, error)
+        console.error(`Event "${event}" handler error:`, error);
       }
-    })
+    });
   }
   
   /**
    * 清除所有监听
    */
   clear() {
-    this._listeners.clear()
+    this._listeners.clear();
   }
 }
 
-export default EventManager
+export default EventManager;

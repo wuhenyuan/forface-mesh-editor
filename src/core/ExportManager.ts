@@ -2,24 +2,24 @@
  * 模型导出管理器
  * 支持 STL、OBJ、GLTF 等格式的导出
  */
-import * as THREE from 'three'
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import * as THREE from 'three';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 export class ExportManager {
-  stlExporter: any
-  objExporter: any
-  gltfExporter: any
-  config: any
-  onProgress: ((...args: any[]) => void) | null
-  onError: ((error: any) => void) | null
+  stlExporter: any;
+  objExporter: any;
+  gltfExporter: any;
+  config: any;
+  onProgress: ((...args: any[]) => void) | null;
+  onError: ((error: any) => void) | null;
 
   constructor() {
     // 导出器实例
-    this.stlExporter = new STLExporter()
-    this.objExporter = new OBJExporter()
-    this.gltfExporter = new GLTFExporter()
+    this.stlExporter = new STLExporter();
+    this.objExporter = new OBJExporter();
+    this.gltfExporter = new GLTFExporter();
     
     // 导出配置
     this.config = {
@@ -36,11 +36,11 @@ export class ExportManager {
         truncateDrawRange: true,
         maxTextureSize: 4096
       }
-    }
+    };
     
     // 事件回调
-    this.onProgress = null
-    this.onError = null
+    this.onProgress = null;
+    this.onError = null;
   }
 
   /**
@@ -51,44 +51,44 @@ export class ExportManager {
    * @returns {Promise<Blob|string>} 导出结果
    */
   async export(objects: any, format: string, options: Record<string, any> = {}) {
-    const objectsArray = Array.isArray(objects) ? objects : [objects]
+    const objectsArray = Array.isArray(objects) ? objects : [objects];
     
     if (objectsArray.length === 0) {
-      throw new Error('没有可导出的对象')
+      throw new Error('没有可导出的对象');
     }
     
-    console.log(`[ExportManager] 开始导出 ${objectsArray.length} 个对象，格式: ${format}`)
+    console.log(`[ExportManager] 开始导出 ${objectsArray.length} 个对象，格式: ${format}`);
     
     try {
-      let result
+      let result;
       
       switch (format.toLowerCase()) {
         case 'stl':
-          result = await this.exportSTL(objectsArray, options)
-          break
+          result = await this.exportSTL(objectsArray, options);
+          break;
         case 'obj':
-          result = await this.exportOBJ(objectsArray, options)
-          break
+          result = await this.exportOBJ(objectsArray, options);
+          break;
         case 'obj-zip':
-          result = await this.exportOBJWithMaterials(objectsArray, options?.filename || 'model')
-          break
+          result = await this.exportOBJWithMaterials(objectsArray, options?.filename || 'model');
+          break;
         case 'gltf':
-          result = await this.exportGLTF(objectsArray, { ...options, binary: false })
-          break
+          result = await this.exportGLTF(objectsArray, { ...options, binary: false });
+          break;
         case 'glb':
-          result = await this.exportGLTF(objectsArray, { ...options, binary: true })
-          break
+          result = await this.exportGLTF(objectsArray, { ...options, binary: true });
+          break;
         default:
-          throw new Error(`不支持的导出格式: ${format}`)
+          throw new Error(`不支持的导出格式: ${format}`);
       }
       
-      console.log(`[ExportManager] 导出完成`)
-      return result
+      console.log(`[ExportManager] 导出完成`);
+      return result;
       
     } catch (error) {
-      console.error('[ExportManager] 导出失败:', error)
-      this.onError?.(error)
-      throw error
+      console.error('[ExportManager] 导出失败:', error);
+      this.onError?.(error);
+      throw error;
     }
   }
 
@@ -99,23 +99,23 @@ export class ExportManager {
    * @returns {Promise<Blob>} STL Blob
    */
   async exportSTL(objects: any[], options: Record<string, any> = {}) {
-    const { binary = this.config.stl.binary } = options
+    const { binary = this.config.stl.binary } = options;
     
     // 创建临时场景包含所有对象
-    const exportScene = this._createExportScene(objects)
+    const exportScene = this._createExportScene(objects);
     
     try {
-      const result = this.stlExporter.parse(exportScene, { binary })
+      const result = this.stlExporter.parse(exportScene, { binary });
       
       if (binary) {
         // 二进制格式返回 ArrayBuffer
-        return new Blob([result], { type: 'application/octet-stream' })
+        return new Blob([result], { type: 'application/octet-stream' });
       } else {
         // ASCII 格式返回字符串
-        return new Blob([result], { type: 'text/plain' })
+        return new Blob([result], { type: 'text/plain' });
       }
     } finally {
-      this._disposeExportScene(exportScene)
+      this._disposeExportScene(exportScene);
     }
   }
 
@@ -126,13 +126,13 @@ export class ExportManager {
    * @returns {Promise<Blob>} OBJ Blob
    */
   async exportOBJ(objects: any[], options: Record<string, any> = {}) {
-    const exportScene = this._createExportScene(objects)
+    const exportScene = this._createExportScene(objects);
     
     try {
-      const result = this.objExporter.parse(exportScene)
-      return new Blob([result], { type: 'text/plain' })
+      const result = this.objExporter.parse(exportScene);
+      return new Blob([result], { type: 'text/plain' });
     } finally {
-      this._disposeExportScene(exportScene)
+      this._disposeExportScene(exportScene);
     }
   }
 
@@ -140,132 +140,132 @@ export class ExportManager {
    * å¯¼å‡º OBJ + MTL + è´´å›¾ ZIP åŒ?
    */
   async exportOBJWithMaterials(objects: any[], filename: string = 'model') {
-    const { default: JSZip } = await import('jszip')
-    const zip = new JSZip()
+    const { default: JSZip } = await import('jszip');
+    const zip = new JSZip();
 
-    const exportScene = this._createExportScene(objects)
+    const exportScene = this._createExportScene(objects);
 
     try {
-      const { materials, textures } = this._collectMaterialsAndTextures(exportScene)
+      const { materials, textures } = this._collectMaterialsAndTextures(exportScene);
 
-      const objContent = this.objExporter.parse(exportScene)
-      const objWithMtl = `mtllib ${filename}.mtl\n${objContent}`
-      zip.file(`${filename}.obj`, objWithMtl)
+      const objContent = this.objExporter.parse(exportScene);
+      const objWithMtl = `mtllib ${filename}.mtl\n${objContent}`;
+      zip.file(`${filename}.obj`, objWithMtl);
 
-      const mtlContent = this._generateMTL(materials)
-      zip.file(`${filename}.mtl`, mtlContent)
+      const mtlContent = this._generateMTL(materials);
+      zip.file(`${filename}.mtl`, mtlContent);
 
       for (const [textureName, textureData] of textures) {
-        zip.file(textureName, textureData)
+        zip.file(textureName, textureData);
       }
 
-      return await zip.generateAsync({ type: 'blob' })
+      return await zip.generateAsync({ type: 'blob' });
     } finally {
-      this._disposeExportScene(exportScene)
+      this._disposeExportScene(exportScene);
     }
   }
 
   _collectMaterialsAndTextures(scene: any) {
-    const materials = new Map()
-    const textures = new Map()
+    const materials = new Map();
+    const textures = new Map();
 
     scene.traverse((object) => {
-      if (!object?.isMesh) return
-      const mesh = object
-      const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      if (!object?.isMesh) return;
+      const mesh = object;
+      const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
 
       for (const material of meshMaterials) {
-        if (!material) continue
+        if (!material) continue;
 
-        const matName = material.name || `material_${material.uuid.substring(0, 8)}`
-        materials.set(matName, material)
+        const matName = material.name || `material_${material.uuid.substring(0, 8)}`;
+        materials.set(matName, material);
 
-        const textureProps = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']
+        const textureProps = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
         for (const prop of textureProps) {
-          const texture = material[prop]
+          const texture = material[prop];
           if (texture?.image) {
-            const textureName = this._getTextureName(texture, prop)
-            const textureBlob = this._textureToBlob(texture)
+            const textureName = this._getTextureName(texture, prop);
+            const textureBlob = this._textureToBlob(texture);
             if (textureBlob) {
-              textures.set(textureName, textureBlob)
+              textures.set(textureName, textureBlob);
             }
           }
         }
       }
-    })
+    });
 
-    return { materials, textures }
+    return { materials, textures };
   }
 
   _generateMTL(materials: Map<string, any>) {
-    const lines = ['# MTL file exported by ExportManager']
+    const lines = ['# MTL file exported by ExportManager'];
 
     for (const [name, material] of materials) {
-      lines.push('')
-      lines.push(`newmtl ${name}`)
+      lines.push('');
+      lines.push(`newmtl ${name}`);
 
-      const mat = material
+      const mat = material;
       if (mat.color) {
-        const c = mat.color
-        lines.push(`Kd ${c.r.toFixed(6)} ${c.g.toFixed(6)} ${c.b.toFixed(6)}`)
-        lines.push(`Ka ${(c.r * 0.2).toFixed(6)} ${(c.g * 0.2).toFixed(6)} ${(c.b * 0.2).toFixed(6)}`)
+        const c = mat.color;
+        lines.push(`Kd ${c.r.toFixed(6)} ${c.g.toFixed(6)} ${c.b.toFixed(6)}`);
+        lines.push(`Ka ${(c.r * 0.2).toFixed(6)} ${(c.g * 0.2).toFixed(6)} ${(c.b * 0.2).toFixed(6)}`);
       }
 
-      lines.push('Ks 0.500000 0.500000 0.500000')
-      const shininess = mat.roughness !== undefined ? (1 - mat.roughness) * 100 : 30
-      lines.push(`Ns ${shininess.toFixed(6)}`)
+      lines.push('Ks 0.500000 0.500000 0.500000');
+      const shininess = mat.roughness !== undefined ? (1 - mat.roughness) * 100 : 30;
+      lines.push(`Ns ${shininess.toFixed(6)}`);
 
-      const opacity = mat.opacity !== undefined ? mat.opacity : 1
-      lines.push(`d ${opacity.toFixed(6)}`)
-      lines.push('illum 2')
+      const opacity = mat.opacity !== undefined ? mat.opacity : 1;
+      lines.push(`d ${opacity.toFixed(6)}`);
+      lines.push('illum 2');
 
       if (mat.map?.image) {
-        const texName = this._getTextureName(mat.map, 'map')
-        lines.push(`map_Kd ${texName}`)
+        const texName = this._getTextureName(mat.map, 'map');
+        lines.push(`map_Kd ${texName}`);
       }
 
       if (mat.normalMap?.image) {
-        const texName = this._getTextureName(mat.normalMap, 'normalMap')
-        lines.push(`map_Bump ${texName}`)
+        const texName = this._getTextureName(mat.normalMap, 'normalMap');
+        lines.push(`map_Bump ${texName}`);
       }
     }
 
-    return lines.join('\n')
+    return lines.join('\n');
   }
 
   _getTextureName(texture: any, propName: string) {
     if (texture.name) {
-      return texture.name.includes('.') ? texture.name : `${texture.name}.png`
+      return texture.name.includes('.') ? texture.name : `${texture.name}.png`;
     }
-    return `${propName}_${texture.uuid.substring(0, 8)}.png`
+    return `${propName}_${texture.uuid.substring(0, 8)}.png`;
   }
 
   _textureToBlob(texture: any) {
-    const image = texture?.image
-    if (!image) return null
+    const image = texture?.image;
+    if (!image) return null;
 
     try {
-      const canvas = document.createElement('canvas')
-      canvas.width = image.width || 256
-      canvas.height = image.height || 256
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width || 256;
+      canvas.height = image.height || 256;
 
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return null
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
 
-      ctx.drawImage(image, 0, 0)
+      ctx.drawImage(image, 0, 0);
 
-      const dataUrl = canvas.toDataURL('image/png')
-      const base64 = dataUrl.split(',')[1]
-      const binary = atob(base64)
-      const array = new Uint8Array(binary.length)
+      const dataUrl = canvas.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
+      const binary = atob(base64);
+      const array = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
-        array[i] = binary.charCodeAt(i)
+        array[i] = binary.charCodeAt(i);
       }
 
-      return new Blob([array], { type: 'image/png' })
+      return new Blob([array], { type: 'image/png' });
     } catch (e) {
-      console.warn('Texture export failed:', e)
-      return null
+      console.warn('Texture export failed:', e);
+      return null;
     }
   }
 
@@ -279,32 +279,32 @@ export class ExportManager {
     const exportOptions = {
       ...this.config.gltf,
       ...options
-    }
+    };
     
-    const exportScene = this._createExportScene(objects)
+    const exportScene = this._createExportScene(objects);
     
     return new Promise((resolve, reject) => {
       this.gltfExporter.parse(
         exportScene,
         (result) => {
-          this._disposeExportScene(exportScene)
+          this._disposeExportScene(exportScene);
           
           if (exportOptions.binary) {
             // GLB 格式
-            resolve(new Blob([result], { type: 'application/octet-stream' }))
+            resolve(new Blob([result], { type: 'application/octet-stream' }));
           } else {
             // GLTF 格式（JSON）
-            const json = JSON.stringify(result, null, 2)
-            resolve(new Blob([json], { type: 'application/json' }))
+            const json = JSON.stringify(result, null, 2);
+            resolve(new Blob([json], { type: 'application/json' }));
           }
         },
         (error) => {
-          this._disposeExportScene(exportScene)
-          reject(error)
+          this._disposeExportScene(exportScene);
+          reject(error);
         },
         exportOptions
-      )
-    })
+      );
+    });
   }
 
   /**
@@ -315,14 +315,14 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    */
   async exportAndDownload(objects: any, format: string, filename: string = 'model', options: Record<string, any> = {}) {
-    const blob = await this.export(objects, format, options)
+    const blob = await this.export(objects, format, options);
     
-    const extension = this._getExtension(format)
-    const fullFilename = `${filename}.${extension}`
+    const extension = this._getExtension(format);
+    const fullFilename = `${filename}.${extension}`;
     
-    this._downloadBlob(blob, fullFilename)
+    this._downloadBlob(blob, fullFilename);
     
-    console.log(`[ExportManager] 文件已下载: ${fullFilename}`)
+    console.log(`[ExportManager] 文件已下载: ${fullFilename}`);
   }
 
   /**
@@ -333,24 +333,24 @@ export class ExportManager {
    * @returns {Promise<Blob>} 导出结果
    */
   async exportScene(scene: any, format: string, options: Record<string, any> = {}) {
-    const { includeHelpers = false } = options
+    const { includeHelpers = false } = options;
     
-    const meshes = []
+    const meshes = [];
     scene.traverse((object) => {
       if (object.isMesh) {
         // 过滤辅助对象
         if (!includeHelpers && object.userData.isHelper) {
-          return
+          return;
         }
-        meshes.push(object)
+        meshes.push(object);
       }
-    })
+    });
     
     if (meshes.length === 0) {
-      throw new Error('场景中没有可导出的网格')
+      throw new Error('场景中没有可导出的网格');
     }
     
-    return this.export(meshes, format, options)
+    return this.export(meshes, format, options);
   }
 
   /**
@@ -362,10 +362,10 @@ export class ExportManager {
    */
   async exportSelected(selectedObject: any, format: string, options: Record<string, any> = {}) {
     if (!selectedObject) {
-      throw new Error('没有选中的对象')
+      throw new Error('没有选中的对象');
     }
     
-    return this.export(selectedObject, format, options)
+    return this.export(selectedObject, format, options);
   }
 
   /**
@@ -377,17 +377,17 @@ export class ExportManager {
    */
   async exportMerged(meshes: any[], format: string, options: Record<string, any> = {}) {
     if (meshes.length === 0) {
-      throw new Error('没有可合并的网格')
+      throw new Error('没有可合并的网格');
     }
     
     // 合并几何体
-    const mergedMesh = this._mergeMeshes(meshes)
+    const mergedMesh = this._mergeMeshes(meshes);
     
     try {
-      return await this.export(mergedMesh, format, options)
+      return await this.export(mergedMesh, format, options);
     } finally {
       // 清理合并后的临时网格
-      mergedMesh.geometry.dispose()
+      mergedMesh.geometry.dispose();
     }
   }
 
@@ -396,15 +396,15 @@ export class ExportManager {
    * @private
    */
   _createExportScene(objects: any[]) {
-    const scene = new THREE.Scene()
+    const scene = new THREE.Scene();
     
     objects.forEach(obj => {
       // 克隆对象以避免修改原始对象
-      const clone = obj.clone()
-      scene.add(clone)
-    })
+      const clone = obj.clone();
+      scene.add(clone);
+    });
     
-    return scene
+    return scene;
   }
 
   /**
@@ -419,8 +419,8 @@ export class ExportManager {
       if (object.material) {
         // 同样不要 dispose 材质
       }
-    })
-    scene.clear()
+    });
+    scene.clear();
   }
 
   /**
@@ -428,29 +428,29 @@ export class ExportManager {
    * @private
    */
   _mergeMeshes(meshes: any[]) {
-    const geometries = []
+    const geometries = [];
     
     meshes.forEach(mesh => {
-      if (!mesh.isMesh || !mesh.geometry) return
+      if (!mesh.isMesh || !mesh.geometry) return;
       
       // 克隆几何体并应用世界变换
-      const geometry = mesh.geometry.clone()
-      geometry.applyMatrix4(mesh.matrixWorld)
-      geometries.push(geometry)
-    })
+      const geometry = mesh.geometry.clone();
+      geometry.applyMatrix4(mesh.matrixWorld);
+      geometries.push(geometry);
+    });
     
     if (geometries.length === 0) {
-      throw new Error('没有有效的几何体可合并')
+      throw new Error('没有有效的几何体可合并');
     }
     
     // 使用 BufferGeometryUtils 合并（如果可用）
     // 这里使用简单的方式：只取第一个几何体
     // 完整实现需要 import { mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
     
-    const mergedGeometry = geometries[0]
-    const material = meshes[0].material.clone()
+    const mergedGeometry = geometries[0];
+    const material = meshes[0].material.clone();
     
-    return new THREE.Mesh(mergedGeometry, material)
+    return new THREE.Mesh(mergedGeometry, material);
   }
 
   /**
@@ -464,8 +464,8 @@ export class ExportManager {
       'obj-zip': 'zip',
       'gltf': 'gltf',
       'glb': 'glb'
-    }
-    return extensions[format.toLowerCase()] || format
+    };
+    return extensions[format.toLowerCase()] || format;
   }
 
   /**
@@ -473,18 +473,18 @@ export class ExportManager {
    * @private
    */
   _downloadBlob(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.style.display = 'none'
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
     
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     
     // 延迟释放 URL
-    setTimeout(() => URL.revokeObjectURL(url), 100)
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   /**
@@ -521,7 +521,7 @@ export class ExportManager {
         description: 'GL 传输格式（二进制），单文件包含所有资源',
         binary: true
       }
-    ]
+    ];
   }
 
   /**
@@ -531,40 +531,40 @@ export class ExportManager {
    * @returns {Object} 估算信息
    */
   estimateExportSize(objects: any, format: string) {
-    let vertexCount = 0
-    let faceCount = 0
+    let vertexCount = 0;
+    let faceCount = 0;
     
-    const objectsArray = Array.isArray(objects) ? objects : [objects]
+    const objectsArray = Array.isArray(objects) ? objects : [objects];
     
     objectsArray.forEach(obj => {
       obj.traverse((child) => {
         if (child.isMesh && child.geometry) {
-          const geo = child.geometry
-          const positions = geo.getAttribute('position')
+          const geo = child.geometry;
+          const positions = geo.getAttribute('position');
           if (positions) {
-            vertexCount += positions.count
-            faceCount += geo.index ? geo.index.count / 3 : positions.count / 3
+            vertexCount += positions.count;
+            faceCount += geo.index ? geo.index.count / 3 : positions.count / 3;
           }
         }
-      })
-    })
+      });
+    });
     
     // 估算文件大小（粗略）
-    let estimatedSize = 0
+    let estimatedSize = 0;
     switch (format.toLowerCase()) {
       case 'stl':
         // 二进制 STL: 84 字节头 + 每个三角形 50 字节
-        estimatedSize = 84 + faceCount * 50
-        break
+        estimatedSize = 84 + faceCount * 50;
+        break;
       case 'obj':
         // OBJ: 每个顶点约 30 字节，每个面约 20 字节
-        estimatedSize = vertexCount * 30 + faceCount * 20
-        break
+        estimatedSize = vertexCount * 30 + faceCount * 20;
+        break;
       case 'gltf':
       case 'glb':
         // GLTF: 每个顶点约 24 字节（位置+法线），加上 JSON 开销
-        estimatedSize = vertexCount * 24 + 1000
-        break
+        estimatedSize = vertexCount * 24 + 1000;
+        break;
     }
     
     return {
@@ -572,7 +572,7 @@ export class ExportManager {
       faceCount,
       estimatedSize,
       estimatedSizeFormatted: this._formatFileSize(estimatedSize)
-    }
+    };
   }
 
   /**
@@ -580,9 +580,9 @@ export class ExportManager {
    * @private
    */
   _formatFileSize(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   /**
@@ -591,10 +591,10 @@ export class ExportManager {
    */
   updateConfig(config: Record<string, any>) {
     if (config.stl) {
-      Object.assign(this.config.stl, config.stl)
+      Object.assign(this.config.stl, config.stl);
     }
     if (config.gltf) {
-      Object.assign(this.config.gltf, config.gltf)
+      Object.assign(this.config.gltf, config.gltf);
     }
   }
 
@@ -602,12 +602,12 @@ export class ExportManager {
    * 销毁
    */
   dispose() {
-    this.stlExporter = null
-    this.objExporter = null
-    this.gltfExporter = null
-    this.onProgress = null
-    this.onError = null
+    this.stlExporter = null;
+    this.objExporter = null;
+    this.gltfExporter = null;
+    this.onProgress = null;
+    this.onError = null;
   }
 }
 
-export default ExportManager
+export default ExportManager;

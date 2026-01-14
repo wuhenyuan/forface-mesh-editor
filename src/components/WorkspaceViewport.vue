@@ -13,467 +13,467 @@
 </template>
 
 <script>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { EditorCore, TextCommand, TransformCommand } from '../core'
-import { useEditorStore } from '../store'
-import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating'
+  import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+  import { EditorCore, TextCommand, TransformCommand } from '../core';
+  import { useEditorStore } from '../store';
+  import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating';
 
-export default {
-  name: 'WorkspaceViewport',
-  components: {
-    ContextMenu,
-    ColorPicker,
-    EditMenu,
-    FloatingTooltip
-  },
-  props: {
-    currentTool: {
-      type: String,
-      default: 'base'
-    }
-  },
-  emits: [
-    'textCreated',
-    'textSelected',
-    'textDeselected',
-    'textDeleted',
-    'objectSelected',
-    'objectDeselected'
-  ],
-  setup(props, { emit, expose }) {
-    const container = ref(null)
-    const store = useEditorStore()
-    let core = null
-    let viewer = null
-    let document = null
-    let isInitializing = true
-
-    let selectedObject = null
-    let transformMode = 'translate'
-    let transformBefore = null
-
-    const snapshotTransform = (object) => {
-      if (!object) return null
-      return {
-        position: [object.position.x, object.position.y, object.position.z],
-        rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
-        rotationOrder: object.rotation.order,
-        scale: [object.scale.x, object.scale.y, object.scale.z]
+  export default {
+    name: 'WorkspaceViewport',
+    components: {
+      ContextMenu,
+      ColorPicker,
+      EditMenu,
+      FloatingTooltip
+    },
+    props: {
+      currentTool: {
+        type: String,
+        default: 'base'
       }
-    }
+    },
+    emits: [
+      'textCreated',
+      'textSelected',
+      'textDeselected',
+      'textDeleted',
+      'objectSelected',
+      'objectDeselected'
+    ],
+    setup(props, { emit, expose }) {
+      const container = ref(null);
+      const store = useEditorStore();
+      let core = null;
+      let viewer = null;
+      let document = null;
+      let isInitializing = true;
 
-    const isSameTransform = (a, b) => {
-      if (!a || !b) return false
-      return (
-        a.rotationOrder === b.rotationOrder &&
-        a.position?.every((v, i) => v === b.position[i]) &&
-        a.rotation?.every((v, i) => v === b.rotation[i]) &&
-        a.scale?.every((v, i) => v === b.scale[i])
-      )
-    }
+      let selectedObject = null;
+      let transformMode = 'translate';
+      let transformBefore = null;
+
+      const snapshotTransform = (object) => {
+        if (!object) return null;
+        return {
+          position: [object.position.x, object.position.y, object.position.z],
+          rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+          rotationOrder: object.rotation.order,
+          scale: [object.scale.x, object.scale.y, object.scale.z]
+        };
+      };
+
+      const isSameTransform = (a, b) => {
+        if (!a || !b) return false;
+        return (
+          a.rotationOrder === b.rotationOrder &&
+          a.position?.every((v, i) => v === b.position[i]) &&
+          a.rotation?.every((v, i) => v === b.rotation[i]) &&
+          a.scale?.every((v, i) => v === b.scale[i])
+        );
+      };
     
-    // ==================== 初始化 ====================
+      // ==================== 初始化 ====================
     
-    const initViewer = async () => {
-      core = new EditorCore(container.value)
-      viewer = core.documentVisual
-      document = core.document
+      const initViewer = async () => {
+        core = new EditorCore(container.value);
+        viewer = core.documentVisual;
+        document = core.document;
 
-      // bind events
-      bindViewerEvents()
+        // bind events
+        bindViewerEvents();
 
-      // register default model sources
-      document.addModelSource('default', '/src/assets/model/shiba.glb', {
-        loaderOptions: { detectFeatures: false }
-      })
-      document.addModelSource('objModel', '/src/assets/model/model/model.obj', {
-        loaderOptions: { detectFeatures: false }
-      })
-      document.addModelSource('stlModel', '/src/assets/model/model/model.stl', {
-        loaderOptions: { detectFeatures: false }
-      })
+        // register default model sources
+        document.addModelSource('default', '/src/assets/model/shiba.glb', {
+          loaderOptions: { detectFeatures: false }
+        });
+        document.addModelSource('objModel', '/src/assets/model/model/model.obj', {
+          loaderOptions: { detectFeatures: false }
+        });
+        document.addModelSource('stlModel', '/src/assets/model/model/model.stl', {
+          loaderOptions: { detectFeatures: false }
+        });
 
-      // init subsystems
-      viewer.initTextSystem()
-      viewer.initObjectSelection()
+        // init subsystems
+        viewer.initTextSystem();
+        viewer.initObjectSelection();
 
-      // register store
-      store.setWorkspaceRef({ value: getExposedMethods() })
+        // register store
+        store.setWorkspaceRef({ value: getExposedMethods() });
 
-      // sync viewMode (force on first mount)
-      store.setViewMode(store.state.viewMode, { force: true }).catch(err => {
-        console.error('Failed to sync viewMode:', err)
-      })
+        // sync viewMode (force on first mount)
+        store.setViewMode(store.state.viewMode, { force: true }).catch(err => {
+          console.error('Failed to sync viewMode:', err);
+        });
 
-      isInitializing = false
+        isInitializing = false;
 
-      // dev helpers
-      if (import.meta.env.DEV) {
-        window.viewer = viewer
-        window.editorCore = core
-        window.debugTextData = {
-          get textObjects() { return viewer.getTextObjects() },
-          get targetMeshes() { return viewer.getMeshes() },
-          get surfaceTextManager() { return viewer.getTextManager() }
+        // dev helpers
+        if (import.meta.env.DEV) {
+          window.viewer = viewer;
+          window.editorCore = core;
+          window.debugTextData = {
+            get textObjects() { return viewer.getTextObjects(); },
+            get targetMeshes() { return viewer.getMeshes(); },
+            get surfaceTextManager() { return viewer.getTextManager(); }
+          };
         }
-      }
-    }
+      };
     
-    // ==================== 事件绑定 ====================
+      // ==================== 事件绑定 ====================
     
-    const bindViewerEvents = () => {
-      // 右键菜单
-      viewer.events.on('contextmenu', ({ x, y, target, targetType }) => {
-        store.showContextMenu({ x, y, target, targetType })
-      })
+      const bindViewerEvents = () => {
+        // 右键菜单
+        viewer.events.on('contextmenu', ({ x, y, target, targetType }) => {
+          store.showContextMenu({ x, y, target, targetType });
+        });
 
-      viewer.events.on('modelLoaded', ({ modelId, model }) => {
-        if (!model) return
-        if (modelId === 'default') {
-          model.name = 'DefaultModel'
-          console.log('Default model loaded: shiba.glb')
-          return
-        }
-        if (modelId === 'objModel') {
-          model.name = 'ObjModel'
-          model.position.x = 0.15
-          console.log('OBJ model loaded (x=0.15)')
-          return
-        }
-        if (modelId === 'stlModel') {
-          model.name = 'StlModel'
-          model.position.x = -0.15
-          console.log('STL model loaded (x=-0.15)')
-        }
-      })
-      
-      // 点击事件
-      viewer.events.on('click', ({ target, targetType }) => {
-        // 点击空白处关闭浮动 UI
-        if (!target) {
-          store.hideAllFloatingUI()
-        }
-      })
-      
-      // 选中事件
-      viewer.events.on('select', ({ target, targetType }) => {
-        if (targetType === 'object') {
-          // 显示编辑菜单
-          const rect = container.value.getBoundingClientRect()
-          store.showEditMenu({
-            x: rect.left + rect.width / 2,
-            y: rect.top + 60,
-            target
-          })
-        }
-      })
-      
-      viewer.events.on('deselect', () => {
-        store.hideEditMenu()
-      })
-      
-      // 文字事件
-      viewer.events.on('textCreated', ({ textObject }) => {
-        store.addText(textObject)
-        emit('textCreated', textObject)
-
-        // 用户在场景中“已发生”的创建：补一条可撤销记录（不重复执行）
-        if (isInitializing || store.isHistoryApplying()) return
-        const snapshot = viewer.getTextSnapshot?.(textObject.id)
-        if (!snapshot) return
-        store.captureCommand(new TextCommand('create', viewer, { snapshot }))
-      })
-      
-      viewer.events.on('textSelected', ({ textObject }) => {
-        store.selectText(textObject)
-        emit('textSelected', textObject)
-      })
-      
-      viewer.events.on('textDeselected', ({ textObject }) => {
-        store.deselectText()
-        emit('textDeselected', textObject)
-      })
-      
-      viewer.events.on('textDeleted', ({ id, textObject }) => {
-        store.removeText(id)
-        emit('textDeleted', { id, textObject })
-      })
-
-      viewer.events.on('textContentUpdated', ({ textObject, newContent }) => {
-        if (!textObject?.id) return
-        store.updateTextInList(textObject.id, newContent)
-      })
-      
-      // 物体选择事件
-      viewer.events.on('objectSelected', ({ object }) => {
-        selectedObject = object
-        emit('objectSelected', object)
-      })
-      
-      viewer.events.on('objectDeselected', ({ object }) => {
-        if (selectedObject?.uuid === object?.uuid) {
-          selectedObject = null
-        }
-        emit('objectDeselected', object)
-      })
-
-      viewer.events.on('transformModeChanged', ({ mode }) => {
-        transformMode = mode
-      })
-
-      viewer.events.on('objectDragging', ({ isDragging }) => {
-        if (store.isHistoryApplying()) return
-        if (!selectedObject) return
-
-        if (isDragging) {
-          transformBefore = snapshotTransform(selectedObject)
-          return
-        }
-
-        if (!transformBefore) return
-        const after = snapshotTransform(selectedObject)
-        if (isSameTransform(transformBefore, after)) {
-          transformBefore = null
-          return
-        }
-
-        const name = selectedObject?.name ? ` ${selectedObject.name}` : ''
-        store.captureCommand(
-          new TransformCommand(selectedObject, transformBefore, after, {
-            description: `变换${name} (${transformMode})`
-          })
-        )
-        transformBefore = null
-      })
-      
-      // 悬停提示
-      viewer.events.on('hover', ({ target, targetType, event }) => {
-        if (target?.name) {
-          store.showTooltip({
-            x: event.clientX,
-            y: event.clientY,
-            content: target.name
-          })
-        }
-      })
-      
-      viewer.events.on('hoverEnd', () => {
-        store.hideTooltip()
-      })
-      
-      // 删除请求（按 Delete 键）
-      viewer.events.on('deleteRequest', ({ target }) => {
-        handleDelete(target)
-      })
-      
-      // ESC 键
-      viewer.events.on('escape', () => {
-        store.hideAllFloatingUI()
-      })
-    }
-    
-    // ==================== 右键菜单处理 ====================
-    
-    const handleContextMenuSelect = ({ key, target, targetType }) => {
-      switch (key) {
-        case 'editText':
-          if (target?.userData?.textId) {
-            viewer.selectText(target.userData.textId)
+        viewer.events.on('modelLoaded', ({ modelId, model }) => {
+          if (!model) return;
+          if (modelId === 'default') {
+            model.name = 'DefaultModel';
+            console.log('Default model loaded: shiba.glb');
+            return;
           }
-          break
+          if (modelId === 'objModel') {
+            model.name = 'ObjModel';
+            model.position.x = 0.15;
+            console.log('OBJ model loaded (x=0.15)');
+            return;
+          }
+          if (modelId === 'stlModel') {
+            model.name = 'StlModel';
+            model.position.x = -0.15;
+            console.log('STL model loaded (x=-0.15)');
+          }
+        });
+      
+        // 点击事件
+        viewer.events.on('click', ({ target, targetType }) => {
+          // 点击空白处关闭浮动 UI
+          if (!target) {
+            store.hideAllFloatingUI();
+          }
+        });
+      
+        // 选中事件
+        viewer.events.on('select', ({ target, targetType }) => {
+          if (targetType === 'object') {
+            // 显示编辑菜单
+            const rect = container.value.getBoundingClientRect();
+            store.showEditMenu({
+              x: rect.left + rect.width / 2,
+              y: rect.top + 60,
+              target
+            });
+          }
+        });
+      
+        viewer.events.on('deselect', () => {
+          store.hideEditMenu();
+        });
+      
+        // 文字事件
+        viewer.events.on('textCreated', ({ textObject }) => {
+          store.addText(textObject);
+          emit('textCreated', textObject);
+
+          // 用户在场景中“已发生”的创建：补一条可撤销记录（不重复执行）
+          if (isInitializing || store.isHistoryApplying()) return;
+          const snapshot = viewer.getTextSnapshot?.(textObject.id);
+          if (!snapshot) return;
+          store.captureCommand(new TextCommand('create', viewer, { snapshot }));
+        });
+      
+        viewer.events.on('textSelected', ({ textObject }) => {
+          store.selectText(textObject);
+          emit('textSelected', textObject);
+        });
+      
+        viewer.events.on('textDeselected', ({ textObject }) => {
+          store.deselectText();
+          emit('textDeselected', textObject);
+        });
+      
+        viewer.events.on('textDeleted', ({ id, textObject }) => {
+          store.removeText(id);
+          emit('textDeleted', { id, textObject });
+        });
+
+        viewer.events.on('textContentUpdated', ({ textObject, newContent }) => {
+          if (!textObject?.id) return;
+          store.updateTextInList(textObject.id, newContent);
+        });
+      
+        // 物体选择事件
+        viewer.events.on('objectSelected', ({ object }) => {
+          selectedObject = object;
+          emit('objectSelected', object);
+        });
+      
+        viewer.events.on('objectDeselected', ({ object }) => {
+          if (selectedObject?.uuid === object?.uuid) {
+            selectedObject = null;
+          }
+          emit('objectDeselected', object);
+        });
+
+        viewer.events.on('transformModeChanged', ({ mode }) => {
+          transformMode = mode;
+        });
+
+        viewer.events.on('objectDragging', ({ isDragging }) => {
+          if (store.isHistoryApplying()) return;
+          if (!selectedObject) return;
+
+          if (isDragging) {
+            transformBefore = snapshotTransform(selectedObject);
+            return;
+          }
+
+          if (!transformBefore) return;
+          const after = snapshotTransform(selectedObject);
+          if (isSameTransform(transformBefore, after)) {
+            transformBefore = null;
+            return;
+          }
+
+          const name = selectedObject?.name ? ` ${selectedObject.name}` : '';
+          store.captureCommand(
+            new TransformCommand(selectedObject, transformBefore, after, {
+              description: `变换${name} (${transformMode})`
+            })
+          );
+          transformBefore = null;
+        });
+      
+        // 悬停提示
+        viewer.events.on('hover', ({ target, targetType, event }) => {
+          if (target?.name) {
+            store.showTooltip({
+              x: event.clientX,
+              y: event.clientY,
+              content: target.name
+            });
+          }
+        });
+      
+        viewer.events.on('hoverEnd', () => {
+          store.hideTooltip();
+        });
+      
+        // 删除请求（按 Delete 键）
+        viewer.events.on('deleteRequest', ({ target }) => {
+          handleDelete(target);
+        });
+      
+        // ESC 键
+        viewer.events.on('escape', () => {
+          store.hideAllFloatingUI();
+        });
+      };
+    
+      // ==================== 右键菜单处理 ====================
+    
+      const handleContextMenuSelect = ({ key, target, targetType }) => {
+        switch (key) {
+          case 'editText':
+            if (target?.userData?.textId) {
+              viewer.selectText(target.userData.textId);
+            }
+            break;
           
-        case 'changeColor':
-          const currentColor = target?.material?.color?.getHexString?.() || 'ffffff'
-          store.showColorPicker({
-            x: store.state.contextMenu.x,
-            y: store.state.contextMenu.y + 10,
-            target,
-            currentColor: '#' + currentColor
-          })
-          break
+          case 'changeColor':
+            const currentColor = target?.material?.color?.getHexString?.() || 'ffffff';
+            store.showColorPicker({
+              x: store.state.contextMenu.x,
+              y: store.state.contextMenu.y + 10,
+              target,
+              currentColor: '#' + currentColor
+            });
+            break;
           
-        case 'duplicate':
-          handleDuplicate(target)
-          break
+          case 'duplicate':
+            handleDuplicate(target);
+            break;
           
-        case 'delete':
-          handleDelete(target)
-          break
+          case 'delete':
+            handleDelete(target);
+            break;
           
-        case 'addText':
+          case 'addText':
+            store.setViewMode('construct')
+              .then(() => viewer.enableTextMode())
+              .catch(err => console.error('进入编辑态失败:', err));
+            break;
+          
+          case 'select':
+            viewer.select(target);
+            break;
+          
+          case 'hide':
+            viewer.setObjectVisible(target, false);
+            break;
+          
+          case 'resetView':
+            viewer.resetView();
+            break;
+        }
+      };
+    
+      // ==================== 颜色选择处理 ====================
+    
+      const handleColorConfirm = ({ color, target }) => {
+        if (!target) return;
+      
+        // 判断是文字还是普通对象
+        if (target.userData?.isText) {
+          const textId = target.userData.textId;
+          store.updateTextColor(textId, color).catch(err => {
+            console.error('更新文字颜色失败:', err);
+          });
+        } else {
+          viewer.setObjectColor(target, color);
+        }
+      };
+    
+      // ==================== 编辑菜单处理 ====================
+    
+      const handleTransformModeChange = ({ mode, target }) => {
+        viewer.setTransformMode(mode);
+      };
+    
+      const handleDuplicate = (target) => {
+        // TODO: 实现复制功能
+        console.log('复制对象:', target?.name);
+      };
+    
+      const handleDelete = (target) => {
+        if (!target) return;
+      
+        if (target.userData?.isText) {
+          const textId = target.userData.textId;
+          store.deleteText(textId).catch(err => {
+            console.error('删除文字失败:', err);
+          });
+        } else {
+          viewer.removeMesh(target);
+        }
+      
+        store.hideEditMenu();
+      };
+    
+      // ==================== 初始文字（开发用） ====================
+    
+      const createInitialText = async () => {
+        const cylinder = viewer.getMeshByName('TestCylinder');
+        if (!cylinder) return;
+      
+        try {
+          const THREE = await import('three');
+          const cylinderCenter = cylinder.position.clone();
+          const radius = 5;
+        
+          const hitPoint = new THREE.Vector3(
+            cylinderCenter.x,
+            cylinderCenter.y,
+            cylinderCenter.z + radius
+          );
+        
+          const faceInfo = {
+            mesh: cylinder,
+            faceIndex: 0,
+            face: { normal: new THREE.Vector3(0, 0, 1) },
+            point: hitPoint,
+            distance: 0,
+            uv: new THREE.Vector2(0.5, 0.5)
+          };
+        
+          await viewer.createText('TEST', faceInfo);
+          console.log('✅ 默认文字已创建');
+        } catch (error) {
+          console.error('创建默认文字失败:', error);
+        }
+      };
+    
+      // ==================== 工具切换 ====================
+    
+      watch(() => props.currentTool, (newTool, oldTool) => {
+        if (!viewer) return;
+      
+        if (newTool === 'text') {
           store.setViewMode('construct')
             .then(() => viewer.enableTextMode())
-            .catch(err => console.error('进入编辑态失败:', err))
-          break
-          
-        case 'select':
-          viewer.select(target)
-          break
-          
-        case 'hide':
-          viewer.setObjectVisible(target, false)
-          break
-          
-        case 'resetView':
-          viewer.resetView()
-          break
-      }
-    }
-    
-    // ==================== 颜色选择处理 ====================
-    
-    const handleColorConfirm = ({ color, target }) => {
-      if (!target) return
-      
-      // 判断是文字还是普通对象
-      if (target.userData?.isText) {
-        const textId = target.userData.textId
-        store.updateTextColor(textId, color).catch(err => {
-          console.error('更新文字颜色失败:', err)
-        })
-      } else {
-        viewer.setObjectColor(target, color)
-      }
-    }
-    
-    // ==================== 编辑菜单处理 ====================
-    
-    const handleTransformModeChange = ({ mode, target }) => {
-      viewer.setTransformMode(mode)
-    }
-    
-    const handleDuplicate = (target) => {
-      // TODO: 实现复制功能
-      console.log('复制对象:', target?.name)
-    }
-    
-    const handleDelete = (target) => {
-      if (!target) return
-      
-      if (target.userData?.isText) {
-        const textId = target.userData.textId
-        store.deleteText(textId).catch(err => {
-          console.error('删除文字失败:', err)
-        })
-      } else {
-        viewer.removeMesh(target)
-      }
-      
-      store.hideEditMenu()
-    }
-    
-    // ==================== 初始文字（开发用） ====================
-    
-    const createInitialText = async () => {
-      const cylinder = viewer.getMeshByName('TestCylinder')
-      if (!cylinder) return
-      
-      try {
-        const THREE = await import('three')
-        const cylinderCenter = cylinder.position.clone()
-        const radius = 5
-        
-        const hitPoint = new THREE.Vector3(
-          cylinderCenter.x,
-          cylinderCenter.y,
-          cylinderCenter.z + radius
-        )
-        
-        const faceInfo = {
-          mesh: cylinder,
-          faceIndex: 0,
-          face: { normal: new THREE.Vector3(0, 0, 1) },
-          point: hitPoint,
-          distance: 0,
-          uv: new THREE.Vector2(0.5, 0.5)
+            .catch(err => console.error('进入编辑态失败:', err));
+        } else if (oldTool === 'text') {
+          viewer.disableTextMode();
         }
-        
-        await viewer.createText('TEST', faceInfo)
-        console.log('✅ 默认文字已创建')
-      } catch (error) {
-        console.error('创建默认文字失败:', error)
-      }
+      });
+    
+      // ==================== 暴露方法 ====================
+    
+      const getExposedMethods = () => ({
+        // 文字操作
+        selectText: (id) => viewer?.selectText(id),
+        deleteText: (id) => viewer?.deleteText(id),
+        deleteSelectedText: () => {
+          const selected = viewer?.getSelectedTextObject();
+          if (selected) viewer.deleteText(selected.id);
+        },
+        updateTextContent: (id, content) => viewer?.updateTextContent(id, content),
+        updateTextColor: (id, color) => viewer?.updateTextColor(id, color),
+        switchTextMode: (id, mode) => viewer?.switchTextMode(id, mode),
+        updateTextConfig: (id, config) => viewer?.updateTextConfig(id, config),
+      
+        // 圆柱面专用
+        updateTextDirection: (id, dir) => viewer?.updateTextConfig(id, { direction: dir }),
+        updateLetterSpacing: (id, val) => viewer?.updateTextConfig(id, { letterSpacing: val }),
+        updateCurvingStrength: (id, val) => viewer?.updateTextConfig(id, { curvingStrength: val }),
+        updateStartAngle: (id, val) => viewer?.updateTextConfig(id, { startAngle: val }),
+      
+        // 视图操作
+        resetView: () => viewer?.resetView(),
+        focusOn: (obj) => viewer?.focusOn(obj),
+        screenshot: (opts) => viewer?.screenshot(opts),
+      
+        // 获取数据
+        getTextObjects: () => viewer?.getTextObjects() || [],
+        getSelectedTextObject: () => viewer?.getSelectedTextObject(),
+        getMeshes: () => viewer?.getMeshes() || [],
+      
+        // 原始 viewer 访问（高级用法）
+        getViewer: () => viewer,
+        getDocument: () => document,
+        getCore: () => core
+      });
+    
+      // 暴露给父组件
+      expose(getExposedMethods());
+    
+      // ==================== 生命周期 ====================
+    
+      onMounted(() => {
+        initViewer();
+      });
+    
+      onBeforeUnmount(() => {
+        if (core) {
+          core.dispose();
+          core = null;
+        }
+        viewer = null;
+        document = null;
+      });
+    
+      return {
+        container,
+        handleContextMenuSelect,
+        handleColorConfirm,
+        handleTransformModeChange,
+        handleDuplicate,
+        handleDelete
+      };
     }
-    
-    // ==================== 工具切换 ====================
-    
-    watch(() => props.currentTool, (newTool, oldTool) => {
-      if (!viewer) return
-      
-      if (newTool === 'text') {
-        store.setViewMode('construct')
-          .then(() => viewer.enableTextMode())
-          .catch(err => console.error('进入编辑态失败:', err))
-      } else if (oldTool === 'text') {
-        viewer.disableTextMode()
-      }
-    })
-    
-    // ==================== 暴露方法 ====================
-    
-    const getExposedMethods = () => ({
-      // 文字操作
-      selectText: (id) => viewer?.selectText(id),
-      deleteText: (id) => viewer?.deleteText(id),
-      deleteSelectedText: () => {
-        const selected = viewer?.getSelectedTextObject()
-        if (selected) viewer.deleteText(selected.id)
-      },
-      updateTextContent: (id, content) => viewer?.updateTextContent(id, content),
-      updateTextColor: (id, color) => viewer?.updateTextColor(id, color),
-      switchTextMode: (id, mode) => viewer?.switchTextMode(id, mode),
-      updateTextConfig: (id, config) => viewer?.updateTextConfig(id, config),
-      
-      // 圆柱面专用
-      updateTextDirection: (id, dir) => viewer?.updateTextConfig(id, { direction: dir }),
-      updateLetterSpacing: (id, val) => viewer?.updateTextConfig(id, { letterSpacing: val }),
-      updateCurvingStrength: (id, val) => viewer?.updateTextConfig(id, { curvingStrength: val }),
-      updateStartAngle: (id, val) => viewer?.updateTextConfig(id, { startAngle: val }),
-      
-      // 视图操作
-      resetView: () => viewer?.resetView(),
-      focusOn: (obj) => viewer?.focusOn(obj),
-      screenshot: (opts) => viewer?.screenshot(opts),
-      
-      // 获取数据
-      getTextObjects: () => viewer?.getTextObjects() || [],
-      getSelectedTextObject: () => viewer?.getSelectedTextObject(),
-      getMeshes: () => viewer?.getMeshes() || [],
-      
-      // 原始 viewer 访问（高级用法）
-      getViewer: () => viewer,
-      getDocument: () => document,
-      getCore: () => core
-    })
-    
-    // 暴露给父组件
-    expose(getExposedMethods())
-    
-    // ==================== 生命周期 ====================
-    
-    onMounted(() => {
-      initViewer()
-    })
-    
-    onBeforeUnmount(() => {
-      if (core) {
-        core.dispose()
-        core = null
-      }
-      viewer = null
-      document = null
-    })
-    
-    return {
-      container,
-      handleContextMenuSelect,
-      handleColorConfirm,
-      handleTransformModeChange,
-      handleDuplicate,
-      handleDelete
-    }
-  }
-}
+  };
 </script>
 
 <style scoped>

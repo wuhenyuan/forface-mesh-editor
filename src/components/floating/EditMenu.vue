@@ -31,59 +31,59 @@
 </template>
 
 <script>
-import { computed, ref } from 'vue'
-import { useEditorStore } from '../../store'
+  import { computed, ref } from 'vue';
+  import { useEditorStore } from '../../store';
 
-export default {
-  name: 'EditMenu',
-  setup(props, { emit }) {
-    const store = useEditorStore()
+  export default {
+    name: 'EditMenu',
+    setup(props, { emit }) {
+      const store = useEditorStore();
     
-    const visible = computed(() => store.state.editMenu.visible)
-    const target = computed(() => store.state.editMenu.target)
+      const visible = computed(() => store.state.editMenu.visible);
+      const target = computed(() => store.state.editMenu.target);
     
-    const mode = ref('translate')
+      const mode = ref('translate');
     
-    const menuStyle = computed(() => ({
-      left: store.state.editMenu.x + 'px',
-      top: store.state.editMenu.y + 'px'
-    }))
+      const menuStyle = computed(() => ({
+        left: store.state.editMenu.x + 'px',
+        top: store.state.editMenu.y + 'px'
+      }));
     
-    const setMode = (newMode) => {
-      mode.value = newMode
-      emit('modeChange', { mode: newMode, target: target.value })
+      const setMode = (newMode) => {
+        mode.value = newMode;
+        emit('modeChange', { mode: newMode, target: target.value });
+      };
+    
+      const openColorPicker = () => {
+        const rect = { x: store.state.editMenu.x, y: store.state.editMenu.y + 50 };
+        store.showColorPicker({
+          x: rect.x,
+          y: rect.y,
+          target: target.value,
+          currentColor: target.value?.material?.color?.getHexString?.() || '#ffffff'
+        });
+      };
+    
+      const duplicate = () => {
+        emit('duplicate', target.value);
+      };
+    
+      const remove = () => {
+        emit('delete', target.value);
+        store.hideEditMenu();
+      };
+    
+      return {
+        visible,
+        mode,
+        menuStyle,
+        setMode,
+        openColorPicker,
+        duplicate,
+        remove
+      };
     }
-    
-    const openColorPicker = () => {
-      const rect = { x: store.state.editMenu.x, y: store.state.editMenu.y + 50 }
-      store.showColorPicker({
-        x: rect.x,
-        y: rect.y,
-        target: target.value,
-        currentColor: target.value?.material?.color?.getHexString?.() || '#ffffff'
-      })
-    }
-    
-    const duplicate = () => {
-      emit('duplicate', target.value)
-    }
-    
-    const remove = () => {
-      emit('delete', target.value)
-      store.hideEditMenu()
-    }
-    
-    return {
-      visible,
-      mode,
-      menuStyle,
-      setMode,
-      openColorPicker,
-      duplicate,
-      remove
-    }
-  }
-}
+  };
 </script>
 
 <style scoped>

@@ -3,20 +3,20 @@
  * 提供在3D网格表面添加文字的完整功能
  */
 
-import { SurfaceTextManager } from './SurfaceTextManager'
+import { SurfaceTextManager } from './SurfaceTextManager';
 
-export { BooleanOperator } from './BooleanOperator'
-export { SurfaceTextManager } from './SurfaceTextManager'
-export { TextGeometryGenerator } from './TextGeometryGenerator'
-export { TextInputOverlay } from './TextInputOverlay'
-export { TextPropertyPanel } from './TextPropertyPanel'
-export { TextTransformControls } from './TextTransformControls'
+export { BooleanOperator } from './BooleanOperator';
+export { SurfaceTextManager } from './SurfaceTextManager';
+export { TextGeometryGenerator } from './TextGeometryGenerator';
+export { TextInputOverlay } from './TextInputOverlay';
+export { TextPropertyPanel } from './TextPropertyPanel';
+export { TextTransformControls } from './TextTransformControls';
 
 // 圆柱面文字相关模块
-export { CurvedTextGeometry, curvedTextGeometry } from './CurvedTextGeometry'
-export { CylinderSurfaceHelper, cylinderSurfaceHelper } from './CylinderSurfaceHelper'
-export { CylinderTextGeometry, cylinderTextGeometry } from './CylinderTextGeometry'
-export { CSGCylinderText, csgCylinderText } from './CSGCylinderText'
+export { CurvedTextGeometry, curvedTextGeometry } from './CurvedTextGeometry';
+export { CylinderSurfaceHelper, cylinderSurfaceHelper } from './CylinderSurfaceHelper';
+export { CylinderTextGeometry, cylinderTextGeometry } from './CylinderTextGeometry';
+export { CSGCylinderText, csgCylinderText } from './CSGCylinderText';
 
 /**
  * 创建表面文字管理器的便捷函数
@@ -28,7 +28,7 @@ export { CSGCylinderText, csgCylinderText } from './CSGCylinderText'
  * @returns {SurfaceTextManager} 表面文字管理器实例
  */
 export function createSurfaceTextManager (scene, camera, renderer, domElement, facePicker) {
-  return new SurfaceTextManager(scene, camera, renderer, domElement, facePicker)
+  return new SurfaceTextManager(scene, camera, renderer, domElement, facePicker);
 }
 
 /**
@@ -41,7 +41,7 @@ export const TextUtils = {
    * @returns {boolean} 是否有效
    */
   validateTextContent (content) {
-    return typeof content === 'string' && content.trim().length > 0
+    return typeof content === 'string' && content.trim().length > 0;
   },
 
   /**
@@ -49,7 +49,7 @@ export const TextUtils = {
    * @returns {string} 唯一ID
    */
   generateTextId () {
-    return `text_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+    return `text_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   },
 
   /**
@@ -58,8 +58,8 @@ export const TextUtils = {
    * @returns {THREE.Box3} 边界框
    */
   calculateTextBounds (geometry) {
-    geometry.computeBoundingBox()
-    return geometry.boundingBox
+    geometry.computeBoundingBox();
+    return geometry.boundingBox;
   },
 
   /**
@@ -79,6 +79,6 @@ export const TextUtils = {
       bevelSize: 0.01,
       bevelOffset: 0,
       bevelSegments: 5
-    }
+    };
   }
-}
+};

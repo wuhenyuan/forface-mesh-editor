@@ -1,5 +1,5 @@
-import { ObjectSelector } from './ObjectSelector'
-import { ObjectTransformControls } from './ObjectTransformControls'
+import { ObjectSelector } from './ObjectSelector';
+import { ObjectTransformControls } from './ObjectTransformControls';
 
 /**
  * 物体选择管理器
@@ -8,21 +8,21 @@ import { ObjectTransformControls } from './ObjectTransformControls'
 export class ObjectSelectionManager {
   [key: string]: any;
   constructor(scene, camera, renderer, domElement) {
-    this.scene = scene
-    this.camera = camera
-    this.renderer = renderer
-    this.domElement = domElement
+    this.scene = scene;
+    this.camera = camera;
+    this.renderer = renderer;
+    this.domElement = domElement;
     
     // 创建子系统
-    this.objectSelector = new ObjectSelector(scene, camera, renderer, domElement)
-    this.transformControls = new ObjectTransformControls(scene, camera, renderer, domElement)
+    this.objectSelector = new ObjectSelector(scene, camera, renderer, domElement);
+    this.transformControls = new ObjectTransformControls(scene, camera, renderer, domElement);
     
     // 状态
-    this.enabled = false
-    this.selectedObject = null
+    this.enabled = false;
+    this.selectedObject = null;
     
     // 事件系统
-    this.eventListeners = new Map()
+    this.eventListeners = new Map();
     
     // 配置
     this.config = {
@@ -34,10 +34,10 @@ export class ObjectSelectionManager {
         emissive: 0x004400,
         emissiveIntensity: 0.2
       }
-    }
+    };
     
     // 设置事件监听
-    this.setupEvents()
+    this.setupEvents();
   }
   
   /**
@@ -46,101 +46,101 @@ export class ObjectSelectionManager {
   setupEvents() {
     // 物体选择事件
     this.objectSelector.on('objectSelected', (object) => {
-      this.selectedObject = object
+      this.selectedObject = object;
       
       // 如果启用变换控制器，附加到选中的物体
       if (this.config.enableTransformControls) {
-        this.transformControls.attach(object)
+        this.transformControls.attach(object);
       }
       
-      console.log('物体选择管理器：物体已选中', object.name || object.uuid)
-      this.emit('objectSelected', object)
-    })
+      console.log('物体选择管理器：物体已选中', object.name || object.uuid);
+      this.emit('objectSelected', object);
+    });
     
     this.objectSelector.on('objectDeselected', (object) => {
-      this.selectedObject = null
+      this.selectedObject = null;
       
       // 分离变换控制器
-      this.transformControls.detach()
+      this.transformControls.detach();
       
-      console.log('物体选择管理器：物体已取消选择')
-      this.emit('objectDeselected', object)
-    })
+      console.log('物体选择管理器：物体已取消选择');
+      this.emit('objectDeselected', object);
+    });
     
     this.objectSelector.on('selectionCleared', () => {
-      this.selectedObject = null
-      this.transformControls.detach()
+      this.selectedObject = null;
+      this.transformControls.detach();
       
-      console.log('物体选择管理器：选择已清除')
-      this.emit('selectionCleared')
-    })
+      console.log('物体选择管理器：选择已清除');
+      this.emit('selectionCleared');
+    });
     
     // 变换控制器事件
     this.transformControls.on('draggingChanged', (isDragging) => {
       // 转发拖拽状态变化事件（用于禁用/启用相机控制）
-      this.emit('draggingChanged', isDragging)
-    })
+      this.emit('draggingChanged', isDragging);
+    });
     
     this.transformControls.on('objectTransformed', (data) => {
-      this.emit('objectTransformed', data)
-    })
+      this.emit('objectTransformed', data);
+    });
     
     this.transformControls.on('dragStart', (data) => {
-      this.emit('dragStart', data)
-    })
+      this.emit('dragStart', data);
+    });
     
     this.transformControls.on('dragEnd', (data) => {
-      this.emit('dragEnd', data)
-    })
+      this.emit('dragEnd', data);
+    });
     
     this.transformControls.on('modeChanged', (mode) => {
-      this.emit('transformModeChanged', mode)
-    })
+      this.emit('transformModeChanged', mode);
+    });
 
     this.transformControls.on('controlMouseDown', () => {
-      this.emit('controlMouseDown')
-    })
+      this.emit('controlMouseDown');
+    });
 
     this.transformControls.on('controlMouseUp', () => {
-      this.emit('controlMouseUp')
-    })
+      this.emit('controlMouseUp');
+    });
   }
   
   /**
    * 启用物体选择管理器
    */
   enable() {
-    if (this.enabled) return
+    if (this.enabled) return;
     
-    this.enabled = true
+    this.enabled = true;
     
     // 启用子系统
-    this.objectSelector.enable()
+    this.objectSelector.enable();
     if (this.config.enableTransformControls) {
-      this.transformControls.enable()
+      this.transformControls.enable();
     }
     
-    console.log('物体选择管理器已启用')
-    this.emit('enabled')
+    console.log('物体选择管理器已启用');
+    this.emit('enabled');
   }
   
   /**
    * 禁用物体选择管理器
    */
   disable() {
-    if (!this.enabled) return
+    if (!this.enabled) return;
     
-    this.enabled = false
+    this.enabled = false;
     
     // 禁用子系统
-    this.objectSelector.disable()
-    this.transformControls.disable()
+    this.objectSelector.disable();
+    this.transformControls.disable();
     
     // 清除状态
-    this.selectedObject = null
+    this.selectedObject = null;
     
-    console.log('物体选择管理器已禁用')
-    this.emit('disabled')
+    console.log('物体选择管理器已禁用');
+    this.emit('disabled');
   }
   
   /**
@@ -148,7 +148,7 @@ export class ObjectSelectionManager {
    * @param {THREE.Object3D[]} objects - 物体数组
    */
   setSelectableObjects(objects) {
-    this.objectSelector.setSelectableObjects(objects)
+    this.objectSelector.setSelectableObjects(objects);
   }
   
   /**
@@ -156,7 +156,7 @@ export class ObjectSelectionManager {
    * @param {THREE.Object3D} object - 物体
    */
   addSelectableObject(object) {
-    this.objectSelector.addSelectableObject(object)
+    this.objectSelector.addSelectableObject(object);
   }
   
   /**
@@ -164,7 +164,7 @@ export class ObjectSelectionManager {
    * @param {THREE.Object3D} object - 物体
    */
   removeSelectableObject(object) {
-    this.objectSelector.removeSelectableObject(object)
+    this.objectSelector.removeSelectableObject(object);
   }
   
   /**
@@ -172,14 +172,14 @@ export class ObjectSelectionManager {
    * @param {THREE.Object3D} object - 要选择的物体
    */
   selectObject(object) {
-    this.objectSelector.selectObject(object)
+    this.objectSelector.selectObject(object);
   }
   
   /**
    * 清除选择
    */
   clearSelection() {
-    this.objectSelector.clearSelection()
+    this.objectSelector.clearSelection();
   }
   
   /**
@@ -187,7 +187,7 @@ export class ObjectSelectionManager {
    * @returns {THREE.Object3D|null} 选中的物体
    */
   getSelectedObject() {
-    return this.selectedObject
+    return this.selectedObject;
   }
   
   /**
@@ -195,7 +195,7 @@ export class ObjectSelectionManager {
    * @param {'translate'|'rotate'|'scale'} mode - 变换模式
    */
   setTransformMode(mode) {
-    this.transformControls.setMode(mode)
+    this.transformControls.setMode(mode);
   }
   
   /**
@@ -203,7 +203,7 @@ export class ObjectSelectionManager {
    * @returns {string} 当前模式
    */
   getTransformMode() {
-    return this.transformControls.getMode()
+    return this.transformControls.getMode();
   }
   
   /**
@@ -211,16 +211,16 @@ export class ObjectSelectionManager {
    * @param {boolean} enabled - 是否启用
    */
   setTransformControlsEnabled(enabled) {
-    this.config.enableTransformControls = enabled
+    this.config.enableTransformControls = enabled;
     
     if (enabled) {
-      this.transformControls.enable()
+      this.transformControls.enable();
       // 如果有选中的物体，重新附加
       if (this.selectedObject) {
-        this.transformControls.attach(this.selectedObject)
+        this.transformControls.attach(this.selectedObject);
       }
     } else {
-      this.transformControls.disable()
+      this.transformControls.disable();
     }
   }
   
@@ -229,7 +229,7 @@ export class ObjectSelectionManager {
    * @returns {boolean} 是否正在拖拽
    */
   isDragging() {
-    return this.transformControls.isDragging()
+    return this.transformControls.isDragging();
   }
   
   /**
@@ -237,8 +237,8 @@ export class ObjectSelectionManager {
    * @param {Object} config - 高亮配置
    */
   setHighlightConfig(config) {
-    Object.assign(this.config.highlightConfig, config)
-    this.objectSelector.setHighlightConfig(this.config.highlightConfig)
+    Object.assign(this.config.highlightConfig, config);
+    this.objectSelector.setHighlightConfig(this.config.highlightConfig);
   }
   
   /**
@@ -247,19 +247,19 @@ export class ObjectSelectionManager {
    */
   setTransformConfig(config) {
     if (config.size !== undefined) {
-      this.transformControls.setSize(config.size)
+      this.transformControls.setSize(config.size);
     }
     
     if (config.space !== undefined) {
-      this.transformControls.setSpace(config.space)
+      this.transformControls.setSpace(config.space);
     }
     
     if (config.axes !== undefined) {
-      this.transformControls.setAxesVisibility(config.axes)
+      this.transformControls.setAxesVisibility(config.axes);
     }
     
     if (config.snap !== undefined) {
-      this.transformControls.setSnap(config.snap)
+      this.transformControls.setSnap(config.snap);
     }
   }
   
@@ -280,7 +280,7 @@ export class ObjectSelectionManager {
       transformMode: this.transformControls.getMode(),
       isDragging: this.transformControls.isDragging(),
       config: { ...this.config }
-    }
+    };
   }
   
   /**
@@ -290,9 +290,9 @@ export class ObjectSelectionManager {
    */
   on(eventName, callback) {
     if (!this.eventListeners.has(eventName)) {
-      this.eventListeners.set(eventName, [])
+      this.eventListeners.set(eventName, []);
     }
-    this.eventListeners.get(eventName).push(callback)
+    this.eventListeners.get(eventName).push(callback);
   }
   
   /**
@@ -301,12 +301,12 @@ export class ObjectSelectionManager {
    * @param {Function} callback - 回调函数
    */
   off(eventName, callback) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
-    const index = listeners.indexOf(callback)
+    const listeners = this.eventListeners.get(eventName);
+    const index = listeners.indexOf(callback);
     if (index !== -1) {
-      listeners.splice(index, 1)
+      listeners.splice(index, 1);
     }
   }
   
@@ -316,29 +316,29 @@ export class ObjectSelectionManager {
    * @param {...any} args - 事件参数
    */
   emit(eventName, ...args) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
+    const listeners = this.eventListeners.get(eventName);
     listeners.forEach(callback => {
       try {
-        callback(...args)
+        callback(...args);
       } catch (error) {
-        console.error(`Error in event listener for ${eventName}:`, error)
+        console.error(`Error in event listener for ${eventName}:`, error);
       }
-    })
+    });
   }
   
   /**
    * 销毁管理器
    */
   destroy() {
-    this.disable()
-    this.objectSelector.destroy()
-    this.transformControls.destroy()
-    this.eventListeners.clear()
-    this.selectedObject = null
+    this.disable();
+    this.objectSelector.destroy();
+    this.transformControls.destroy();
+    this.eventListeners.clear();
+    this.selectedObject = null;
   }
 }
 
 // 导出所有相关类
-export { ObjectSelector, ObjectTransformControls }
+export { ObjectSelector, ObjectTransformControls };

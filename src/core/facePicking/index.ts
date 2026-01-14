@@ -4,23 +4,23 @@
  * 包含优化的 BVH + Feature 预处理系统
  */
 
-import { FacePicker } from './FacePicker'
-import { RaycastManager } from './RaycastManager'
+import { FacePicker } from './FacePicker';
+import { RaycastManager } from './RaycastManager';
 
 // 核心组件
-export { FacePicker } from './FacePicker'
-export { RaycastManager } from './RaycastManager'
-export { SelectionManager } from './SelectionManager'
-export { HighlightRenderer } from './HighlightRenderer'
-export { EventHandler } from './EventHandler'
+export { FacePicker } from './FacePicker';
+export { RaycastManager } from './RaycastManager';
+export { SelectionManager } from './SelectionManager';
+export { HighlightRenderer } from './HighlightRenderer';
+export { EventHandler } from './EventHandler';
 
 // 优化组件
-export { OptimizedFacePicker } from './OptimizedFacePicker'
-export { FeatureDetector } from './FeatureDetector'
-export { FeaturePool } from './FeaturePool'
+export { OptimizedFacePicker } from './OptimizedFacePicker';
+export { FeatureDetector } from './FeatureDetector';
+export { FeaturePool } from './FeaturePool';
 
 // 调试和测试工具
-export { DebugLogger, debugLogger } from './DebugLogger'
+export { DebugLogger, debugLogger } from './DebugLogger';
 
 /**
  * 创建面拾取器的便捷函数
@@ -31,7 +31,7 @@ export { DebugLogger, debugLogger } from './DebugLogger'
  * @returns {FacePicker} 面拾取器实例
  */
 export function createFacePicker(scene, camera, renderer, domElement) {
-  return new FacePicker(scene, camera, renderer, domElement)
+  return new FacePicker(scene, camera, renderer, domElement);
 }
 
 /**
@@ -43,8 +43,8 @@ export function createFacePicker(scene, camera, renderer, domElement) {
  * @returns {Promise<OptimizedFacePicker>} 优化面拾取器实例
  */
 export async function createOptimizedFacePicker(scene, camera, renderer, domElement) {
-  const { OptimizedFacePicker } = await import('./OptimizedFacePicker')
-  return new OptimizedFacePicker(scene, camera, renderer, domElement)
+  const { OptimizedFacePicker } = await import('./OptimizedFacePicker');
+  return new OptimizedFacePicker(scene, camera, renderer, domElement);
 }
 
 /**
@@ -59,34 +59,34 @@ export const FacePickingUtils = {
   validateMesh(mesh) {
     // 直接实现验证逻辑，避免循环依赖
     if (!mesh || !mesh.geometry) {
-      return false
+      return false;
     }
     
     if (!mesh.visible) {
-      return false
+      return false;
     }
     
-    const geometry = mesh.geometry
+    const geometry = mesh.geometry;
     
     if (geometry.isBufferGeometry) {
-      const positionAttribute = geometry.getAttribute('position')
+      const positionAttribute = geometry.getAttribute('position');
       if (!positionAttribute || positionAttribute.count === 0) {
-        return false
+        return false;
       }
       
-      const indexAttribute = geometry.getIndex()
+      const indexAttribute = geometry.getIndex();
       const faceCount = indexAttribute 
         ? indexAttribute.count / 3 
-        : positionAttribute.count / 3
+        : positionAttribute.count / 3;
       
-      return faceCount >= 1
+      return faceCount >= 1;
     }
     
     if (geometry.isGeometry) {
-      return geometry.vertices?.length > 0 && geometry.faces?.length > 0
+      return geometry.vertices?.length > 0 && geometry.faces?.length > 0;
     }
     
-    return false
+    return false;
   },
   
   /**
@@ -96,23 +96,23 @@ export const FacePickingUtils = {
    * @returns {THREE.Mesh[]} 网格数组
    */
   getPickableMeshes(scene, includeChildren = true) {
-    const meshes = []
+    const meshes = [];
     
     if (includeChildren) {
       scene.traverse((object) => {
         if (object.isMesh && this.validateMesh(object) && this.isMeshPickable(object)) {
-          meshes.push(object)
+          meshes.push(object);
         }
-      })
+      });
     } else {
       scene.children.forEach((object) => {
         if (object.isMesh && this.validateMesh(object) && this.isMeshPickable(object)) {
-          meshes.push(object)
+          meshes.push(object);
         }
-      })
+      });
     }
     
-    return meshes
+    return meshes;
   },
   
   /**
@@ -122,7 +122,7 @@ export const FacePickingUtils = {
    */
   setMeshPickable(mesh, pickable = true) {
     if (mesh && mesh.userData) {
-      mesh.userData.facePickable = pickable
+      mesh.userData.facePickable = pickable;
     }
   },
   
@@ -132,7 +132,7 @@ export const FacePickingUtils = {
    * @returns {boolean} 是否可拾取
    */
   isMeshPickable(mesh) {
-    return mesh && mesh.userData && mesh.userData.facePickable !== false
+    return mesh && mesh.userData && mesh.userData.facePickable !== false;
   },
   
   /**
@@ -141,7 +141,7 @@ export const FacePickingUtils = {
    * @param {boolean} pickable - 是否可拾取
    */
   setMeshesPickable(meshes, pickable = true) {
-    meshes.forEach(mesh => this.setMeshPickable(mesh, pickable))
+    meshes.forEach(mesh => this.setMeshPickable(mesh, pickable));
   },
   
   /**
@@ -151,34 +151,34 @@ export const FacePickingUtils = {
    */
   getMeshInfo(mesh) {
     if (!mesh || !mesh.geometry) {
-      return null
+      return null;
     }
     
     // 直接实现兼容性检查，避免循环依赖
-    const geometry = mesh.geometry
+    const geometry = mesh.geometry;
     const compatibility = {
       isCompatible: false,
       type: 'unknown',
       faceCount: 0,
       hasIndices: false,
       warnings: []
-    }
+    };
     
     if (geometry.isBufferGeometry) {
-      compatibility.type = 'BufferGeometry'
-      const positionAttribute = geometry.getAttribute('position')
+      compatibility.type = 'BufferGeometry';
+      const positionAttribute = geometry.getAttribute('position');
       if (positionAttribute) {
-        const indexAttribute = geometry.getIndex()
+        const indexAttribute = geometry.getIndex();
         compatibility.faceCount = indexAttribute 
           ? indexAttribute.count / 3 
-          : positionAttribute.count / 3
-        compatibility.hasIndices = !!indexAttribute
-        compatibility.isCompatible = compatibility.faceCount > 0
+          : positionAttribute.count / 3;
+        compatibility.hasIndices = !!indexAttribute;
+        compatibility.isCompatible = compatibility.faceCount > 0;
       }
     } else if (geometry.isGeometry) {
-      compatibility.type = 'Geometry'
-      compatibility.faceCount = geometry.faces ? geometry.faces.length : 0
-      compatibility.isCompatible = compatibility.faceCount > 0
+      compatibility.type = 'Geometry';
+      compatibility.faceCount = geometry.faces ? geometry.faces.length : 0;
+      compatibility.isCompatible = compatibility.faceCount > 0;
     }
     
     return {
@@ -190,7 +190,7 @@ export const FacePickingUtils = {
       position: mesh.position.clone(),
       rotation: mesh.rotation.clone(),
       scale: mesh.scale.clone()
-    }
+    };
   },
   
   /**
@@ -203,7 +203,7 @@ export const FacePickingUtils = {
       this.validateMesh(mesh) && 
       this.isMeshPickable(mesh) && 
       mesh.visible
-    )
+    );
   },
   
   /**
@@ -212,8 +212,8 @@ export const FacePickingUtils = {
    * @returns {Object} 调试信息
    */
   createDebugInfo(meshes) {
-    const validMeshes = this.filterValidMeshes(meshes)
-    const invalidMeshes = meshes.filter(mesh => !this.validateMesh(mesh))
+    const validMeshes = this.filterValidMeshes(meshes);
+    const invalidMeshes = meshes.filter(mesh => !this.validateMesh(mesh));
     
     return {
       total: meshes.length,
@@ -225,10 +225,10 @@ export const FacePickingUtils = {
         uuid: mesh.uuid,
         issues: this.validateMesh(mesh) ? [] : ['Invalid geometry']
       }))
-    }
+    };
   },
   
   async runValidationTests() {
-    throw new Error('Validation test helpers are not bundled in this build')
+    throw new Error('Validation test helpers are not bundled in this build');
   }
-}
+};

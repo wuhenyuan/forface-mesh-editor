@@ -1,5 +1,5 @@
-import * as THREE from 'three'
-import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
+import * as THREE from 'three';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
 /**
  * 文字变换控制器
@@ -8,26 +8,26 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 export class TextTransformControls {
   [key: string]: any;
   constructor(scene, camera, renderer) {
-    this.scene = scene
-    this.camera = camera
-    this.renderer = renderer
+    this.scene = scene;
+    this.camera = camera;
+    this.renderer = renderer;
     
     // 创建变换控制器
-    this.controls = new TransformControls(camera, renderer.domElement)
-    this.controls.setMode('translate') // 默认为移动模式
-    this.controls.setSpace('world') // 世界坐标系
+    this.controls = new TransformControls(camera, renderer.domElement);
+    this.controls.setMode('translate'); // 默认为移动模式
+    this.controls.setSpace('world'); // 世界坐标系
     
     // 添加到场景
-    this.scene.add(this.controls)
+    this.scene.add(this.controls);
     
     // 事件监听器
-    this.eventListeners = new Map()
+    this.eventListeners = new Map();
     
     // 当前附加的对象
-    this.attachedObject = null
+    this.attachedObject = null;
     
     // 设置事件处理
-    this.setupEventHandlers()
+    this.setupEventHandlers();
   }
   
   /**
@@ -37,18 +37,18 @@ export class TextTransformControls {
     // 变换开始
     this.controls.addEventListener('dragging-changed', (event) => {
       // 禁用/启用轨道控制器（如果存在）
-      this.emit('dragging-changed', event.value)
-    })
+      this.emit('dragging-changed', event.value);
+    });
     
     // 变换中
     this.controls.addEventListener('change', () => {
-      this.emit('change', this.attachedObject)
-    })
+      this.emit('change', this.attachedObject);
+    });
     
     // 对象变换
     this.controls.addEventListener('objectChange', () => {
-      this.emit('objectChange', this.attachedObject)
-    })
+      this.emit('objectChange', this.attachedObject);
+    });
   }
   
   /**
@@ -57,16 +57,16 @@ export class TextTransformControls {
    */
   attach(object) {
     if (!object) {
-      console.warn('尝试附加空对象到变换控制器')
-      return
+      console.warn('尝试附加空对象到变换控制器');
+      return;
     }
     
-    this.attachedObject = object
-    this.controls.attach(object)
-    this.controls.visible = true
+    this.attachedObject = object;
+    this.controls.attach(object);
+    this.controls.visible = true;
     
-    console.log('变换控制器已附加到对象:', object.name || object.uuid)
-    this.emit('attached', object)
+    console.log('变换控制器已附加到对象:', object.name || object.uuid);
+    this.emit('attached', object);
   }
   
   /**
@@ -74,13 +74,13 @@ export class TextTransformControls {
    */
   detach() {
     if (this.attachedObject) {
-      const object = this.attachedObject
-      this.controls.detach()
-      this.controls.visible = false
-      this.attachedObject = null
+      const object = this.attachedObject;
+      this.controls.detach();
+      this.controls.visible = false;
+      this.attachedObject = null;
       
-      console.log('变换控制器已分离对象:', object.name || object.uuid)
-      this.emit('detached', object)
+      console.log('变换控制器已分离对象:', object.name || object.uuid);
+      this.emit('detached', object);
     }
   }
   
@@ -90,10 +90,10 @@ export class TextTransformControls {
    */
   setMode(mode) {
     if (['translate', 'rotate', 'scale'].includes(mode)) {
-      this.controls.setMode(mode)
-      this.emit('modeChanged', mode)
+      this.controls.setMode(mode);
+      this.emit('modeChanged', mode);
     } else {
-      console.warn('无效的变换模式:', mode)
+      console.warn('无效的变换模式:', mode);
     }
   }
   
@@ -102,7 +102,7 @@ export class TextTransformControls {
    * @returns {string} 当前模式
    */
   getMode() {
-    return this.controls.getMode()
+    return this.controls.getMode();
   }
   
   /**
@@ -111,10 +111,10 @@ export class TextTransformControls {
    */
   setSpace(space) {
     if (['world', 'local'].includes(space)) {
-      this.controls.setSpace(space)
-      this.emit('spaceChanged', space)
+      this.controls.setSpace(space);
+      this.emit('spaceChanged', space);
     } else {
-      console.warn('无效的坐标空间:', space)
+      console.warn('无效的坐标空间:', space);
     }
   }
   
@@ -123,7 +123,7 @@ export class TextTransformControls {
    * @returns {string} 当前坐标空间
    */
   getSpace() {
-    return this.controls.space
+    return this.controls.space;
   }
   
   /**
@@ -131,7 +131,7 @@ export class TextTransformControls {
    * @param {number} size - 大小
    */
   setSize(size) {
-    this.controls.setSize(size)
+    this.controls.setSize(size);
   }
   
   /**
@@ -139,7 +139,7 @@ export class TextTransformControls {
    * @returns {number} 当前大小
    */
   getSize() {
-    return this.controls.size
+    return this.controls.size;
   }
   
   /**
@@ -147,8 +147,8 @@ export class TextTransformControls {
    * @param {boolean} enabled - 是否启用
    */
   setEnabled(enabled) {
-    this.controls.enabled = enabled
-    this.emit('enabledChanged', enabled)
+    this.controls.enabled = enabled;
+    this.emit('enabledChanged', enabled);
   }
   
   /**
@@ -156,7 +156,7 @@ export class TextTransformControls {
    * @returns {boolean} 是否启用
    */
   isEnabled() {
-    return this.controls.enabled
+    return this.controls.enabled;
   }
   
   /**
@@ -164,8 +164,8 @@ export class TextTransformControls {
    * @param {boolean} visible - 是否可见
    */
   setVisible(visible) {
-    this.controls.visible = visible
-    this.emit('visibilityChanged', visible)
+    this.controls.visible = visible;
+    this.emit('visibilityChanged', visible);
   }
   
   /**
@@ -173,7 +173,7 @@ export class TextTransformControls {
    * @returns {boolean} 是否可见
    */
   isVisible() {
-    return this.controls.visible
+    return this.controls.visible;
   }
   
   /**
@@ -181,7 +181,7 @@ export class TextTransformControls {
    * @returns {THREE.Object3D|null} 附加的对象
    */
   getAttachedObject() {
-    return this.attachedObject
+    return this.attachedObject;
   }
   
   /**
@@ -191,7 +191,7 @@ export class TextTransformControls {
   setDragThreshold(threshold) {
     // TransformControls没有直接的拖拽阈值设置
     // 这里可以实现自定义逻辑
-    console.log('设置拖拽阈值:', threshold)
+    console.log('设置拖拽阈值:', threshold);
   }
   
   /**
@@ -199,10 +199,10 @@ export class TextTransformControls {
    */
   reset() {
     if (this.attachedObject) {
-      this.attachedObject.position.set(0, 0, 0)
-      this.attachedObject.rotation.set(0, 0, 0)
-      this.attachedObject.scale.set(1, 1, 1)
-      this.emit('reset', this.attachedObject)
+      this.attachedObject.position.set(0, 0, 0);
+      this.attachedObject.rotation.set(0, 0, 0);
+      this.attachedObject.scale.set(1, 1, 1);
+      this.emit('reset', this.attachedObject);
     }
   }
   
@@ -211,7 +211,7 @@ export class TextTransformControls {
    * @returns {Object|null} 变换信息
    */
   getTransformInfo() {
-    if (!this.attachedObject) return null
+    if (!this.attachedObject) return null;
     
     return {
       position: this.attachedObject.position.clone(),
@@ -221,7 +221,7 @@ export class TextTransformControls {
       space: this.getSpace(),
       enabled: this.isEnabled(),
       visible: this.isVisible()
-    }
+    };
   }
   
   /**
@@ -229,19 +229,19 @@ export class TextTransformControls {
    * @param {Object} transform - 变换数据
    */
   applyTransform(transform) {
-    if (!this.attachedObject || !transform) return
+    if (!this.attachedObject || !transform) return;
     
     if (transform.position) {
-      this.attachedObject.position.copy(transform.position)
+      this.attachedObject.position.copy(transform.position);
     }
     if (transform.rotation) {
-      this.attachedObject.rotation.copy(transform.rotation)
+      this.attachedObject.rotation.copy(transform.rotation);
     }
     if (transform.scale) {
-      this.attachedObject.scale.copy(transform.scale)
+      this.attachedObject.scale.copy(transform.scale);
     }
     
-    this.emit('transformApplied', transform)
+    this.emit('transformApplied', transform);
   }
   
   /**
@@ -251,9 +251,9 @@ export class TextTransformControls {
    */
   on(eventName, callback) {
     if (!this.eventListeners.has(eventName)) {
-      this.eventListeners.set(eventName, [])
+      this.eventListeners.set(eventName, []);
     }
-    this.eventListeners.get(eventName).push(callback)
+    this.eventListeners.get(eventName).push(callback);
   }
   
   /**
@@ -262,12 +262,12 @@ export class TextTransformControls {
    * @param {Function} callback - 回调函数
    */
   off(eventName, callback) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
-    const index = listeners.indexOf(callback)
+    const listeners = this.eventListeners.get(eventName);
+    const index = listeners.indexOf(callback);
     if (index !== -1) {
-      listeners.splice(index, 1)
+      listeners.splice(index, 1);
     }
   }
   
@@ -277,27 +277,27 @@ export class TextTransformControls {
    * @param {...any} args - 事件参数
    */
   emit(eventName, ...args) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
+    const listeners = this.eventListeners.get(eventName);
     listeners.forEach(callback => {
       try {
-        callback(...args)
+        callback(...args);
       } catch (error) {
-        console.error(`Error in event listener for ${eventName}:`, error)
+        console.error(`Error in event listener for ${eventName}:`, error);
       }
-    })
+    });
   }
   
   /**
    * 销毁控制器，清理资源
    */
   dispose() {
-    this.detach()
-    this.scene.remove(this.controls)
-    this.controls.dispose()
-    this.eventListeners.clear()
+    this.detach();
+    this.scene.remove(this.controls);
+    this.controls.dispose();
+    this.eventListeners.clear();
     
-    console.log('文字变换控制器已销毁')
+    console.log('文字变换控制器已销毁');
   }
 }

@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import * as THREE from 'three';
 
 /**
  * 物体选择器
@@ -7,68 +7,68 @@ import * as THREE from 'three'
 export class ObjectSelector {
   [key: string]: any;
   constructor(scene, camera, renderer, domElement) {
-    this.scene = scene
-    this.camera = camera
-    this.renderer = renderer
-    this.domElement = domElement
+    this.scene = scene;
+    this.camera = camera;
+    this.renderer = renderer;
+    this.domElement = domElement;
     
     // 射线投射器
-    this.raycaster = new THREE.Raycaster()
-    this.mouse = new THREE.Vector2()
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
     
     // 状态
-    this.enabled = false
-    this.selectableObjects = [] // 可选择的物体列表
-    this.selectedObject = null // 当前选中的物体
+    this.enabled = false;
+    this.selectableObjects = []; // 可选择的物体列表
+    this.selectedObject = null; // 当前选中的物体
     
     // 事件系统
-    this.eventListeners = new Map()
+    this.eventListeners = new Map();
     
     // 高亮材质缓存
-    this.originalMaterials = new Map()
+    this.originalMaterials = new Map();
     
     // 绑定事件处理器
-    this.handleClick = this.handleClick.bind(this)
-    this.handleMouseMove = this.handleMouseMove.bind(this)
+    this.handleClick = this.handleClick.bind(this);
+    this.handleMouseMove = this.handleMouseMove.bind(this);
     
     // 高亮配置
     this.highlightConfig = {
       color: 0x00ff00,
       emissive: 0x004400,
       emissiveIntensity: 0.2
-    }
+    };
   }
   
   /**
    * 启用物体选择
    */
   enable() {
-    if (this.enabled) return
+    if (this.enabled) return;
     
-    this.enabled = true
-    this.domElement.addEventListener('click', this.handleClick)
-    this.domElement.addEventListener('mousemove', this.handleMouseMove)
+    this.enabled = true;
+    this.domElement.addEventListener('click', this.handleClick);
+    this.domElement.addEventListener('mousemove', this.handleMouseMove);
     
-    console.log('物体选择器已启用')
-    this.emit('enabled')
+    console.log('物体选择器已启用');
+    this.emit('enabled');
   }
   
   /**
    * 禁用物体选择
    */
   disable() {
-    if (!this.enabled) return
+    if (!this.enabled) return;
     
-    this.enabled = false
-    this.domElement.removeEventListener('click', this.handleClick)
-    this.domElement.removeEventListener('mousemove', this.handleMouseMove)
+    this.enabled = false;
+    this.domElement.removeEventListener('click', this.handleClick);
+    this.domElement.removeEventListener('mousemove', this.handleMouseMove);
     
     // 清除选择和高亮
-    this.clearSelection()
-    this.clearAllHighlights()
+    this.clearSelection();
+    this.clearAllHighlights();
     
-    console.log('物体选择器已禁用')
-    this.emit('disabled')
+    console.log('物体选择器已禁用');
+    this.emit('disabled');
   }
   
   /**
@@ -76,7 +76,7 @@ export class ObjectSelector {
    * @param {THREE.Object3D[]} objects - 物体数组
    */
   setSelectableObjects(objects) {
-    this.selectableObjects = objects
+    this.selectableObjects = objects;
   }
   
   /**
@@ -85,7 +85,7 @@ export class ObjectSelector {
    */
   addSelectableObject(object) {
     if (!this.selectableObjects.includes(object)) {
-      this.selectableObjects.push(object)
+      this.selectableObjects.push(object);
     }
   }
   
@@ -94,14 +94,14 @@ export class ObjectSelector {
    * @param {THREE.Object3D} object - 物体
    */
   removeSelectableObject(object) {
-    const index = this.selectableObjects.indexOf(object)
+    const index = this.selectableObjects.indexOf(object);
     if (index !== -1) {
-      this.selectableObjects.splice(index, 1)
+      this.selectableObjects.splice(index, 1);
     }
     
     // 如果移除的是当前选中的物体，清除选择
     if (this.selectedObject === object) {
-      this.clearSelection()
+      this.clearSelection();
     }
   }
   
@@ -110,28 +110,28 @@ export class ObjectSelector {
    * @param {MouseEvent} event - 鼠标事件
    */
   handleClick(event) {
-    if (!this.enabled) return
+    if (!this.enabled) return;
     
     // 更新鼠标位置
-    this.updateMousePosition(event)
+    this.updateMousePosition(event);
     
     // 执行射线投射
-    this.raycaster.setFromCamera(this.mouse, this.camera)
-    const intersects = this.raycaster.intersectObjects(this.selectableObjects, true)
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(this.selectableObjects, true);
     
     if (intersects.length > 0) {
       // 找到最顶层的可选择物体
-      let targetObject = intersects[0].object
+      let targetObject = intersects[0].object;
       while (targetObject.parent && !this.selectableObjects.includes(targetObject)) {
-        targetObject = targetObject.parent
+        targetObject = targetObject.parent;
       }
       
       if (this.selectableObjects.includes(targetObject)) {
-        this.selectObject(targetObject)
+        this.selectObject(targetObject);
       }
     } else {
       // 点击空白区域，清除选择
-      this.clearSelection()
+      this.clearSelection();
     }
   }
   
@@ -140,33 +140,33 @@ export class ObjectSelector {
    * @param {MouseEvent} event - 鼠标事件
    */
   handleMouseMove(event) {
-    if (!this.enabled) return
+    if (!this.enabled) return;
     
     // 更新鼠标位置
-    this.updateMousePosition(event)
+    this.updateMousePosition(event);
     
     // 执行射线投射
-    this.raycaster.setFromCamera(this.mouse, this.camera)
-    const intersects = this.raycaster.intersectObjects(this.selectableObjects, true)
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(this.selectableObjects, true);
     
     // 清除之前的悬停高亮
-    this.clearHoverHighlights()
+    this.clearHoverHighlights();
     
     if (intersects.length > 0) {
       // 找到最顶层的可选择物体
-      let targetObject = intersects[0].object
+      let targetObject = intersects[0].object;
       while (targetObject.parent && !this.selectableObjects.includes(targetObject)) {
-        targetObject = targetObject.parent
+        targetObject = targetObject.parent;
       }
       
       if (this.selectableObjects.includes(targetObject) && targetObject !== this.selectedObject) {
-        this.addHoverHighlight(targetObject)
-        this.domElement.style.cursor = 'pointer'
+        this.addHoverHighlight(targetObject);
+        this.domElement.style.cursor = 'pointer';
       } else {
-        this.domElement.style.cursor = 'default'
+        this.domElement.style.cursor = 'default';
       }
     } else {
-      this.domElement.style.cursor = 'default'
+      this.domElement.style.cursor = 'default';
     }
   }
   
@@ -175,9 +175,9 @@ export class ObjectSelector {
    * @param {MouseEvent} event - 鼠标事件
    */
   updateMousePosition(event) {
-    const rect = this.domElement.getBoundingClientRect()
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+    const rect = this.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   }
   
   /**
@@ -185,31 +185,31 @@ export class ObjectSelector {
    * @param {THREE.Object3D} object - 要选择的物体
    */
   selectObject(object) {
-    if (this.selectedObject === object) return
+    if (this.selectedObject === object) return;
     
     // 清除之前的选择
-    this.clearSelection()
+    this.clearSelection();
     
-    this.selectedObject = object
-    this.addSelectionHighlight(object)
+    this.selectedObject = object;
+    this.addSelectionHighlight(object);
     
-    console.log('物体已选中:', object.name || object.uuid)
-    this.emit('objectSelected', object)
+    console.log('物体已选中:', object.name || object.uuid);
+    this.emit('objectSelected', object);
   }
   
   /**
    * 清除选择
    */
   clearSelection() {
-    if (!this.selectedObject) return
+    if (!this.selectedObject) return;
     
-    this.removeSelectionHighlight(this.selectedObject)
-    const previousObject = this.selectedObject
-    this.selectedObject = null
+    this.removeSelectionHighlight(this.selectedObject);
+    const previousObject = this.selectedObject;
+    this.selectedObject = null;
     
-    console.log('选择已清除')
-    this.emit('objectDeselected', previousObject)
-    this.emit('selectionCleared')
+    console.log('选择已清除');
+    this.emit('objectDeselected', previousObject);
+    this.emit('selectionCleared');
   }
   
   /**
@@ -217,7 +217,7 @@ export class ObjectSelector {
    * @param {THREE.Object3D} object - 物体
    */
   addSelectionHighlight(object) {
-    this.traverseAndHighlight(object, 'selection')
+    this.traverseAndHighlight(object, 'selection');
   }
   
   /**
@@ -225,7 +225,7 @@ export class ObjectSelector {
    * @param {THREE.Object3D} object - 物体
    */
   removeSelectionHighlight(object) {
-    this.traverseAndRestoreMaterial(object, 'selection')
+    this.traverseAndRestoreMaterial(object, 'selection');
   }
   
   /**
@@ -233,7 +233,7 @@ export class ObjectSelector {
    * @param {THREE.Object3D} object - 物体
    */
   addHoverHighlight(object) {
-    this.traverseAndHighlight(object, 'hover')
+    this.traverseAndHighlight(object, 'hover');
   }
   
   /**
@@ -242,8 +242,8 @@ export class ObjectSelector {
   clearHoverHighlights() {
     // 遍历所有物体，移除悬停高亮
     this.selectableObjects.forEach(object => {
-      this.traverseAndRestoreMaterial(object, 'hover')
-    })
+      this.traverseAndRestoreMaterial(object, 'hover');
+    });
   }
   
   /**
@@ -251,9 +251,9 @@ export class ObjectSelector {
    */
   clearAllHighlights() {
     this.selectableObjects.forEach(object => {
-      this.traverseAndRestoreMaterial(object, 'selection')
-      this.traverseAndRestoreMaterial(object, 'hover')
-    })
+      this.traverseAndRestoreMaterial(object, 'selection');
+      this.traverseAndRestoreMaterial(object, 'hover');
+    });
   }
   
   /**
@@ -264,28 +264,28 @@ export class ObjectSelector {
   traverseAndHighlight(object, type) {
     object.traverse((child) => {
       if (child.isMesh && child.material) {
-        const key = `${child.uuid}_${type}`
+        const key = `${child.uuid}_${type}`;
         
         // 保存原始材质
         if (!this.originalMaterials.has(key)) {
-          this.originalMaterials.set(key, child.material)
+          this.originalMaterials.set(key, child.material);
         }
         
         // 创建高亮材质
-        const highlightMaterial = child.material.clone()
+        const highlightMaterial = child.material.clone();
         
         if (type === 'selection') {
-          highlightMaterial.color.setHex(this.highlightConfig.color)
-          highlightMaterial.emissive.setHex(this.highlightConfig.emissive)
-          highlightMaterial.emissiveIntensity = this.highlightConfig.emissiveIntensity
+          highlightMaterial.color.setHex(this.highlightConfig.color);
+          highlightMaterial.emissive.setHex(this.highlightConfig.emissive);
+          highlightMaterial.emissiveIntensity = this.highlightConfig.emissiveIntensity;
         } else if (type === 'hover') {
-          highlightMaterial.emissive.setHex(0x222222)
-          highlightMaterial.emissiveIntensity = 0.1
+          highlightMaterial.emissive.setHex(0x222222);
+          highlightMaterial.emissiveIntensity = 0.1;
         }
         
-        child.material = highlightMaterial
+        child.material = highlightMaterial;
       }
-    })
+    });
   }
   
   /**
@@ -296,14 +296,14 @@ export class ObjectSelector {
   traverseAndRestoreMaterial(object, type) {
     object.traverse((child) => {
       if (child.isMesh && child.material) {
-        const key = `${child.uuid}_${type}`
+        const key = `${child.uuid}_${type}`;
         
         if (this.originalMaterials.has(key)) {
-          child.material = this.originalMaterials.get(key)
-          this.originalMaterials.delete(key)
+          child.material = this.originalMaterials.get(key);
+          this.originalMaterials.delete(key);
         }
       }
-    })
+    });
   }
   
   /**
@@ -311,7 +311,7 @@ export class ObjectSelector {
    * @returns {THREE.Object3D|null} 选中的物体
    */
   getSelectedObject() {
-    return this.selectedObject
+    return this.selectedObject;
   }
   
   /**
@@ -319,7 +319,7 @@ export class ObjectSelector {
    * @param {Object} config - 高亮配置
    */
   setHighlightConfig(config) {
-    Object.assign(this.highlightConfig, config)
+    Object.assign(this.highlightConfig, config);
   }
   
   /**
@@ -329,9 +329,9 @@ export class ObjectSelector {
    */
   on(eventName, callback) {
     if (!this.eventListeners.has(eventName)) {
-      this.eventListeners.set(eventName, [])
+      this.eventListeners.set(eventName, []);
     }
-    this.eventListeners.get(eventName).push(callback)
+    this.eventListeners.get(eventName).push(callback);
   }
   
   /**
@@ -340,12 +340,12 @@ export class ObjectSelector {
    * @param {Function} callback - 回调函数
    */
   off(eventName, callback) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
-    const index = listeners.indexOf(callback)
+    const listeners = this.eventListeners.get(eventName);
+    const index = listeners.indexOf(callback);
     if (index !== -1) {
-      listeners.splice(index, 1)
+      listeners.splice(index, 1);
     }
   }
   
@@ -355,27 +355,27 @@ export class ObjectSelector {
    * @param {...any} args - 事件参数
    */
   emit(eventName, ...args) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
+    const listeners = this.eventListeners.get(eventName);
     listeners.forEach(callback => {
       try {
-        callback(...args)
+        callback(...args);
       } catch (error) {
-        console.error(`Error in event listener for ${eventName}:`, error)
+        console.error(`Error in event listener for ${eventName}:`, error);
       }
-    })
+    });
   }
   
   /**
    * 销毁选择器
    */
   destroy() {
-    this.disable()
-    this.clearAllHighlights()
-    this.originalMaterials.clear()
-    this.eventListeners.clear()
-    this.selectableObjects = []
-    this.selectedObject = null
+    this.disable();
+    this.clearAllHighlights();
+    this.originalMaterials.clear();
+    this.eventListeners.clear();
+    this.selectableObjects = [];
+    this.selectedObject = null;
   }
 }

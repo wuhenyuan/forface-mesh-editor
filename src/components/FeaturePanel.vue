@@ -10,24 +10,24 @@
 </template>
 
 <script>
-import { computed } from 'vue'
-import { useEditorStore } from '../store'
+  import { computed } from 'vue';
+  import { useEditorStore } from '../store';
 
-export default {
-  name: 'FeaturePanel',
-  setup() {
-    const store = useEditorStore()
+  export default {
+    name: 'FeaturePanel',
+    setup() {
+      const store = useEditorStore();
     
-    const currentFeature = computed(() => store.state.currentFeature)
+      const currentFeature = computed(() => store.state.currentFeature);
     
-    const onSelect = (key) => {
-      console.log('🔥 FeaturePanel onSelect:', key)
-      store.setFeature(key)
+      const onSelect = (key) => {
+        console.log('🔥 FeaturePanel onSelect:', key);
+        store.setFeature(key);
+      };
+    
+      return { currentFeature, onSelect };
     }
-    
-    return { currentFeature, onSelect }
-  }
-}
+  };
 </script>
 
 <style scoped>

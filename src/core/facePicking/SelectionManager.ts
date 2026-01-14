@@ -3,31 +3,31 @@
  * 负责管理面的选择状态，支持单选和多选模式
  */
 export class SelectionManager {
-  selectedFaces: Map<string, any>
-  selectionMode: 'single' | 'multi'
-  hoverFace: any
-  selectionHistory: any[]
-  historyIndex: number
-  maxHistorySize: number
-  eventCallbacks: Map<string, any[]>
+  selectedFaces: Map<string, any>;
+  selectionMode: 'single' | 'multi';
+  hoverFace: any;
+  selectionHistory: any[];
+  historyIndex: number;
+  maxHistorySize: number;
+  eventCallbacks: Map<string, any[]>;
 
   constructor() {
     // 使用Map存储选中的面，key为面ID，value为面信息
-    this.selectedFaces = new Map()
+    this.selectedFaces = new Map();
     
     // 选择模式：'single' 或 'multi'
-    this.selectionMode = 'single'
+    this.selectionMode = 'single';
     
     // 悬停的面
-    this.hoverFace = null
+    this.hoverFace = null;
     
     // 选择历史记录（用于撤销/重做）
-    this.selectionHistory = []
-    this.historyIndex = -1
-    this.maxHistorySize = 50
+    this.selectionHistory = [];
+    this.historyIndex = -1;
+    this.maxHistorySize = 50;
     
     // 事件回调
-    this.eventCallbacks = new Map()
+    this.eventCallbacks = new Map();
   }
   
   /**
@@ -38,25 +38,25 @@ export class SelectionManager {
    */
   addFace(faceInfo: any, recordHistory: boolean = true) {
     if (!faceInfo || !faceInfo.id) {
-      console.warn('无效的面信息')
-      return false
+      console.warn('无效的面信息');
+      return false;
     }
     
     // 记录当前状态到历史
     if (recordHistory) {
-      this.recordCurrentState()
+      this.recordCurrentState();
     }
     
     // 如果是单选模式，先清除之前的选择
     if (this.selectionMode === 'single') {
-      this.selectedFaces.clear()
+      this.selectedFaces.clear();
     }
     
-    this.selectedFaces.set(faceInfo.id, faceInfo)
-    this.emitEvent('faceAdded', faceInfo)
-    this.emitEvent('selectionChanged', this.getSelectionSummary())
+    this.selectedFaces.set(faceInfo.id, faceInfo);
+    this.emitEvent('faceAdded', faceInfo);
+    this.emitEvent('selectionChanged', this.getSelectionSummary());
     
-    return true
+    return true;
   }
   
   /**
@@ -67,27 +67,27 @@ export class SelectionManager {
    */
   removeFace(faceInfo: any, recordHistory: boolean = true) {
     if (!faceInfo || !faceInfo.id) {
-      console.warn('无效的面信息')
-      return false
+      console.warn('无效的面信息');
+      return false;
     }
     
     if (!this.selectedFaces.has(faceInfo.id)) {
-      return false
+      return false;
     }
     
     // 记录当前状态到历史
     if (recordHistory) {
-      this.recordCurrentState()
+      this.recordCurrentState();
     }
     
-    const removed = this.selectedFaces.delete(faceInfo.id)
+    const removed = this.selectedFaces.delete(faceInfo.id);
     
     if (removed) {
-      this.emitEvent('faceRemoved', faceInfo)
-      this.emitEvent('selectionChanged', this.getSelectionSummary())
+      this.emitEvent('faceRemoved', faceInfo);
+      this.emitEvent('selectionChanged', this.getSelectionSummary());
     }
     
-    return removed
+    return removed;
   }
   
   /**
@@ -96,19 +96,19 @@ export class SelectionManager {
    */
   clearAll(recordHistory: boolean = true) {
     if (this.selectedFaces.size === 0) {
-      return
+      return;
     }
     
     // 记录当前状态到历史
     if (recordHistory) {
-      this.recordCurrentState()
+      this.recordCurrentState();
     }
     
-    const clearedFaces = Array.from(this.selectedFaces.values())
-    this.selectedFaces.clear()
+    const clearedFaces = Array.from(this.selectedFaces.values());
+    this.selectedFaces.clear();
     
-    this.emitEvent('selectionCleared', clearedFaces)
-    this.emitEvent('selectionChanged', this.getSelectionSummary())
+    this.emitEvent('selectionCleared', clearedFaces);
+    this.emitEvent('selectionChanged', this.getSelectionSummary());
   }
   
   /**
@@ -118,10 +118,10 @@ export class SelectionManager {
    */
   contains(faceInfo: any) {
     if (!faceInfo || !faceInfo.id) {
-      return false
+      return false;
     }
     
-    return this.selectedFaces.has(faceInfo.id)
+    return this.selectedFaces.has(faceInfo.id);
   }
   
   /**
@@ -129,7 +129,7 @@ export class SelectionManager {
    * @returns {Object[]} 选中的面信息数组
    */
   getAll() {
-    return Array.from(this.selectedFaces.values())
+    return Array.from(this.selectedFaces.values());
   }
   
   /**
@@ -137,7 +137,7 @@ export class SelectionManager {
    * @returns {number} 选中面的数量
    */
   getCount() {
-    return this.selectedFaces.size
+    return this.selectedFaces.size;
   }
   
   /**
@@ -145,7 +145,7 @@ export class SelectionManager {
    * @returns {boolean} 是否有选择
    */
   hasSelection() {
-    return this.selectedFaces.size > 0
+    return this.selectedFaces.size > 0;
   }
   
   /**
@@ -154,7 +154,7 @@ export class SelectionManager {
    * @returns {Object|null} 面信息对象或null
    */
   getFaceById(faceId: string) {
-    return this.selectedFaces.get(faceId) || null
+    return this.selectedFaces.get(faceId) || null;
   }
   
   /**
@@ -164,33 +164,33 @@ export class SelectionManager {
    */
   setSelectionMode(mode: any, recordHistory: boolean = true) {
     if (mode !== 'single' && mode !== 'multi') {
-      console.warn('无效的选择模式，应为 "single" 或 "multi"')
-      return
+      console.warn('无效的选择模式，应为 "single" 或 "multi"');
+      return;
     }
     
     if (this.selectionMode === mode) {
-      return // 模式没有变化
+      return; // 模式没有变化
     }
     
     // 记录当前状态到历史
     if (recordHistory) {
-      this.recordCurrentState()
+      this.recordCurrentState();
     }
     
-    const oldMode = this.selectionMode
-    this.selectionMode = mode
+    const oldMode = this.selectionMode;
+    this.selectionMode = mode;
     
     // 如果切换到单选模式且当前有多个选择，只保留第一个
     if (mode === 'single' && this.selectedFaces.size > 1) {
-      const firstFace = this.selectedFaces.values().next().value
-      this.selectedFaces.clear()
+      const firstFace = this.selectedFaces.values().next().value;
+      this.selectedFaces.clear();
       if (firstFace) {
-        this.selectedFaces.set(firstFace.id, firstFace)
+        this.selectedFaces.set(firstFace.id, firstFace);
       }
     }
     
-    this.emitEvent('selectionModeChanged', { oldMode, newMode: mode })
-    this.emitEvent('selectionChanged', this.getSelectionSummary())
+    this.emitEvent('selectionModeChanged', { oldMode, newMode: mode });
+    this.emitEvent('selectionChanged', this.getSelectionSummary());
   }
   
   /**
@@ -198,21 +198,21 @@ export class SelectionManager {
    * @returns {'single'|'multi'} 选择模式
    */
   getSelectionMode() {
-    return this.selectionMode
+    return this.selectionMode;
   }
   
   /**
    * 设置单选模式
    */
   setSingleSelectMode() {
-    this.setSelectionMode('single')
+    this.setSelectionMode('single');
   }
   
   /**
    * 设置多选模式
    */
   setMultiSelectMode() {
-    this.setSelectionMode('multi')
+    this.setSelectionMode('multi');
   }
   
   /**
@@ -220,7 +220,7 @@ export class SelectionManager {
    * @param {Object|null} faceInfo - 面信息对象或null
    */
   setHoverFace(faceInfo: any) {
-    this.hoverFace = faceInfo
+    this.hoverFace = faceInfo;
   }
   
   /**
@@ -228,14 +228,14 @@ export class SelectionManager {
    * @returns {Object|null} 面信息对象或null
    */
   getHoverFace() {
-    return this.hoverFace
+    return this.hoverFace;
   }
   
   /**
    * 清除悬停状态
    */
   clearHover() {
-    this.hoverFace = null
+    this.hoverFace = null;
   }
   
   /**
@@ -246,16 +246,16 @@ export class SelectionManager {
    */
   toggleFace(faceInfo, recordHistory = true) {
     if (!faceInfo || !faceInfo.id) {
-      console.warn('无效的面信息')
-      return false
+      console.warn('无效的面信息');
+      return false;
     }
     
     if (this.contains(faceInfo)) {
-      this.removeFace(faceInfo, recordHistory)
-      return false
+      this.removeFace(faceInfo, recordHistory);
+      return false;
     } else {
-      this.addFace(faceInfo, recordHistory)
-      return true
+      this.addFace(faceInfo, recordHistory);
+      return true;
     }
   }
   
@@ -267,39 +267,39 @@ export class SelectionManager {
    */
   addMultipleFaces(faceInfos, recordHistory = true) {
     if (!Array.isArray(faceInfos) || faceInfos.length === 0) {
-      return 0
+      return 0;
     }
     
     // 记录当前状态到历史
     if (recordHistory) {
-      this.recordCurrentState()
+      this.recordCurrentState();
     }
     
-    let addedCount = 0
+    let addedCount = 0;
     
     // 如果是单选模式，只添加第一个
     if (this.selectionMode === 'single') {
       if (faceInfos[0] && faceInfos[0].id) {
-        this.selectedFaces.clear()
-        this.selectedFaces.set(faceInfos[0].id, faceInfos[0])
-        addedCount = 1
+        this.selectedFaces.clear();
+        this.selectedFaces.set(faceInfos[0].id, faceInfos[0]);
+        addedCount = 1;
       }
     } else {
       // 多选模式，添加所有有效的面
       faceInfos.forEach(faceInfo => {
         if (faceInfo && faceInfo.id) {
-          this.selectedFaces.set(faceInfo.id, faceInfo)
-          addedCount++
+          this.selectedFaces.set(faceInfo.id, faceInfo);
+          addedCount++;
         }
-      })
+      });
     }
     
     if (addedCount > 0) {
-      this.emitEvent('multipleFacesAdded', faceInfos.slice(0, addedCount))
-      this.emitEvent('selectionChanged', this.getSelectionSummary())
+      this.emitEvent('multipleFacesAdded', faceInfos.slice(0, addedCount));
+      this.emitEvent('selectionChanged', this.getSelectionSummary());
     }
     
-    return addedCount
+    return addedCount;
   }
   
   /**
@@ -310,31 +310,31 @@ export class SelectionManager {
    */
   removeMultipleFaces(faceInfos, recordHistory = true) {
     if (!Array.isArray(faceInfos) || faceInfos.length === 0) {
-      return 0
+      return 0;
     }
     
     // 记录当前状态到历史
     if (recordHistory) {
-      this.recordCurrentState()
+      this.recordCurrentState();
     }
     
-    let removedCount = 0
-    const removedFaces = []
+    let removedCount = 0;
+    const removedFaces = [];
     
     faceInfos.forEach(faceInfo => {
       if (faceInfo && faceInfo.id && this.selectedFaces.has(faceInfo.id)) {
-        this.selectedFaces.delete(faceInfo.id)
-        removedFaces.push(faceInfo)
-        removedCount++
+        this.selectedFaces.delete(faceInfo.id);
+        removedFaces.push(faceInfo);
+        removedCount++;
       }
-    })
+    });
     
     if (removedCount > 0) {
-      this.emitEvent('multipleFacesRemoved', removedFaces)
-      this.emitEvent('selectionChanged', this.getSelectionSummary())
+      this.emitEvent('multipleFacesRemoved', removedFaces);
+      this.emitEvent('selectionChanged', this.getSelectionSummary());
     }
     
-    return removedCount
+    return removedCount;
   }
   
   /**
@@ -348,7 +348,7 @@ export class SelectionManager {
       hasSelection: this.hasSelection(),
       hasHover: this.hoverFace !== null,
       faceIds: Array.from(this.selectedFaces.keys())
-    }
+    };
   }
   
   /**
@@ -358,19 +358,19 @@ export class SelectionManager {
   validateState() {
     // 检查单选模式下是否只有一个选择
     if (this.selectionMode === 'single' && this.selectedFaces.size > 1) {
-      console.warn('单选模式下存在多个选择')
-      return false
+      console.warn('单选模式下存在多个选择');
+      return false;
     }
     
     // 检查所有选中的面是否有有效的ID
     for (const [id, faceInfo] of this.selectedFaces) {
       if (!faceInfo.id || faceInfo.id !== id) {
-        console.warn('选择状态不一致：面ID不匹配')
-        return false
+        console.warn('选择状态不一致：面ID不匹配');
+        return false;
       }
     }
     
-    return true
+    return true;
   }
   
   /**
@@ -381,19 +381,19 @@ export class SelectionManager {
       selectedFaces: new Map(this.selectedFaces),
       selectionMode: this.selectionMode,
       timestamp: Date.now()
-    }
+    };
     
     // 移除当前索引之后的历史记录
-    this.selectionHistory = this.selectionHistory.slice(0, this.historyIndex + 1)
+    this.selectionHistory = this.selectionHistory.slice(0, this.historyIndex + 1);
     
     // 添加新状态
-    this.selectionHistory.push(currentState)
-    this.historyIndex++
+    this.selectionHistory.push(currentState);
+    this.historyIndex++;
     
     // 限制历史记录大小
     if (this.selectionHistory.length > this.maxHistorySize) {
-      this.selectionHistory.shift()
-      this.historyIndex--
+      this.selectionHistory.shift();
+      this.historyIndex--;
     }
   }
   
@@ -403,22 +403,22 @@ export class SelectionManager {
    */
   undo() {
     if (this.historyIndex <= 0) {
-      return false
+      return false;
     }
     
-    this.historyIndex--
-    const previousState = this.selectionHistory[this.historyIndex]
+    this.historyIndex--;
+    const previousState = this.selectionHistory[this.historyIndex];
     
     if (previousState) {
-      this.selectedFaces = new Map(previousState.selectedFaces)
-      this.selectionMode = previousState.selectionMode
+      this.selectedFaces = new Map(previousState.selectedFaces);
+      this.selectionMode = previousState.selectionMode;
       
-      this.emitEvent('undoPerformed', previousState)
-      this.emitEvent('selectionChanged', this.getSelectionSummary())
-      return true
+      this.emitEvent('undoPerformed', previousState);
+      this.emitEvent('selectionChanged', this.getSelectionSummary());
+      return true;
     }
     
-    return false
+    return false;
   }
   
   /**
@@ -427,22 +427,22 @@ export class SelectionManager {
    */
   redo() {
     if (this.historyIndex >= this.selectionHistory.length - 1) {
-      return false
+      return false;
     }
     
-    this.historyIndex++
-    const nextState = this.selectionHistory[this.historyIndex]
+    this.historyIndex++;
+    const nextState = this.selectionHistory[this.historyIndex];
     
     if (nextState) {
-      this.selectedFaces = new Map(nextState.selectedFaces)
-      this.selectionMode = nextState.selectionMode
+      this.selectedFaces = new Map(nextState.selectedFaces);
+      this.selectionMode = nextState.selectionMode;
       
-      this.emitEvent('redoPerformed', nextState)
-      this.emitEvent('selectionChanged', this.getSelectionSummary())
-      return true
+      this.emitEvent('redoPerformed', nextState);
+      this.emitEvent('selectionChanged', this.getSelectionSummary());
+      return true;
     }
     
-    return false
+    return false;
   }
   
   /**
@@ -450,7 +450,7 @@ export class SelectionManager {
    * @returns {boolean} 是否可以撤销
    */
   canUndo() {
-    return this.historyIndex > 0
+    return this.historyIndex > 0;
   }
   
   /**
@@ -458,15 +458,15 @@ export class SelectionManager {
    * @returns {boolean} 是否可以重做
    */
   canRedo() {
-    return this.historyIndex < this.selectionHistory.length - 1
+    return this.historyIndex < this.selectionHistory.length - 1;
   }
   
   /**
    * 清除历史记录
    */
   clearHistory() {
-    this.selectionHistory = []
-    this.historyIndex = -1
+    this.selectionHistory = [];
+    this.historyIndex = -1;
   }
   
   /**
@@ -476,9 +476,9 @@ export class SelectionManager {
    */
   on(eventName: string, callback: (...args: any[]) => void) {
     if (!this.eventCallbacks.has(eventName)) {
-      this.eventCallbacks.set(eventName, [])
+      this.eventCallbacks.set(eventName, []);
     }
-    this.eventCallbacks.get(eventName).push(callback)
+    this.eventCallbacks.get(eventName).push(callback);
   }
   
   /**
@@ -487,12 +487,12 @@ export class SelectionManager {
    * @param {Function} callback - 回调函数
    */
   off(eventName: string, callback: (...args: any[]) => void) {
-    if (!this.eventCallbacks.has(eventName)) return
+    if (!this.eventCallbacks.has(eventName)) return;
     
-    const callbacks = this.eventCallbacks.get(eventName)
-    const index = callbacks.indexOf(callback)
+    const callbacks = this.eventCallbacks.get(eventName);
+    const index = callbacks.indexOf(callback);
     if (index !== -1) {
-      callbacks.splice(index, 1)
+      callbacks.splice(index, 1);
     }
   }
   
@@ -502,16 +502,16 @@ export class SelectionManager {
    * @param {...any} args - 事件参数
    */
   emitEvent(eventName: string, ...args: any[]) {
-    if (!this.eventCallbacks.has(eventName)) return
+    if (!this.eventCallbacks.has(eventName)) return;
     
-    const callbacks = this.eventCallbacks.get(eventName)
+    const callbacks = this.eventCallbacks.get(eventName);
     callbacks.forEach(callback => {
       try {
-        callback(...args)
+        callback(...args);
       } catch (error) {
-        console.error(`Error in SelectionManager event listener for ${eventName}:`, error)
+        console.error(`Error in SelectionManager event listener for ${eventName}:`, error);
       }
-    })
+    });
   }
   
   /**
@@ -519,25 +519,25 @@ export class SelectionManager {
    * @returns {Object} 统计信息
    */
   getSelectionStats() {
-    const meshGroups = new Map()
+    const meshGroups = new Map();
     
     // 按网格分组统计
     this.selectedFaces.forEach(faceInfo => {
-      const meshId = faceInfo.mesh.uuid
+      const meshId = faceInfo.mesh.uuid;
       if (!meshGroups.has(meshId)) {
         meshGroups.set(meshId, {
           mesh: faceInfo.mesh,
           faceCount: 0,
           totalArea: 0
-        })
+        });
       }
       
-      const group = meshGroups.get(meshId)
-      group.faceCount++
+      const group = meshGroups.get(meshId);
+      group.faceCount++;
       if (faceInfo.area) {
-        group.totalArea += faceInfo.area
+        group.totalArea += faceInfo.area;
       }
-    })
+    });
     
     return {
       totalFaces: this.selectedFaces.size,
@@ -547,6 +547,6 @@ export class SelectionManager {
       hasHistory: this.selectionHistory.length > 0,
       canUndo: this.canUndo(),
       canRedo: this.canRedo()
-    }
+    };
   }
 }

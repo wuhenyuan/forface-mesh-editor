@@ -1,4 +1,4 @@
-import type * as THREE from 'three'
+import type * as THREE from 'three';
 
 export interface ViewerClickEvent {
   target: THREE.Object3D | null

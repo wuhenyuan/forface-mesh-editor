@@ -27,20 +27,20 @@ const config: Record<string, any> = {
       type: 'base'
     }
   },
-    {
-      id: '文字1',
-      type: 'text',
-      textType: 'Ailias',
-      text: '我是文字内容',
-      size: 33,
-      depth: 3,
-      boolean: 'substract',
-      color: '#ff00ff',
-      position: [0, 0, 0],
-      rotate: [0, 0, 0],
-      wrap: 'surface Project',
-    }
+  {
+    id: '文字1',
+    type: 'text',
+    textType: 'Ailias',
+    text: '我是文字内容',
+    size: 33,
+    depth: 3,
+    boolean: 'substract',
+    color: '#ff00ff',
+    position: [0, 0, 0],
+    rotate: [0, 0, 0],
+    wrap: 'surface Project',
+  }
   ],
-}
+};
 
-export default config
+export default config;

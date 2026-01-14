@@ -77,146 +77,146 @@
 </template>
 
 <script>
-import { ref, reactive, nextTick, watch } from 'vue'
-import WorkspaceViewport from './WorkspaceViewport.vue'
+  import { ref, reactive, nextTick, watch } from 'vue';
+  import WorkspaceViewport from './WorkspaceViewport.vue';
 
-export default {
-  name: 'FacePickingDemo',
-  components: {
-    WorkspaceViewport
-  },
-  setup() {
-    // 控制状态
-    const showPanel = ref(true)
-    const showShortcuts = ref(true)
-    const autoScroll = ref(true)
-    const logContainer = ref(null)
+  export default {
+    name: 'FacePickingDemo',
+    components: {
+      WorkspaceViewport
+    },
+    setup() {
+      // 控制状态
+      const showPanel = ref(true);
+      const showShortcuts = ref(true);
+      const autoScroll = ref(true);
+      const logContainer = ref(null);
     
-    // 颜色配置
-    const selectionColor = ref('#ff6b35')
-    const hoverColor = ref('#4fc3f7')
+      // 颜色配置
+      const selectionColor = ref('#ff6b35');
+      const hoverColor = ref('#4fc3f7');
     
-    // 事件日志
-    const eventLogs = ref([])
-    const maxLogs = 100
+      // 事件日志
+      const eventLogs = ref([]);
+      const maxLogs = 100;
     
-    // 统计信息
-    const stats = reactive({
-      totalSelections: 0,
-      totalDeselections: 0,
-      totalHovers: 0,
-      totalClears: 0
-    })
+      // 统计信息
+      const stats = reactive({
+        totalSelections: 0,
+        totalDeselections: 0,
+        totalHovers: 0,
+        totalClears: 0
+      });
     
-    // 添加日志条目
-    const addLog = (type, message, data = null) => {
-      const log = {
-        time: new Date().toLocaleTimeString(),
-        type,
-        message,
-        data
-      }
+      // 添加日志条目
+      const addLog = (type, message, data = null) => {
+        const log = {
+          time: new Date().toLocaleTimeString(),
+          type,
+          message,
+          data
+        };
       
-      eventLogs.value.push(log)
+        eventLogs.value.push(log);
       
-      // 限制日志数量
-      if (eventLogs.value.length > maxLogs) {
-        eventLogs.value.shift()
-      }
+        // 限制日志数量
+        if (eventLogs.value.length > maxLogs) {
+          eventLogs.value.shift();
+        }
       
-      // 自动滚动到底部
-      if (autoScroll.value) {
-        nextTick(() => {
-          if (logContainer.value) {
-            logContainer.value.scrollTop = logContainer.value.scrollHeight
-          }
-        })
-      }
-    }
+        // 自动滚动到底部
+        if (autoScroll.value) {
+          nextTick(() => {
+            if (logContainer.value) {
+              logContainer.value.scrollTop = logContainer.value.scrollHeight;
+            }
+          });
+        }
+      };
     
-    // 面选择事件处理
-    const onFaceSelected = (faceInfo) => {
-      stats.totalSelections++
-      addLog('selection', `选中面: ${faceInfo.mesh.name}[${faceInfo.faceIndex}]`, faceInfo)
-    }
+      // 面选择事件处理
+      const onFaceSelected = (faceInfo) => {
+        stats.totalSelections++;
+        addLog('selection', `选中面: ${faceInfo.mesh.name}[${faceInfo.faceIndex}]`, faceInfo);
+      };
     
-    const onFaceDeselected = (faceInfo) => {
-      stats.totalDeselections++
-      addLog('deselection', `取消选择: ${faceInfo.mesh.name}[${faceInfo.faceIndex}]`, faceInfo)
-    }
+      const onFaceDeselected = (faceInfo) => {
+        stats.totalDeselections++;
+        addLog('deselection', `取消选择: ${faceInfo.mesh.name}[${faceInfo.faceIndex}]`, faceInfo);
+      };
     
-    const onSelectionCleared = () => {
-      stats.totalClears++
-      addLog('clear', '清除所有选择')
-    }
+      const onSelectionCleared = () => {
+        stats.totalClears++;
+        addLog('clear', '清除所有选择');
+      };
     
-    const onFaceHover = (faceInfo) => {
-      stats.totalHovers++
-      addLog('hover', `悬停: ${faceInfo.mesh.name}[${faceInfo.faceIndex}]`, faceInfo)
-    }
+      const onFaceHover = (faceInfo) => {
+        stats.totalHovers++;
+        addLog('hover', `悬停: ${faceInfo.mesh.name}[${faceInfo.faceIndex}]`, faceInfo);
+      };
     
-    const onFacePickingToggled = (enabled) => {
-      addLog('toggle', `面拾取${enabled ? '启用' : '禁用'}`)
-    }
+      const onFacePickingToggled = (enabled) => {
+        addLog('toggle', `面拾取${enabled ? '启用' : '禁用'}`);
+      };
     
-    // 控制方法
-    const resetDemo = () => {
-      // 重置统计
-      stats.totalSelections = 0
-      stats.totalDeselections = 0
-      stats.totalHovers = 0
-      stats.totalClears = 0
+      // 控制方法
+      const resetDemo = () => {
+        // 重置统计
+        stats.totalSelections = 0;
+        stats.totalDeselections = 0;
+        stats.totalHovers = 0;
+        stats.totalClears = 0;
       
-      // 清除日志
-      eventLogs.value = []
+        // 清除日志
+        eventLogs.value = [];
       
-      addLog('system', '演示已重置')
-    }
+        addLog('system', '演示已重置');
+      };
     
-    const clearLog = () => {
-      eventLogs.value = []
-    }
+      const clearLog = () => {
+        eventLogs.value = [];
+      };
     
-    const togglePanel = () => {
-      showPanel.value = !showPanel.value
-    }
+      const togglePanel = () => {
+        showPanel.value = !showPanel.value;
+      };
     
-    const toggleShortcuts = () => {
-      showShortcuts.value = !showShortcuts.value
-    }
+      const toggleShortcuts = () => {
+        showShortcuts.value = !showShortcuts.value;
+      };
     
-    // 监听自动滚动设置
-    watch(autoScroll, (newValue) => {
-      addLog('system', `自动滚动${newValue ? '启用' : '禁用'}`)
-    })
+      // 监听自动滚动设置
+      watch(autoScroll, (newValue) => {
+        addLog('system', `自动滚动${newValue ? '启用' : '禁用'}`);
+      });
     
-    // 初始化日志
-    addLog('system', '面拾取演示已启动')
+      // 初始化日志
+      addLog('system', '面拾取演示已启动');
     
-    return {
-      // 状态
-      showPanel,
-      showShortcuts,
-      autoScroll,
-      logContainer,
-      selectionColor,
-      hoverColor,
-      eventLogs,
-      stats,
+      return {
+        // 状态
+        showPanel,
+        showShortcuts,
+        autoScroll,
+        logContainer,
+        selectionColor,
+        hoverColor,
+        eventLogs,
+        stats,
       
-      // 方法
-      onFaceSelected,
-      onFaceDeselected,
-      onSelectionCleared,
-      onFaceHover,
-      onFacePickingToggled,
-      resetDemo,
-      clearLog,
-      togglePanel,
-      toggleShortcuts
+        // 方法
+        onFaceSelected,
+        onFaceDeselected,
+        onSelectionCleared,
+        onFaceHover,
+        onFacePickingToggled,
+        resetDemo,
+        clearLog,
+        togglePanel,
+        toggleShortcuts
+      };
     }
-  }
-}
+  };
 </script>
 
 <style scoped>

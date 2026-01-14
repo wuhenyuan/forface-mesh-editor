@@ -5,8 +5,8 @@
 export class TextPropertyPanel {
   [key: string]: any;
   constructor() {
-    this.currentTextObject = null
-    this.eventListeners = new Map()
+    this.currentTextObject = null;
+    this.eventListeners = new Map();
     
     // 属性配置
     this.properties = {
@@ -50,7 +50,7 @@ export class TextPropertyPanel {
         step: 0.01, 
         default: 0.1 
       }
-    }
+    };
   }
   
   /**
@@ -58,8 +58,8 @@ export class TextPropertyPanel {
    * @param {Object} textObject - 文字对象
    */
   setTextObject(textObject) {
-    this.currentTextObject = textObject
-    this.emit('textObjectChanged', textObject)
+    this.currentTextObject = textObject;
+    this.emit('textObjectChanged', textObject);
   }
   
   /**
@@ -67,15 +67,15 @@ export class TextPropertyPanel {
    * @returns {Object|null} 当前文字对象
    */
   getCurrentTextObject() {
-    return this.currentTextObject
+    return this.currentTextObject;
   }
   
   /**
    * 清除当前文字对象
    */
   clearTextObject() {
-    this.currentTextObject = null
-    this.emit('textObjectCleared')
+    this.currentTextObject = null;
+    this.emit('textObjectCleared');
   }
   
   /**
@@ -84,23 +84,23 @@ export class TextPropertyPanel {
    * @returns {any} 属性值
    */
   getPropertyValue(propertyName) {
-    if (!this.currentTextObject) return null
+    if (!this.currentTextObject) return null;
     
     switch (propertyName) {
       case 'content':
-        return this.currentTextObject.content
+        return this.currentTextObject.content;
       case 'color':
-        return '#' + this.currentTextObject.material.color.getHexString()
+        return '#' + this.currentTextObject.material.color.getHexString();
       case 'mode':
-        return this.currentTextObject.mode
+        return this.currentTextObject.mode;
       case 'font':
-        return this.currentTextObject.config.font
+        return this.currentTextObject.config.font;
       case 'size':
-        return this.currentTextObject.config.size
+        return this.currentTextObject.config.size;
       case 'thickness':
-        return this.currentTextObject.config.thickness
+        return this.currentTextObject.config.thickness;
       default:
-        return this.currentTextObject.config[propertyName]
+        return this.currentTextObject.config[propertyName];
     }
   }
   
@@ -110,16 +110,16 @@ export class TextPropertyPanel {
    * @param {any} value - 属性值
    */
   setPropertyValue(propertyName, value) {
-    if (!this.currentTextObject) return
+    if (!this.currentTextObject) return;
     
-    const oldValue = this.getPropertyValue(propertyName)
+    const oldValue = this.getPropertyValue(propertyName);
     
     // 验证值
-    const validation = this.validatePropertyValue(propertyName, value)
+    const validation = this.validatePropertyValue(propertyName, value);
     if (!validation.isValid) {
-      console.error('属性值验证失败:', validation.errors)
-      this.emit('validationError', { propertyName, value, errors: validation.errors })
-      return
+      console.error('属性值验证失败:', validation.errors);
+      this.emit('validationError', { propertyName, value, errors: validation.errors });
+      return;
     }
     
     // 发出属性变化事件
@@ -128,36 +128,36 @@ export class TextPropertyPanel {
       propertyName, 
       oldValue, 
       newValue: value 
-    })
+    });
     
     // 更新属性
     switch (propertyName) {
       case 'content':
-        this.emit('contentChangeRequested', { textObject: this.currentTextObject, newContent: value })
-        break
+        this.emit('contentChangeRequested', { textObject: this.currentTextObject, newContent: value });
+        break;
       case 'color':
-        this.emit('colorChangeRequested', { textObject: this.currentTextObject, newColor: value })
-        break
+        this.emit('colorChangeRequested', { textObject: this.currentTextObject, newColor: value });
+        break;
       case 'mode':
-        this.emit('modeChangeRequested', { textObject: this.currentTextObject, newMode: value })
-        break
+        this.emit('modeChangeRequested', { textObject: this.currentTextObject, newMode: value });
+        break;
       case 'font':
       case 'size':
       case 'thickness':
-        this.currentTextObject.config[propertyName] = value
+        this.currentTextObject.config[propertyName] = value;
         this.emit('configChangeRequested', { 
           textObject: this.currentTextObject, 
           propertyName, 
           newValue: value 
-        })
-        break
+        });
+        break;
       default:
-        this.currentTextObject.config[propertyName] = value
+        this.currentTextObject.config[propertyName] = value;
         this.emit('configChangeRequested', { 
           textObject: this.currentTextObject, 
           propertyName, 
           newValue: value 
-        })
+        });
     }
     
     // 发出属性已变化事件
@@ -166,7 +166,7 @@ export class TextPropertyPanel {
       propertyName, 
       oldValue, 
       newValue: value 
-    })
+    });
   }
   
   /**
@@ -176,59 +176,59 @@ export class TextPropertyPanel {
    * @returns {Object} 验证结果
    */
   validatePropertyValue(propertyName, value) {
-    const property = this.properties[propertyName]
+    const property = this.properties[propertyName];
     if (!property) {
-      return { isValid: false, errors: ['未知属性'] }
+      return { isValid: false, errors: ['未知属性'] };
     }
     
-    const errors = []
+    const errors = [];
     
     // 必填验证
     if (property.required && (value === null || value === undefined || value === '')) {
-      errors.push('此属性为必填项')
+      errors.push('此属性为必填项');
     }
     
     // 类型验证
     switch (property.type) {
       case 'text':
         if (typeof value !== 'string') {
-          errors.push('必须是文本类型')
+          errors.push('必须是文本类型');
         } else if (value.trim().length === 0) {
-          errors.push('文本内容不能为空')
+          errors.push('文本内容不能为空');
         }
-        break
+        break;
         
       case 'number':
         if (typeof value !== 'number' || isNaN(value)) {
-          errors.push('必须是数字类型')
+          errors.push('必须是数字类型');
         } else {
           if (property.min !== undefined && value < property.min) {
-            errors.push(`值不能小于 ${property.min}`)
+            errors.push(`值不能小于 ${property.min}`);
           }
           if (property.max !== undefined && value > property.max) {
-            errors.push(`值不能大于 ${property.max}`)
+            errors.push(`值不能大于 ${property.max}`);
           }
         }
-        break
+        break;
         
       case 'color':
         if (typeof value !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(value)) {
-          errors.push('必须是有效的颜色值（如 #FF0000）')
+          errors.push('必须是有效的颜色值（如 #FF0000）');
         }
-        break
+        break;
         
       case 'select':
-        const validOptions = property.options.map(opt => opt.value)
+        const validOptions = property.options.map(opt => opt.value);
         if (!validOptions.includes(value)) {
-          errors.push(`值必须是以下选项之一: ${validOptions.join(', ')}`)
+          errors.push(`值必须是以下选项之一: ${validOptions.join(', ')}`);
         }
-        break
+        break;
     }
     
     return {
       isValid: errors.length === 0,
       errors
-    }
+    };
   }
   
   /**
@@ -236,7 +236,7 @@ export class TextPropertyPanel {
    * @returns {Object} 属性配置
    */
   getPropertyConfigs() {
-    return { ...this.properties }
+    return { ...this.properties };
   }
   
   /**
@@ -245,7 +245,7 @@ export class TextPropertyPanel {
    * @returns {Object|null} 属性配置
    */
   getPropertyConfig(propertyName) {
-    return this.properties[propertyName] || null
+    return this.properties[propertyName] || null;
   }
   
   /**
@@ -253,14 +253,14 @@ export class TextPropertyPanel {
    * @returns {Object} 属性值对象
    */
   getAllPropertyValues() {
-    if (!this.currentTextObject) return {}
+    if (!this.currentTextObject) return {};
     
-    const values: Record<string, any> = {}
+    const values: Record<string, any> = {};
     Object.keys(this.properties).forEach(propertyName => {
-      values[propertyName] = this.getPropertyValue(propertyName)
-    })
+      values[propertyName] = this.getPropertyValue(propertyName);
+    });
     
-    return values
+    return values;
   }
   
   /**
@@ -268,13 +268,13 @@ export class TextPropertyPanel {
    * @param {Object} properties - 属性值对象
    */
   setAllPropertyValues(properties) {
-    if (!this.currentTextObject || !properties) return
+    if (!this.currentTextObject || !properties) return;
     
     Object.entries(properties).forEach(([propertyName, value]) => {
       if (this.properties[propertyName]) {
-        this.setPropertyValue(propertyName, value)
+        this.setPropertyValue(propertyName, value);
       }
-    })
+    });
   }
   
   /**
@@ -283,18 +283,18 @@ export class TextPropertyPanel {
    */
   resetToDefault(propertyName) {
     if (propertyName) {
-      const property = this.properties[propertyName]
+      const property = this.properties[propertyName];
       if (property && property.default !== undefined) {
-        this.setPropertyValue(propertyName, property.default)
+        this.setPropertyValue(propertyName, property.default);
       }
     } else {
       // 重置所有属性
       Object.entries(this.properties as Record<string, any>).forEach(([name, config]) => {
-        const cfg = config as any
+        const cfg = config as any;
         if (cfg.default !== undefined) {
-          this.setPropertyValue(name, cfg.default)
+          this.setPropertyValue(name, cfg.default);
         }
-      })
+      });
     }
   }
   
@@ -304,10 +304,10 @@ export class TextPropertyPanel {
    * @returns {boolean} 是否已修改
    */
   isPropertyModified(propertyName) {
-    const currentValue = this.getPropertyValue(propertyName)
-    const defaultValue = this.properties[propertyName]?.default
+    const currentValue = this.getPropertyValue(propertyName);
+    const defaultValue = this.properties[propertyName]?.default;
     
-    return currentValue !== defaultValue
+    return currentValue !== defaultValue;
   }
   
   /**
@@ -317,7 +317,7 @@ export class TextPropertyPanel {
   getModifiedProperties() {
     return Object.keys(this.properties).filter(propertyName => 
       this.isPropertyModified(propertyName)
-    )
+    );
   }
   
   /**
@@ -329,7 +329,7 @@ export class TextPropertyPanel {
       return {
         hasTextObject: false,
         properties: []
-      }
+      };
     }
     
     const properties = Object.entries(this.properties as Record<string, any>).map(([name, config]) => ({
@@ -337,14 +337,14 @@ export class TextPropertyPanel {
       ...(config as any),
       value: this.getPropertyValue(name),
       isModified: this.isPropertyModified(name)
-    }))
+    }));
     
     return {
       hasTextObject: true,
       textObjectId: this.currentTextObject.id,
       textObjectName: this.currentTextObject.content || '未命名文字',
       properties
-    }
+    };
   }
   
   /**
@@ -354,9 +354,9 @@ export class TextPropertyPanel {
    */
   on(eventName, callback) {
     if (!this.eventListeners.has(eventName)) {
-      this.eventListeners.set(eventName, [])
+      this.eventListeners.set(eventName, []);
     }
-    this.eventListeners.get(eventName).push(callback)
+    this.eventListeners.get(eventName).push(callback);
   }
   
   /**
@@ -365,12 +365,12 @@ export class TextPropertyPanel {
    * @param {Function} callback - 回调函数
    */
   off(eventName, callback) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
-    const index = listeners.indexOf(callback)
+    const listeners = this.eventListeners.get(eventName);
+    const index = listeners.indexOf(callback);
     if (index !== -1) {
-      listeners.splice(index, 1)
+      listeners.splice(index, 1);
     }
   }
   
@@ -380,24 +380,24 @@ export class TextPropertyPanel {
    * @param {...any} args - 事件参数
    */
   emit(eventName, ...args) {
-    if (!this.eventListeners.has(eventName)) return
+    if (!this.eventListeners.has(eventName)) return;
     
-    const listeners = this.eventListeners.get(eventName)
+    const listeners = this.eventListeners.get(eventName);
     listeners.forEach(callback => {
       try {
-        callback(...args)
+        callback(...args);
       } catch (error) {
-        console.error(`Error in event listener for ${eventName}:`, error)
+        console.error(`Error in event listener for ${eventName}:`, error);
       }
-    })
+    });
   }
   
   /**
    * 销毁属性面板，清理资源
    */
   destroy() {
-    this.currentTextObject = null
-    this.eventListeners.clear()
-    console.log('文字属性面板已销毁')
+    this.currentTextObject = null;
+    this.eventListeners.clear();
+    console.log('文字属性面板已销毁');
   }
 }

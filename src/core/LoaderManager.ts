@@ -7,9 +7,9 @@
  * 2. 加载完成后触发特征检测
  * 3. 返回标准化的模型数据
  */
-import * as THREE from 'three'
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import * as THREE from 'three';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 // import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader'
 // import JSZip from 'jszip'  // 需要时再引入
 
@@ -30,31 +30,31 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
  */
 
 export class LoaderManager {
-  stlLoader: any
-  objLoader: any
-  featureDetector: any
-  loadCounter: number
-  loadedModels: Map<string, any>
-  onProgress: ((...args: any[]) => void) | null
-  onError: ((error: any) => void) | null
+  stlLoader: any;
+  objLoader: any;
+  featureDetector: any;
+  loadCounter: number;
+  loadedModels: Map<string, any>;
+  onProgress: ((...args: any[]) => void) | null;
+  onError: ((error: any) => void) | null;
 
   constructor() {
     // Loaders
-    this.stlLoader = new STLLoader()
-    this.objLoader = new OBJLoader()
+    this.stlLoader = new STLLoader();
+    this.objLoader = new OBJLoader();
     
     // 特征检测器（由 Viewer 注入）
-    this.featureDetector = null
+    this.featureDetector = null;
     
     // 加载计数器（用于生成 ID）
-    this.loadCounter = 0
+    this.loadCounter = 0;
     
     // 已加载模型缓存
-    this.loadedModels = new Map() // modelId -> LoadResult
+    this.loadedModels = new Map(); // modelId -> LoadResult
     
     // 事件回调
-    this.onProgress = null
-    this.onError = null
+    this.onProgress = null;
+    this.onError = null;
   }
 
   /**
@@ -62,7 +62,7 @@ export class LoaderManager {
    * @param {FeatureDetector} detector 
    */
   setFeatureDetector(detector: any) {
-    this.featureDetector = detector
+    this.featureDetector = detector;
   }
 
   /**
@@ -77,40 +77,40 @@ export class LoaderManager {
       detectFeatures = true,
       centerModel = true,
       material = null
-    } = options
+    } = options;
 
     // 判断文件格式
-    const format = this._detectFormat(source)
+    const format = this._detectFormat(source);
     
-    console.log(`[LoaderManager] 加载模型: ${modelId}, 格式: ${format}`)
+    console.log(`[LoaderManager] 加载模型: ${modelId}, 格式: ${format}`);
 
-    let model
+    let model;
     try {
       switch (format) {
         case 'stl':
-          model = await this._loadSTL(source, material)
-          break
+          model = await this._loadSTL(source, material);
+          break;
         case 'obj':
-          model = await this._loadOBJ(source, material)
-          break
+          model = await this._loadOBJ(source, material);
+          break;
         case 'zip':
-          model = await this._loadZipOBJ(source, material)
-          break
+          model = await this._loadZipOBJ(source, material);
+          break;
         default:
-          throw new Error(`不支持的文件格式: ${format}`)
+          throw new Error(`不支持的文件格式: ${format}`);
       }
     } catch (error) {
-      this.onError?.(error)
-      throw error
+      this.onError?.(error);
+      throw error;
     }
 
     // 居中模型
     if (centerModel) {
-      this._centerModel(model)
+      this._centerModel(model);
     }
 
     // 生成元数据
-    const metadata = this._extractMetadata(model)
+    const metadata = this._extractMetadata(model);
 
     // 构建结果
     const result = {
@@ -118,18 +118,18 @@ export class LoaderManager {
       modelId,
       format,
       metadata
-    }
+    };
 
     // 缓存
-    this.loadedModels.set(modelId, result)
+    this.loadedModels.set(modelId, result);
 
     // 特征检测
     if (detectFeatures && this.featureDetector) {
-      console.log(`[LoaderManager] 开始特征检测: ${modelId}`)
-      await this.featureDetector.detect(model, modelId)
+      console.log(`[LoaderManager] 开始特征检测: ${modelId}`);
+      await this.featureDetector.detect(model, modelId);
     }
 
-    return result
+    return result;
   }
 
   /**
@@ -139,30 +139,30 @@ export class LoaderManager {
   async _loadSTL(source: any, material: any) {
     return new Promise((resolve, reject) => {
       const onLoad = (geometry) => {
-        geometry.computeVertexNormals()
+        geometry.computeVertexNormals();
         
         const mat = material || new THREE.MeshStandardMaterial({
           color: 0xcccccc,
           metalness: 0.3,
           roughness: 0.6
-        })
+        });
         
-        const mesh = new THREE.Mesh(geometry, mat)
-        resolve(mesh)
-      }
+        const mesh = new THREE.Mesh(geometry, mat);
+        resolve(mesh);
+      };
 
       if (source instanceof Blob || source instanceof File) {
-        const reader = new FileReader()
+        const reader = new FileReader();
         reader.onload = (e) => {
-          const geometry = this.stlLoader.parse((e as any)?.target?.result)
-          onLoad(geometry)
-        }
-        reader.onerror = reject
-        reader.readAsArrayBuffer(source)
+          const geometry = this.stlLoader.parse((e as any)?.target?.result);
+          onLoad(geometry);
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(source);
       } else {
-        this.stlLoader.load(source, onLoad, this.onProgress, reject)
+        this.stlLoader.load(source, onLoad, this.onProgress, reject);
       }
-    })
+    });
   }
 
   /**
@@ -176,25 +176,25 @@ export class LoaderManager {
         if (material) {
           group.traverse((child) => {
             if (child.isMesh) {
-              child.material = material
+              child.material = material;
             }
-          })
+          });
         }
-        resolve(group)
-      }
+        resolve(group);
+      };
 
       if (source instanceof Blob || source instanceof File) {
-        const reader = new FileReader()
+        const reader = new FileReader();
         reader.onload = (e) => {
-          const group = this.objLoader.parse((e as any)?.target?.result)
-          onLoad(group)
-        }
-        reader.onerror = reject
-        reader.readAsText(source)
+          const group = this.objLoader.parse((e as any)?.target?.result);
+          onLoad(group);
+        };
+        reader.onerror = reject;
+        reader.readAsText(source);
       } else {
-        this.objLoader.load(source, onLoad, this.onProgress, reject)
+        this.objLoader.load(source, onLoad, this.onProgress, reject);
       }
-    })
+    });
   }
 
   /**
@@ -202,47 +202,47 @@ export class LoaderManager {
    * @private
    */
   async _loadZipOBJ(source: any, material: any) {
-    const { default: JSZip } = await import('jszip')
+    const { default: JSZip } = await import('jszip');
 
     const zipInput =
       typeof source === 'string'
         ? await this._fetchArrayBuffer(source)
-        : source
+        : source;
 
-    const zip = await JSZip.loadAsync(zipInput)
-    const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir)
+    const zip = await JSZip.loadAsync(zipInput);
+    const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
 
-    const objName = fileNames.find((n) => n.toLowerCase().endsWith('.obj'))
-    const stlName = fileNames.find((n) => n.toLowerCase().endsWith('.stl'))
-    const targetName = objName || stlName
+    const objName = fileNames.find((n) => n.toLowerCase().endsWith('.obj'));
+    const stlName = fileNames.find((n) => n.toLowerCase().endsWith('.stl'));
+    const targetName = objName || stlName;
 
     if (!targetName) {
-      throw new Error('ZIP 中未找到 .obj 或 .stl 文件')
+      throw new Error('ZIP 中未找到 .obj 或 .stl 文件');
     }
 
     if (targetName.toLowerCase().endsWith('.stl')) {
-      const buffer = await zip.file(targetName).async('arraybuffer')
-      const geometry = this.stlLoader.parse(buffer)
-      geometry.computeVertexNormals()
+      const buffer = await zip.file(targetName).async('arraybuffer');
+      const geometry = this.stlLoader.parse(buffer);
+      geometry.computeVertexNormals();
 
       const mat = material || new THREE.MeshStandardMaterial({
         color: 0xcccccc,
         metalness: 0.3,
         roughness: 0.6
-      })
-      return new THREE.Mesh(geometry, mat)
+      });
+      return new THREE.Mesh(geometry, mat);
     }
 
-    const objText = await zip.file(targetName).async('text')
-    const group = this.objLoader.parse(objText)
+    const objText = await zip.file(targetName).async('text');
+    const group = this.objLoader.parse(objText);
 
     if (material) {
       group.traverse((child) => {
-        if (child.isMesh) child.material = material
-      })
+        if (child.isMesh) child.material = material;
+      });
     }
 
-    return group
+    return group;
     
     /*
     const zip = await JSZip.loadAsync(source)
@@ -277,11 +277,11 @@ export class LoaderManager {
   }
 
   async _fetchArrayBuffer(url: string) {
-    const res = await fetch(url)
+    const res = await fetch(url);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      throw new Error(`HTTP ${res.status} ${res.statusText}`);
     }
-    return await res.arrayBuffer()
+    return await res.arrayBuffer();
   }
 
   /**
@@ -289,25 +289,25 @@ export class LoaderManager {
    * @private
    */
   _detectFormat(source: any) {
-    let filename = ''
+    let filename = '';
     
     if (typeof source === 'string') {
-      filename = source.toLowerCase()
+      filename = source.toLowerCase();
     } else if (source instanceof File) {
-      filename = source.name.toLowerCase()
+      filename = source.name.toLowerCase();
     } else if (source instanceof Blob) {
-      const type = (source.type || '').toLowerCase()
-      if (type.includes('zip')) return 'zip'
-      if (type.includes('stl')) return 'stl'
-      if (type.includes('obj')) return 'obj'
-      return 'unknown'
+      const type = (source.type || '').toLowerCase();
+      if (type.includes('zip')) return 'zip';
+      if (type.includes('stl')) return 'stl';
+      if (type.includes('obj')) return 'obj';
+      return 'unknown';
     }
 
-    if (filename.endsWith('.stl')) return 'stl'
-    if (filename.endsWith('.obj')) return 'obj'
-    if (filename.endsWith('.zip')) return 'zip'
+    if (filename.endsWith('.stl')) return 'stl';
+    if (filename.endsWith('.obj')) return 'obj';
+    if (filename.endsWith('.zip')) return 'zip';
     
-    return 'unknown'
+    return 'unknown';
   }
 
   /**
@@ -315,14 +315,14 @@ export class LoaderManager {
    * @private
    */
   _centerModel(model: any) {
-    const box = new THREE.Box3().setFromObject(model)
-    const center = box.getCenter(new THREE.Vector3())
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
     
-    model.position.sub(center)
+    model.position.sub(center);
     
     // 将模型底部放在 y=0
-    const newBox = new THREE.Box3().setFromObject(model)
-    model.position.y -= newBox.min.y
+    const newBox = new THREE.Box3().setFromObject(model);
+    model.position.y -= newBox.min.y;
   }
 
   /**
@@ -330,21 +330,21 @@ export class LoaderManager {
    * @private
    */
   _extractMetadata(model: any) {
-    let vertexCount = 0
-    let faceCount = 0
-    const boundingBox = new THREE.Box3().setFromObject(model)
-    const size = boundingBox.getSize(new THREE.Vector3())
+    let vertexCount = 0;
+    let faceCount = 0;
+    const boundingBox = new THREE.Box3().setFromObject(model);
+    const size = boundingBox.getSize(new THREE.Vector3());
 
     model.traverse((child) => {
       if (child.isMesh && child.geometry) {
-        const geo = child.geometry
-        const positions = geo.getAttribute('position')
+        const geo = child.geometry;
+        const positions = geo.getAttribute('position');
         if (positions) {
-          vertexCount += positions.count
-          faceCount += geo.index ? geo.index.count / 3 : positions.count / 3
+          vertexCount += positions.count;
+          faceCount += geo.index ? geo.index.count / 3 : positions.count / 3;
         }
       }
-    })
+    });
 
     return {
       vertexCount,
@@ -354,7 +354,7 @@ export class LoaderManager {
         max: boundingBox.max.toArray()
       },
       size: size.toArray()
-    }
+    };
   }
 
   /**
@@ -362,7 +362,7 @@ export class LoaderManager {
    * @private
    */
   _generateModelId() {
-    return `model_${++this.loadCounter}_${Date.now()}`
+    return `model_${++this.loadCounter}_${Date.now()}`;
   }
 
   /**
@@ -371,7 +371,7 @@ export class LoaderManager {
    * @returns {LoadResult|null}
    */
   getModel(modelId: string) {
-    return this.loadedModels.get(modelId) || null
+    return this.loadedModels.get(modelId) || null;
   }
 
   /**
@@ -379,11 +379,11 @@ export class LoaderManager {
    * @param {string} modelId 
    */
   removeModel(modelId: string) {
-    const result = this.loadedModels.get(modelId)
+    const result = this.loadedModels.get(modelId);
     if (result) {
       // 清理特征数据
-      this.featureDetector?.clearFeatures(modelId)
-      this.loadedModels.delete(modelId)
+      this.featureDetector?.clearFeatures(modelId);
+      this.loadedModels.delete(modelId);
     }
   }
 
@@ -391,9 +391,9 @@ export class LoaderManager {
    * 清理所有
    */
   dispose() {
-    this.loadedModels.clear()
-    this.featureDetector = null
+    this.loadedModels.clear();
+    this.featureDetector = null;
   }
 }
 
-export default LoaderManager
+export default LoaderManager;

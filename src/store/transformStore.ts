@@ -7,7 +7,7 @@
  * 2. Three.js 的 Object3D 层级自动处理世界变换
  * 3. Store 只管理数据，实际变换由 Viewer 应用
  */
-import Vue from 'vue'
+import Vue from 'vue';
 
 // ==================== 变换数据结构 ====================
 /**
@@ -18,7 +18,7 @@ const createDefaultTransform = () => ({
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 0, y: 0, z: 0 },  // 欧拉角（度数）
   scale: { x: 1, y: 1, z: 1 }
-})
+});
 
 /**
  * 创建统一缩放的变换
@@ -28,7 +28,7 @@ const createUniformScaleTransform = (uniformScale = 1) => ({
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 0, y: 0, z: 0 },
   scale: { x: uniformScale, y: uniformScale, z: uniformScale }
-})
+});
 
 // ==================== 核心状态 ====================
 const state = Vue.observable({
@@ -63,19 +63,19 @@ const state = Vue.observable({
   
   // 变换空间
   transformSpace: 'local'  // 'local' | 'world'
-})
+});
 
 // ==================== Getters ====================
 const getters = {
   // 获取当前选中目标的变换数据
   activeTransform: () => {
-    const target = state.activeTarget
-    if (!target) return null
+    const target = state.activeTarget;
+    if (!target) return null;
     
-    if (target === 'scene') return state.scene
-    if (target === 'mainModel') return state.mainModel
-    if (target === 'base') return state.base
-    return state.texts[target] || null
+    if (target === 'scene') return state.scene;
+    if (target === 'mainModel') return state.mainModel;
+    if (target === 'base') return state.base;
+    return state.texts[target] || null;
   },
   
   // 获取所有文字的变换列表
@@ -83,38 +83,38 @@ const getters = {
     return Object.entries(state.texts).map(([id, transform]) => ({
       id,
       ...transform
-    }))
+    }));
   },
   
   // 检查目标是否被锁定
   isTargetLocked: (target) => {
-    if (target === 'mainModel') return state.mainModel.locked
-    if (target === 'base') return state.base.locked
-    return state.texts[target]?.locked || false
+    if (target === 'mainModel') return state.mainModel.locked;
+    if (target === 'base') return state.base.locked;
+    return state.texts[target]?.locked || false;
   }
-}
+};
 
 // ==================== Actions ====================
 const actions = {
   // --- 选中目标 ---
   setActiveTarget(target) {
-    state.activeTarget = target
+    state.activeTarget = target;
   },
   
   clearActiveTarget() {
-    state.activeTarget = null
+    state.activeTarget = null;
   },
   
   // --- 变换模式 ---
   setTransformMode(mode) {
     if (['translate', 'rotate', 'scale'].includes(mode)) {
-      state.transformMode = mode
+      state.transformMode = mode;
     }
   },
   
   setTransformSpace(space) {
     if (['local', 'world'].includes(space)) {
-      state.transformSpace = space
+      state.transformSpace = space;
     }
   },
   
@@ -125,24 +125,24 @@ const actions = {
    * @param {Partial<Transform>} transform - 要更新的变换属性
    */
   updateTransform(target, transform) {
-    let targetObj = this._getTargetObject(target)
-    if (!targetObj) return
+    let targetObj = this._getTargetObject(target);
+    if (!targetObj) return;
     
     // 检查是否锁定
     if (targetObj.locked) {
-      console.warn(`Target ${target} is locked`)
-      return
+      console.warn(`Target ${target} is locked`);
+      return;
     }
     
     // 合并更新
     if (transform.position) {
-      Object.assign(targetObj.position, transform.position)
+      Object.assign(targetObj.position, transform.position);
     }
     if (transform.rotation) {
-      Object.assign(targetObj.rotation, transform.rotation)
+      Object.assign(targetObj.rotation, transform.rotation);
     }
     if (transform.scale) {
-      Object.assign(targetObj.scale, transform.scale)
+      Object.assign(targetObj.scale, transform.scale);
     }
   },
   
@@ -152,7 +152,7 @@ const actions = {
   setPosition(target, x, y, z) {
     this.updateTransform(target, { 
       position: { x, y, z } 
-    })
+    });
   },
   
   /**
@@ -161,7 +161,7 @@ const actions = {
   setRotation(target, x, y, z) {
     this.updateTransform(target, { 
       rotation: { x, y, z } 
-    })
+    });
   },
   
   /**
@@ -170,14 +170,14 @@ const actions = {
   setScale(target, x, y, z) {
     this.updateTransform(target, { 
       scale: { x, y, z } 
-    })
+    });
   },
   
   /**
    * 设置统一缩放
    */
   setUniformScale(target, scale) {
-    this.setScale(target, scale, scale, scale)
+    this.setScale(target, scale, scale, scale);
   },
   
   // --- 文字变换管理 ---
@@ -191,7 +191,7 @@ const actions = {
       surfaceType = 'plane',  // 'plane' | 'cylinder'
       surfaceId = null,       // 关联的表面 ID
       initialTransform = null
-    } = options
+    } = options;
     
     Vue.set(state.texts, textId, {
       ...createDefaultTransform(),
@@ -206,16 +206,16 @@ const actions = {
         arcAngle: 90,      // 弧度范围（度）
         curveSegments: 20  // 曲线分段数
       } : {})
-    })
+    });
   },
   
   /**
    * 移除文字变换
    */
   removeTextTransform(textId) {
-    Vue.delete(state.texts, textId)
+    Vue.delete(state.texts, textId);
     if (state.activeTarget === textId) {
-      state.activeTarget = null
+      state.activeTarget = null;
     }
   },
   
@@ -223,42 +223,42 @@ const actions = {
    * 更新文字的表面参数（圆柱面专用）
    */
   updateTextSurfaceParams(textId, params) {
-    const textTransform = state.texts[textId]
-    if (!textTransform) return
+    const textTransform = state.texts[textId];
+    if (!textTransform) return;
     
     if (params.arcAngle !== undefined) {
-      textTransform.arcAngle = params.arcAngle
+      textTransform.arcAngle = params.arcAngle;
     }
     if (params.curveSegments !== undefined) {
-      textTransform.curveSegments = params.curveSegments
+      textTransform.curveSegments = params.curveSegments;
     }
   },
   
   // --- 锁定/解锁 ---
   toggleLock(target) {
-    const targetObj = this._getTargetObject(target)
+    const targetObj = this._getTargetObject(target);
     if (targetObj && 'locked' in targetObj) {
-      targetObj.locked = !targetObj.locked
+      targetObj.locked = !targetObj.locked;
     }
   },
   
   // --- 可见性 ---
   toggleVisibility(target) {
-    const targetObj = this._getTargetObject(target)
+    const targetObj = this._getTargetObject(target);
     if (targetObj && 'visible' in targetObj) {
-      targetObj.visible = !targetObj.visible
+      targetObj.visible = !targetObj.visible;
     }
   },
   
   // --- 重置变换 ---
   resetTransform(target) {
-    const targetObj = this._getTargetObject(target)
-    if (!targetObj || targetObj.locked) return
+    const targetObj = this._getTargetObject(target);
+    if (!targetObj || targetObj.locked) return;
     
-    const defaults = createDefaultTransform()
-    targetObj.position = { ...defaults.position }
-    targetObj.rotation = { ...defaults.rotation }
-    targetObj.scale = { ...defaults.scale }
+    const defaults = createDefaultTransform();
+    targetObj.position = { ...defaults.position };
+    targetObj.rotation = { ...defaults.rotation };
+    targetObj.scale = { ...defaults.scale };
   },
   
   // --- 导出用：获取完整变换数据 ---
@@ -288,49 +288,49 @@ const actions = {
           } : {})
         }])
       )
-    }
+    };
   },
   
   // --- 从数据恢复 ---
   loadFromData(data) {
     if (data.scene) {
-      Object.assign(state.scene, data.scene)
+      Object.assign(state.scene, data.scene);
     }
     if (data.mainModel) {
-      Object.assign(state.mainModel, data.mainModel)
+      Object.assign(state.mainModel, data.mainModel);
     }
     if (data.base) {
-      Object.assign(state.base, data.base)
+      Object.assign(state.base, data.base);
     }
     if (data.texts) {
-      state.texts = {}
+      state.texts = {};
       Object.entries(data.texts).forEach(([id, transform]) => {
         Vue.set(state.texts, id, {
           ...createDefaultTransform(),
           ...(transform as any),
           visible: true,
           locked: false
-        })
-      })
+        });
+      });
     }
   },
   
   // --- 内部方法 ---
   _getTargetObject(target) {
-    if (target === 'scene') return state.scene
-    if (target === 'mainModel') return state.mainModel
-    if (target === 'base') return state.base
-    return state.texts[target]
+    if (target === 'scene') return state.scene;
+    if (target === 'mainModel') return state.mainModel;
+    if (target === 'base') return state.base;
+    return state.texts[target];
   }
-}
+};
 
 // ==================== 导出 ====================
 export const useTransformStore = () => ({
   state,
   ...getters,
   ...actions
-})
+});
 
-export { state, getters, actions, createDefaultTransform }
+export { state, getters, actions, createDefaultTransform };
 
-export default { state, getters, actions, useTransformStore }
+export default { state, getters, actions, useTransformStore };

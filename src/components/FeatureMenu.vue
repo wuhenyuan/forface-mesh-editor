@@ -35,70 +35,70 @@
 </template>
 
 <script>
-import { computed, watch } from 'vue'
-import { useEditorStore } from '../store'
+  import { computed, watch } from 'vue';
+  import { useEditorStore } from '../store';
 
-export default {
-  name: 'FeatureMenu',
-  emits: ['select'],
-  setup(props, { emit }) {
-    const store = useEditorStore()
+  export default {
+    name: 'FeatureMenu',
+    emits: ['select'],
+    setup(props, { emit }) {
+      const store = useEditorStore();
     
-    const keyword = computed({
-      get: () => store.state.menuKeyword,
-      set: (val) => store.setMenuKeyword(val)
-    })
+      const keyword = computed({
+        get: () => store.state.menuKeyword,
+        set: (val) => store.setMenuKeyword(val)
+      });
     
-    const loading = computed(() => store.state.menuLoading)
-    const displayItems = computed(() => store.state.menuItems)
+      const loading = computed(() => store.state.menuLoading);
+      const displayItems = computed(() => store.state.menuItems);
     
-    // 搜索处理
-    const handleSearch = async (value) => {
-      store.setMenuLoading(true)
+      // 搜索处理
+      const handleSearch = async (value) => {
+        store.setMenuLoading(true);
       
-      // 模拟搜索延迟
-      await new Promise(resolve => setTimeout(resolve, 300))
+        // 模拟搜索延迟
+        await new Promise(resolve => setTimeout(resolve, 300));
       
-      // 模拟数据
-      const allData = [
-        { id: 'b1', name: '圆形底座', thumbnail: '' },
-        { id: 'b2', name: '方形底座', thumbnail: '' },
-        { id: 'b3', name: '心形底座', thumbnail: '' },
-        { id: 'b4', name: '星形底座', thumbnail: '' },
-        { id: 'b5', name: '六边形底座', thumbnail: '' },
-        { id: 'b6', name: '椭圆底座', thumbnail: '' }
-      ]
+        // 模拟数据
+        const allData = [
+          { id: 'b1', name: '圆形底座', thumbnail: '' },
+          { id: 'b2', name: '方形底座', thumbnail: '' },
+          { id: 'b3', name: '心形底座', thumbnail: '' },
+          { id: 'b4', name: '星形底座', thumbnail: '' },
+          { id: 'b5', name: '六边形底座', thumbnail: '' },
+          { id: 'b6', name: '椭圆底座', thumbnail: '' }
+        ];
       
-      if (!value) {
-        store.setMenuItems(allData.slice(0, 4))
-      } else {
-        store.setMenuItems(allData.filter(item => item.name.includes(value)))
-      }
+        if (!value) {
+          store.setMenuItems(allData.slice(0, 4));
+        } else {
+          store.setMenuItems(allData.filter(item => item.name.includes(value)));
+        }
       
-      store.setMenuLoading(false)
+        store.setMenuLoading(false);
+      };
+    
+      // 选择菜单项
+      const handleSelect = (item) => {
+        emit('select', item, store.state.currentFeature);
+        console.log('选中菜单项:', item.name);
+      };
+    
+      // 功能切换时清空搜索并加载数据
+      watch(() => store.state.currentFeature, () => {
+        store.setMenuKeyword('');
+        handleSearch('');
+      }, { immediate: true });
+    
+      return { 
+        keyword, 
+        loading,
+        displayItems,
+        handleSearch,
+        handleSelect
+      };
     }
-    
-    // 选择菜单项
-    const handleSelect = (item) => {
-      emit('select', item, store.state.currentFeature)
-      console.log('选中菜单项:', item.name)
-    }
-    
-    // 功能切换时清空搜索并加载数据
-    watch(() => store.state.currentFeature, () => {
-      store.setMenuKeyword('')
-      handleSearch('')
-    }, { immediate: true })
-    
-    return { 
-      keyword, 
-      loading,
-      displayItems,
-      handleSearch,
-      handleSelect
-    }
-  }
-}
+  };
 </script>
 
 <style scoped>

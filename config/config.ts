@@ -1,4 +1,4 @@
-export const CONFIG_SCHEMA_VERSION = 3
+export const CONFIG_SCHEMA_VERSION = 3;
 
 /**
  * 内部归一化结构（运行时使用）
@@ -65,11 +65,11 @@ const INTERNAL_DEFAULT_CONFIG = {
   lookupTable: {},
   faceRepare: '0',
   modelOptimization: '0'
-}
+};
 
 function _normalizeModelEntry(key: string, input: any, fallback: any) {
-  const value = input && typeof input === 'object' ? input : {}
-  const base = fallback || { id: key, path: '', config: {} }
+  const value = input && typeof input === 'object' ? input : {};
+  const base = fallback || { id: key, path: '', config: {} };
 
   return {
     ...base,
@@ -80,7 +80,7 @@ function _normalizeModelEntry(key: string, input: any, fallback: any) {
       ...(base.config || {}),
       ...(value.config && typeof value.config === 'object' ? value.config : {})
     }
-  }
+  };
 }
 
 /**
@@ -89,7 +89,7 @@ function _normalizeModelEntry(key: string, input: any, fallback: any) {
  * - 新：models.{origin,base,final}.{path,config}
  */
 export function normalizeConfig(inputConfig: any): any {
-  const source = inputConfig && typeof inputConfig === 'object' ? inputConfig : {}
+  const source = inputConfig && typeof inputConfig === 'object' ? inputConfig : {};
 
   const {
     // legacy fields (v1)
@@ -107,82 +107,82 @@ export function normalizeConfig(inputConfig: any): any {
     models: modelsField,
     texts: textsField,
     ...rest
-  } = source
+  } = source;
 
-  const base: any = JSON.parse(JSON.stringify(INTERNAL_DEFAULT_CONFIG))
+  const base: any = JSON.parse(JSON.stringify(INTERNAL_DEFAULT_CONFIG));
 
   if (typeof version === 'string' && version) {
     rest.metadata = {
       ...(rest.metadata && typeof rest.metadata === 'object' ? rest.metadata : {}),
       version,
       ...(typeof createTime === 'string' && createTime ? { created: createTime } : {})
-    }
+    };
   } else if (typeof createTime === 'string' && createTime) {
     rest.metadata = {
       ...(rest.metadata && typeof rest.metadata === 'object' ? rest.metadata : {}),
       created: createTime
-    }
+    };
   }
 
-  const modelsFromFeatures: Record<string, any> = {}
-  const textsFromFeatures: any[] = []
+  const modelsFromFeatures: Record<string, any> = {};
+  const textsFromFeatures: any[] = [];
 
   if (Array.isArray(features)) {
     for (const feature of features) {
-      if (!feature || typeof feature !== 'object') continue
-      const kind = feature.kind || feature.type
-      const id = typeof feature.id === 'string' ? feature.id : null
-      const payload = feature.payload && typeof feature.payload === 'object' ? feature.payload : {}
+      if (!feature || typeof feature !== 'object') continue;
+      const kind = feature.kind || feature.type;
+      const id = typeof feature.id === 'string' ? feature.id : null;
+      const payload = feature.payload && typeof feature.payload === 'object' ? feature.payload : {};
 
       if (kind === 'model') {
-        const key = id || (typeof payload.key === 'string' ? payload.key : null)
-        if (!key) continue
+        const key = id || (typeof payload.key === 'string' ? payload.key : null);
+        if (!key) continue;
         modelsFromFeatures[key] = {
           id: key,
           path: typeof payload.path === 'string' ? payload.path : '',
           config: payload.config && typeof payload.config === 'object' ? payload.config : {}
-        }
-        continue
+        };
+        continue;
       }
 
       if (kind === 'text') {
-        const textIndex = id || (typeof payload.index === 'string' ? payload.index : null)
-        if (!textIndex) continue
-        const { index: _ignored, ...restPayload } = payload
-        textsFromFeatures.push({ ...restPayload, index: textIndex })
+        const textIndex = id || (typeof payload.index === 'string' ? payload.index : null);
+        if (!textIndex) continue;
+        const { index: _ignored, ...restPayload } = payload;
+        textsFromFeatures.push({ ...restPayload, index: textIndex });
       }
     }
   }
 
-  const modelsFromList: Record<string, any> = {}
+  const modelsFromList: Record<string, any> = {};
   if (Array.isArray(modelsField)) {
     for (let i = 0; i < modelsField.length; i++) {
-      const entry = modelsField[i]
-      if (!entry || typeof entry !== 'object') continue
+      const entry = modelsField[i];
+      if (!entry || typeof entry !== 'object') continue;
 
       const configuredPath =
         typeof entry.url === 'string'
           ? entry.url
-          : (typeof entry.path === 'string' ? entry.path : '')
-      if (!configuredPath) continue
+          : (typeof entry.path === 'string' ? entry.path : '');
+      if (!configuredPath) continue;
 
       const key =
         typeof entry.id === 'string' && entry.id
           ? entry.id
           : (typeof entry.key === 'string' && entry.key
-              ? entry.key
-              : (i === 0 ? 'origin' : (i === 1 ? 'base' : (i === 2 ? 'final' : `model_${i + 1}`))))
+            ? entry.key
+            : (i === 0 ? 'origin' : (i === 1 ? 'base' : (i === 2 ? 'final' : `model_${i + 1}`))));
 
-      const nextConfig: any = {}
-      if (Array.isArray(entry.position)) nextConfig.position = entry.position
-      if (Array.isArray(entry.scale)) nextConfig.scale = entry.scale
-      if (Array.isArray(entry.rotation)) nextConfig.rotation = entry.rotation
+      const nextConfig: any = {};
+      if (Array.isArray(entry.position)) nextConfig.position = entry.position;
+      if (Array.isArray(entry.scale)) nextConfig.scale = entry.scale;
+      if (Array.isArray(entry.rotation)) nextConfig.rotation = entry.rotation;
 
       modelsFromList[key] = {
         id: key,
         path: configuredPath,
         config: nextConfig
-      }
+      };
     }
   }
 
@@ -199,36 +199,36 @@ export function normalizeConfig(inputConfig: any): any {
     texts: Array.isArray(textsField)
       ? textsField
       : (textsFromFeatures.length > 0 ? textsFromFeatures : base.texts)
-  }
+  };
 
   // 归一化 models（包含未来扩展的未知 key）
   for (const [key, value] of Object.entries(merged.models)) {
-    merged.models[key] = _normalizeModelEntry(key, value, base.models[key])
+    merged.models[key] = _normalizeModelEntry(key, value, base.models[key]);
   }
 
   // 确保 texts 每一项都有稳定 index（用于后续更新/删除/持久化）
   if (Array.isArray(merged.texts)) {
-    const now = Date.now()
+    const now = Date.now();
     merged.texts = merged.texts
       .filter((t) => t && typeof t === 'object')
       .map((t, idx) => {
-        if (typeof t.index === 'string' && t.index) return t
+        if (typeof t.index === 'string' && t.index) return t;
         return {
           ...t,
           index: `text_${now}_${idx}_${Math.random().toString(36).slice(2, 10)}`
-        }
-      })
+        };
+      });
   }
 
   // legacy path → models.*.path（仅在新值为空时填充）
   if (typeof originModelPath === 'string' && !merged.models.origin.path) {
-    merged.models.origin.path = originModelPath
+    merged.models.origin.path = originModelPath;
   }
   if (typeof baseModelPath === 'string' && !merged.models.base.path) {
-    merged.models.base.path = baseModelPath
+    merged.models.base.path = baseModelPath;
   }
   if (typeof finalModelPath === 'string' && !merged.models.final.path) {
-    merged.models.final.path = finalModelPath
+    merged.models.final.path = finalModelPath;
   }
 
   // legacy config → models.*.config（新字段优先）
@@ -237,17 +237,17 @@ export function normalizeConfig(inputConfig: any): any {
       ...(base.models.final.config || {}),
       ...(finalModelConfig || {}),
       ...(merged.models.final.config || {})
-    }
+    };
   }
   if (baseModelConfig && typeof baseModelConfig === 'object') {
     merged.models.base.config = {
       ...(base.models.base.config || {}),
       ...(baseModelConfig || {}),
       ...(merged.models.base.config || {})
-    }
+    };
   }
 
-  return merged
+  return merged;
 }
 
 /**
@@ -260,9 +260,9 @@ export function normalizeConfig(inputConfig: any): any {
  * - text  feature: { kind:'text',  id:'<uuid>', payload:{ ...textConfig(不含 index) } }
  */
 export function serializeConfig(inputConfig: any): any {
-  const normalized = normalizeConfig(inputConfig)
+  const normalized = normalizeConfig(inputConfig);
 
-  const nextFeatures: any[] = []
+  const nextFeatures: any[] = [];
 
   for (const [key, model] of Object.entries(normalized.models || {}) as Array<[string, any]>) {
     nextFeatures.push({
@@ -272,19 +272,19 @@ export function serializeConfig(inputConfig: any): any {
         path: model?.path || '',
         config: model?.config || {}
       }
-    })
+    });
   }
 
-  const textsList = Array.isArray(normalized.texts) ? normalized.texts : []
+  const textsList = Array.isArray(normalized.texts) ? normalized.texts : [];
   for (const textConfig of textsList) {
-    if (!textConfig || typeof textConfig !== 'object') continue
-    const { index, ...payload } = textConfig
-    const id = typeof index === 'string' && index ? index : `text_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    if (!textConfig || typeof textConfig !== 'object') continue;
+    const { index, ...payload } = textConfig;
+    const id = typeof index === 'string' && index ? index : `text_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     nextFeatures.push({
       kind: 'text',
       id,
       payload
-    })
+    });
   }
 
   const persisted: any = {
@@ -296,15 +296,15 @@ export function serializeConfig(inputConfig: any): any {
     lookupTable: normalized.lookupTable || {},
     faceRepare: normalized.faceRepare ?? '0',
     modelOptimization: normalized.modelOptimization ?? '0'
-  }
+  };
 
   if (normalized.metadata) {
-    persisted.metadata = normalized.metadata
+    persisted.metadata = normalized.metadata;
   }
 
-  return persisted
+  return persisted;
 }
 
-const defaultConfig = serializeConfig(INTERNAL_DEFAULT_CONFIG)
+const defaultConfig = serializeConfig(INTERNAL_DEFAULT_CONFIG);
 
-export default defaultConfig
+export default defaultConfig;

@@ -4,18 +4,18 @@
  */
 
 export class DebugLogger {
-  enabled: boolean
-  logs: any[]
-  maxLogs: number
-  startTime: number
-  levels: Record<string, number>
-  currentLevel: number
+  enabled: boolean;
+  logs: any[];
+  maxLogs: number;
+  startTime: number;
+  levels: Record<string, number>;
+  currentLevel: number;
 
   constructor(enabled = false) {
-    this.enabled = enabled
-    this.logs = []
-    this.maxLogs = 1000
-    this.startTime = performance.now()
+    this.enabled = enabled;
+    this.logs = [];
+    this.maxLogs = 1000;
+    this.startTime = performance.now();
     
     // 日志级别
     this.levels = {
@@ -23,24 +23,24 @@ export class DebugLogger {
       INFO: 1,
       WARN: 2,
       ERROR: 3
-    }
+    };
     
-    this.currentLevel = this.levels.INFO
+    this.currentLevel = this.levels.INFO;
   }
   
   /**
    * 启用调试模式
    */
   enable() {
-    this.enabled = true
-    this.log('DEBUG', '调试模式已启用')
+    this.enabled = true;
+    this.log('DEBUG', '调试模式已启用');
   }
   
   /**
    * 禁用调试模式
    */
   disable() {
-    this.enabled = false
+    this.enabled = false;
   }
   
   /**
@@ -49,7 +49,7 @@ export class DebugLogger {
    */
   setLevel(level) {
     if (this.levels[level] !== undefined) {
-      this.currentLevel = this.levels[level]
+      this.currentLevel = this.levels[level];
     }
   }
   
@@ -61,34 +61,34 @@ export class DebugLogger {
    */
   log(level, message, data = null) {
     if (!this.enabled || this.levels[level] < this.currentLevel) {
-      return
+      return;
     }
     
-    const timestamp = performance.now() - this.startTime
+    const timestamp = performance.now() - this.startTime;
     const logEntry = {
       level,
       message,
       data,
       timestamp: Math.round(timestamp * 100) / 100,
       time: new Date().toISOString()
-    }
+    };
     
-    this.logs.push(logEntry)
+    this.logs.push(logEntry);
     
     // 限制日志数量
     if (this.logs.length > this.maxLogs) {
-      this.logs.shift()
+      this.logs.shift();
     }
     
     // 输出到控制台
-    const consoleAny = console as any
-    const consoleMethod = level.toLowerCase()
+    const consoleAny = console as any;
+    const consoleMethod = level.toLowerCase();
     if (consoleAny[consoleMethod]) {
-      const prefix = `[FacePicker ${level}] ${timestamp.toFixed(2)}ms:`
+      const prefix = `[FacePicker ${level}] ${timestamp.toFixed(2)}ms:`;
       if (data) {
-        consoleAny[consoleMethod](prefix, message, data)
+        consoleAny[consoleMethod](prefix, message, data);
       } else {
-        consoleAny[consoleMethod](prefix, message)
+        consoleAny[consoleMethod](prefix, message);
       }
     }
   }
@@ -97,28 +97,28 @@ export class DebugLogger {
    * 调试级别日志
    */
   debug(message: string, data: any = null) {
-    this.log('DEBUG', message, data)
+    this.log('DEBUG', message, data);
   }
   
   /**
    * 信息级别日志
    */
   info(message: string, data: any = null) {
-    this.log('INFO', message, data)
+    this.log('INFO', message, data);
   }
   
   /**
    * 警告级别日志
    */
   warn(message: string, data: any = null) {
-    this.log('WARN', message, data)
+    this.log('WARN', message, data);
   }
   
   /**
    * 错误级别日志
    */
   error(message: string, data: any = null) {
-    this.log('ERROR', message, data)
+    this.log('ERROR', message, data);
   }
   
   /**
@@ -131,7 +131,7 @@ export class DebugLogger {
     this.debug(`性能: ${operation}`, {
       duration: `${duration.toFixed(2)}ms`,
       ...context
-    })
+    });
   }
   
   /**
@@ -145,7 +145,7 @@ export class DebugLogger {
       faceIndex: faceInfo?.faceIndex,
       position: faceInfo?.point,
       distance: faceInfo?.distance
-    })
+    });
   }
   
   /**
@@ -159,7 +159,7 @@ export class DebugLogger {
       mode: selectionInfo.mode,
       canUndo: selectionInfo.canUndo,
       canRedo: selectionInfo.canRedo
-    })
+    });
   }
   
   /**
@@ -172,7 +172,7 @@ export class DebugLogger {
     this.error(`错误 [${context}]: ${error.message}`, {
       stack: error.stack,
       ...additionalInfo
-    })
+    });
   }
   
   /**
@@ -187,7 +187,7 @@ export class DebugLogger {
       faceCount: validationResult.faceCount,
       geometryType: validationResult.geometryType,
       warnings: validationResult.warnings
-    })
+    });
   }
   
   /**
@@ -198,13 +198,13 @@ export class DebugLogger {
     const stats: any = {
       total: this.logs.length,
       byLevel: {} as Record<string, number>
-    }
+    };
     
     Object.keys(this.levels).forEach(level => {
-      stats.byLevel[level] = this.logs.filter(log => log.level === level).length
-    })
+      stats.byLevel[level] = this.logs.filter(log => log.level === level).length;
+    });
     
-    return stats
+    return stats;
   }
   
   /**
@@ -213,7 +213,7 @@ export class DebugLogger {
    * @returns {Array} 日志数组
    */
   getRecentLogs(count = 50) {
-    return this.logs.slice(-count)
+    return this.logs.slice(-count);
   }
   
   /**
@@ -222,7 +222,7 @@ export class DebugLogger {
    * @returns {Array} 过滤后的日志
    */
   getLogsByLevel(level) {
-    return this.logs.filter(log => log.level === level)
+    return this.logs.filter(log => log.level === level);
   }
   
   /**
@@ -231,19 +231,19 @@ export class DebugLogger {
    * @returns {Array} 匹配的日志
    */
   searchLogs(query) {
-    const lowerQuery = query.toLowerCase()
+    const lowerQuery = query.toLowerCase();
     return this.logs.filter(log => 
       log.message.toLowerCase().includes(lowerQuery) ||
       (log.data && JSON.stringify(log.data).toLowerCase().includes(lowerQuery))
-    )
+    );
   }
   
   /**
    * 清除所有日志
    */
   clearLogs() {
-    this.logs = []
-    this.info('日志已清除')
+    this.logs = [];
+    this.info('日志已清除');
   }
   
   /**
@@ -255,7 +255,7 @@ export class DebugLogger {
       exported: new Date().toISOString(),
       stats: this.getLogStats(),
       logs: this.logs
-    }, null, 2)
+    }, null, 2);
   }
   
   /**
@@ -263,9 +263,9 @@ export class DebugLogger {
    * @returns {Object} 调试报告
    */
   generateDebugReport() {
-    const stats = this.getLogStats()
-    const recentErrors = this.getLogsByLevel('ERROR').slice(-10)
-    const recentWarnings = this.getLogsByLevel('WARN').slice(-10)
+    const stats = this.getLogStats();
+    const recentErrors = this.getLogsByLevel('ERROR').slice(-10);
+    const recentWarnings = this.getLogsByLevel('WARN').slice(-10);
     
     return {
       summary: {
@@ -285,7 +285,7 @@ export class DebugLogger {
         timestamp: log.timestamp,
         data: log.data
       }))
-    }
+    };
   }
   
   /**
@@ -294,7 +294,7 @@ export class DebugLogger {
    * @returns {Object} 监控器对象
    */
   createPerformanceMonitor(name) {
-    const startTime = performance.now()
+    const startTime = performance.now();
     
     return {
       name,
@@ -305,9 +305,9 @@ export class DebugLogger {
        * @param {Object} context - 上下文信息
        */
       end: (context = {}) => {
-        const duration = performance.now() - startTime
-        this.logPerformance(name, duration, context)
-        return duration
+        const duration = performance.now() - startTime;
+        this.logPerformance(name, duration, context);
+        return duration;
       },
       
       /**
@@ -316,21 +316,21 @@ export class DebugLogger {
        * @param {Object} context - 上下文信息
        */
       checkpoint: (checkpoint, context = {}) => {
-        const duration = performance.now() - startTime
+        const duration = performance.now() - startTime;
         this.debug(`${name} - ${checkpoint}`, {
           duration: `${duration.toFixed(2)}ms`,
           ...context
-        })
+        });
       }
-    }
+    };
   }
 }
 
 // 创建全局调试器实例
-export const debugLogger = new DebugLogger()
+export const debugLogger = new DebugLogger();
 
 // 在开发环境中自动启用调试
 if (process.env.NODE_ENV === 'development') {
-  debugLogger.enable()
-  debugLogger.setLevel('DEBUG')
+  debugLogger.enable();
+  debugLogger.setLevel('DEBUG');
 }

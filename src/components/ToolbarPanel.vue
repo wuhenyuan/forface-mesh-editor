@@ -31,113 +31,113 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
-import { useEditorStore } from '../store'
+  import { ref, computed } from 'vue';
+  import { useEditorStore } from '../store';
 
-export default {
-  name: 'ToolbarPanel',
-  setup() {
-    const store = useEditorStore()
-    const projectName = ref('人物模型编辑器')
-    const exportingOBJ = ref(false)
-    const exportingSTL = ref(false)
+  export default {
+    name: 'ToolbarPanel',
+    setup() {
+      const store = useEditorStore();
+      const projectName = ref('人物模型编辑器');
+      const exportingOBJ = ref(false);
+      const exportingSTL = ref(false);
     
-    const isBusy = computed(() => store.isHistoryBusy?.() || false)
-    const viewModeBusy = computed(() => store.state.viewModeBusy)
-    const canUndo = computed(() => store.canUndo() && !isBusy.value)
-    const canRedo = computed(() => store.canRedo() && !isBusy.value)
+      const isBusy = computed(() => store.isHistoryBusy?.() || false);
+      const viewModeBusy = computed(() => store.state.viewModeBusy);
+      const canUndo = computed(() => store.canUndo() && !isBusy.value);
+      const canRedo = computed(() => store.canRedo() && !isBusy.value);
 
-    const viewModeLabel = computed(() => (
-      store.state.viewMode === 'result' ? '进入编辑' : '查看结果'
-    ))
+      const viewModeLabel = computed(() => (
+        store.state.viewMode === 'result' ? '进入编辑' : '查看结果'
+      ));
     
-    const handleUndo = async () => {
-      try {
-        await store.undo()
-      } catch (error) {
-        console.error('撤销失败:', error)
-      }
-    }
+      const handleUndo = async () => {
+        try {
+          await store.undo();
+        } catch (error) {
+          console.error('撤销失败:', error);
+        }
+      };
     
-    const handleRedo = async () => {
-      try {
-        await store.redo()
-      } catch (error) {
-        console.error('重做失败:', error)
-      }
-    }
+      const handleRedo = async () => {
+        try {
+          await store.redo();
+        } catch (error) {
+          console.error('重做失败:', error);
+        }
+      };
     
-    const handleResetView = () => {
-      const workspace = store.state.workspaceRef?.value
-      workspace?.resetView()
-    }
+      const handleResetView = () => {
+        const workspace = store.state.workspaceRef?.value;
+        workspace?.resetView();
+      };
 
-    const handleToggleViewMode = async () => {
-      try {
-        await store.toggleViewMode()
-      } catch (error) {
-        console.error('切换视图模式失败:', error)
-      }
-    }
+      const handleToggleViewMode = async () => {
+        try {
+          await store.toggleViewMode();
+        } catch (error) {
+          console.error('切换视图模式失败:', error);
+        }
+      };
     
-    // 导出 OBJ (ZIP 包含 OBJ + MTL + 贴图)
-    const handleExportOBJ = async () => {
-      const workspace = store.state.workspaceRef?.value
-      const viewer = workspace?.getViewer?.()
-      if (!viewer) {
-        console.error('编辑器未就绪')
-        return
-      }
+      // 导出 OBJ (ZIP 包含 OBJ + MTL + 贴图)
+      const handleExportOBJ = async () => {
+        const workspace = store.state.workspaceRef?.value;
+        const viewer = workspace?.getViewer?.();
+        if (!viewer) {
+          console.error('编辑器未就绪');
+          return;
+        }
       
-      exportingOBJ.value = true
-      try {
-        await viewer.exportScene('obj-zip', 'model')
-        console.log('✅ OBJ 导出成功')
-      } catch (error) {
-        console.error('导出 OBJ 失败:', error)
-      } finally {
-        exportingOBJ.value = false
-      }
-    }
+        exportingOBJ.value = true;
+        try {
+          await viewer.exportScene('obj-zip', 'model');
+          console.log('✅ OBJ 导出成功');
+        } catch (error) {
+          console.error('导出 OBJ 失败:', error);
+        } finally {
+          exportingOBJ.value = false;
+        }
+      };
     
-    // 导出 STL
-    const handleExportSTL = async () => {
-      const workspace = store.state.workspaceRef?.value
-      const viewer = workspace?.getViewer?.()
-      if (!viewer) {
-        console.error('编辑器未就绪')
-        return
-      }
+      // 导出 STL
+      const handleExportSTL = async () => {
+        const workspace = store.state.workspaceRef?.value;
+        const viewer = workspace?.getViewer?.();
+        if (!viewer) {
+          console.error('编辑器未就绪');
+          return;
+        }
       
-      exportingSTL.value = true
-      try {
-        await viewer.exportScene('stl', 'model')
-        console.log('✅ STL 导出成功')
-      } catch (error) {
-        console.error('导出 STL 失败:', error)
-      } finally {
-        exportingSTL.value = false
-      }
-    }
+        exportingSTL.value = true;
+        try {
+          await viewer.exportScene('stl', 'model');
+          console.log('✅ STL 导出成功');
+        } catch (error) {
+          console.error('导出 STL 失败:', error);
+        } finally {
+          exportingSTL.value = false;
+        }
+      };
     
-    return { 
-      projectName,
-      canUndo,
-      canRedo,
-      isBusy,
-      viewModeBusy,
-      viewModeLabel,
-      exportingOBJ,
-      exportingSTL,
-      handleUndo,
-      handleRedo,
-      handleResetView,
-      handleToggleViewMode,
-      handleExportOBJ,
-      handleExportSTL
+      return { 
+        projectName,
+        canUndo,
+        canRedo,
+        isBusy,
+        viewModeBusy,
+        viewModeLabel,
+        exportingOBJ,
+        exportingSTL,
+        handleUndo,
+        handleRedo,
+        handleResetView,
+        handleToggleViewMode,
+        handleExportOBJ,
+        handleExportSTL
+      };
     }
-  }
-}
+  };
 </script>
 
 <style scoped>

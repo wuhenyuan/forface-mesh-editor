@@ -2,7 +2,7 @@
  * 项目管理器
  * 负责项目的创建、保存、加载、导出配置等
  */
-import defaultConfig, { normalizeConfig, serializeConfig } from '../../config/config'
+import defaultConfig, { normalizeConfig, serializeConfig } from '../../config/config';
 
 interface ProjectInfo {
   id: string | null
@@ -17,17 +17,17 @@ type ProjectManagerCallback = ((event: any) => void) | null
 type PackageObjectUrlEntry = string | { url: string; file?: File | Blob }
 
 export class ProjectManager {
-  config: any
-  projectInfo: ProjectInfo
-  _isDirty: boolean
-  onChange: ProjectManagerCallback
-  onSave: ProjectManagerCallback
-  onLoad: ProjectManagerCallback
-  _packageObjectUrls: Map<string, PackageObjectUrlEntry>
+  config: any;
+  projectInfo: ProjectInfo;
+  _isDirty: boolean;
+  onChange: ProjectManagerCallback;
+  onSave: ProjectManagerCallback;
+  onLoad: ProjectManagerCallback;
+  _packageObjectUrls: Map<string, PackageObjectUrlEntry>;
 
   constructor() {
     // 当前项目配置（深拷贝默认配置）
-    this.config = normalizeConfig(this._deepClone(defaultConfig))
+    this.config = normalizeConfig(this._deepClone(defaultConfig));
     
     // 项目元信息
     this.projectInfo = {
@@ -36,18 +36,18 @@ export class ProjectManager {
       createTime: null,
       updateTime: null,
       version: 1
-    }
+    };
     
     // 是否有未保存的修改
-    this._isDirty = false
+    this._isDirty = false;
     
     // 事件回调
-    this.onChange = null
-    this.onSave = null
-    this.onLoad = null
+    this.onChange = null;
+    this.onSave = null;
+    this.onLoad = null;
 
     // ZIP 项目包导入时的资源映射：zip 内路径 -> blob:URL
-    this._packageObjectUrls = new Map()
+    this._packageObjectUrls = new Map();
   }
 
   /**
@@ -56,13 +56,13 @@ export class ProjectManager {
    * @returns {Object} 项目配置
    */
   createProject(options: Record<string, any> = {}) {
-    const { name = '未命名项目', originModelPath = '' } = options
+    const { name = '未命名项目', originModelPath = '' } = options;
     
     // 重置为默认配置
-    this._revokePackageObjectUrls()
-    this.config = normalizeConfig(this._deepClone(defaultConfig))
-    this.config.models.origin.path = originModelPath || ''
-    this.config.status = 'draft'
+    this._revokePackageObjectUrls();
+    this.config = normalizeConfig(this._deepClone(defaultConfig));
+    this.config.models.origin.path = originModelPath || '';
+    this.config.status = 'draft';
     
     // 设置项目信息
     this.projectInfo = {
@@ -71,13 +71,13 @@ export class ProjectManager {
       createTime: Date.now(),
       updateTime: Date.now(),
       version: 1
-    }
+    };
     
-    this._isDirty = false
-    this.onChange?.({ type: 'create', project: this.getProjectData() })
+    this._isDirty = false;
+    this.onChange?.({ type: 'create', project: this.getProjectData() });
     
-    console.log(`[ProjectManager] 创建新项目: ${name}`)
-    return this.getProjectData()
+    console.log(`[ProjectManager] 创建新项目: ${name}`);
+    return this.getProjectData();
   }
 
   /**
@@ -88,14 +88,14 @@ export class ProjectManager {
     return {
       projectInfo: { ...this.projectInfo },
       config: this._deepClone(this.config)
-    }
+    };
   }
 
   _getPersistedProjectData(configOverride?: any) {
     return {
       projectInfo: { ...this.projectInfo },
       config: serializeConfig(configOverride || this.config)
-    }
+    };
   }
 
   /**
@@ -105,28 +105,28 @@ export class ProjectManager {
    */
   saveToLocal(key = 'editor_project') {
     try {
-      const nextUpdateTime = Date.now()
-      const projectInfoForSave = { ...this.projectInfo, updateTime: nextUpdateTime }
-      const configForSave = this._deepClone(this.config)
-      configForSave.status = 'synced'
+      const nextUpdateTime = Date.now();
+      const projectInfoForSave = { ...this.projectInfo, updateTime: nextUpdateTime };
+      const configForSave = this._deepClone(this.config);
+      configForSave.status = 'synced';
 
       const data = {
         projectInfo: projectInfoForSave,
         config: serializeConfig(configForSave)
-      }
+      };
       
-      localStorage.setItem(key, JSON.stringify(data))
+      localStorage.setItem(key, JSON.stringify(data));
 
-      this.projectInfo.updateTime = nextUpdateTime
-      this._isDirty = false
-      this.config.status = 'synced'
-      this.onSave?.({ type: 'local', key, data })
+      this.projectInfo.updateTime = nextUpdateTime;
+      this._isDirty = false;
+      this.config.status = 'synced';
+      this.onSave?.({ type: 'local', key, data });
       
-      console.log(`[ProjectManager] 项目已保存到本地: ${key}`)
-      return true
+      console.log(`[ProjectManager] 项目已保存到本地: ${key}`);
+      return true;
     } catch (error) {
-      console.error('[ProjectManager] 保存失败:', error)
-      return false
+      console.error('[ProjectManager] 保存失败:', error);
+      return false;
     }
   }
 
@@ -137,17 +137,17 @@ export class ProjectManager {
    */
   loadFromLocal(key = 'editor_project') {
     try {
-      const json = localStorage.getItem(key)
+      const json = localStorage.getItem(key);
       if (!json) {
-        console.warn(`[ProjectManager] 未找到本地项目: ${key}`)
-        return null
+        console.warn(`[ProjectManager] 未找到本地项目: ${key}`);
+        return null;
       }
       
-      const data = JSON.parse(json)
-      return this.loadProject(data)
+      const data = JSON.parse(json);
+      return this.loadProject(data);
     } catch (error) {
-      console.error('[ProjectManager] 加载失败:', error)
-      return null
+      console.error('[ProjectManager] 加载失败:', error);
+      return null;
     }
   }
 
@@ -157,42 +157,42 @@ export class ProjectManager {
    * @returns {Object} 加载后的项目数据
    */
   loadProject(data: any, options: Record<string, any> = {}) {
-    const source = data && typeof data === 'object' ? data : null
-    if (!source) throw new Error('无效的项目数据')
+    const source = data && typeof data === 'object' ? data : null;
+    if (!source) throw new Error('无效的项目数据');
 
-    const isProjectWrapper = !!(source.config && typeof source.config === 'object')
-    const configSource = isProjectWrapper ? source.config : source
+    const isProjectWrapper = !!(source.config && typeof source.config === 'object');
+    const configSource = isProjectWrapper ? source.config : source;
 
     // 合并配置（保留默认值 + 兼容旧字段升级）
-    this._revokePackageObjectUrls()
-    this.config = normalizeConfig(this._deepClone(configSource))
+    this._revokePackageObjectUrls();
+    this.config = normalizeConfig(this._deepClone(configSource));
 
     // 加载项目信息
     if (isProjectWrapper) {
       this.projectInfo = {
         ...this.projectInfo,
         ...source.projectInfo
-      }
+      };
     } else {
-      const now = Date.now()
+      const now = Date.now();
       const inferredName =
         typeof options?.name === 'string' && options.name.trim()
           ? options.name.trim()
-          : '导入项目'
+          : '导入项目';
       this.projectInfo = {
         id: this._generateId(),
         name: inferredName,
         createTime: now,
         updateTime: now,
         version: 1
-      }
+      };
     }
     
-    this._isDirty = false
-    this.onLoad?.({ type: 'load', project: this.getProjectData() })
+    this._isDirty = false;
+    this.onLoad?.({ type: 'load', project: this.getProjectData() });
     
-    console.log(`[ProjectManager] 项目已加载: ${this.projectInfo.name}`)
-    return this.getProjectData()
+    console.log(`[ProjectManager] 项目已加载: ${this.projectInfo.name}`);
+    return this.getProjectData();
   }
 
   /**
@@ -200,12 +200,12 @@ export class ProjectManager {
    * @param {string} filename - 文件名
    */
   exportProjectFile(filename = 'project') {
-    const data = this._getPersistedProjectData()
-    const json = JSON.stringify(data, null, 2)
-    const blob = new Blob([json], { type: 'application/json' })
+    const data = this._getPersistedProjectData();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
     
-    this._downloadBlob(blob, `${filename}.json`)
-    console.log(`[ProjectManager] 项目已导出: ${filename}.json`)
+    this._downloadBlob(blob, `${filename}.json`);
+    console.log(`[ProjectManager] 项目已导出: ${filename}.json`);
   }
 
   /**
@@ -215,28 +215,28 @@ export class ProjectManager {
    */
   async importProjectFile(file) {
     if (file?.name && /\.zip$/i.test(file.name)) {
-      return await this.importProjectPackage(file)
+      return await this.importProjectPackage(file);
     }
 
     return new Promise((resolve, reject) => {
-      const reader = new FileReader()
+      const reader = new FileReader();
       
       reader.onload = (e) => {
         try {
-          const result = (e as any)?.target?.result
-          if (typeof result !== 'string') throw new Error('无效的项目文件')
-          const data = JSON.parse(result)
-          const inferredName = file?.name ? this._stripExt(file.name) : undefined
-          const project = this.loadProject(data, { name: inferredName })
-          resolve(project)
+          const result = (e as any)?.target?.result;
+          if (typeof result !== 'string') throw new Error('无效的项目文件');
+          const data = JSON.parse(result);
+          const inferredName = file?.name ? this._stripExt(file.name) : undefined;
+          const project = this.loadProject(data, { name: inferredName });
+          resolve(project);
         } catch (error) {
-          reject(new Error('无效的项目文件'))
+          reject(new Error('无效的项目文件'));
         }
-      }
+      };
       
-      reader.onerror = () => reject(new Error('文件读取失败'))
-      reader.readAsText(file)
-    })
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsText(file);
+    });
   }
 
   /**
@@ -263,38 +263,38 @@ export class ProjectManager {
       format = 'v3',
       projectFileName = 'project.json',
       fetchOptions = undefined
-    } = options
+    } = options;
 
-    const { default: JSZip } = await import('jszip')
-    const zip = new JSZip()
+    const { default: JSZip } = await import('jszip');
+    const zip = new JSZip();
 
-    const packageConfig = this._deepClone(this.config)
-    const modelKeysToInclude = this._resolvePackageModelKeys(packageConfig?.models, includeModels)
+    const packageConfig = this._deepClone(this.config);
+    const modelKeysToInclude = this._resolvePackageModelKeys(packageConfig?.models, includeModels);
 
     if (modelKeysToInclude.length > 0 && packageConfig?.models) {
-      const usedNames = new Set()
-      const modelDir = format === 'config2' ? 'model' : 'models'
-      const packagedPathByKey = new Map()
+      const usedNames = new Set();
+      const modelDir = format === 'config2' ? 'model' : 'models';
+      const packagedPathByKey = new Map();
 
       for (const key of modelKeysToInclude) {
-        const model = packageConfig.models[key]
-        const configuredPath = model?.path
-        if (!configuredPath) continue
+        const model = packageConfig.models[key];
+        const configuredPath = model?.path;
+        if (!configuredPath) continue;
 
-        const runtimePath = this.resolveModelPath(key)
-        const blob = await this._fetchAsBlob(runtimePath, { modelKey: key, fetchOptions })
+        const runtimePath = this.resolveModelPath(key);
+        const blob = await this._fetchAsBlob(runtimePath, { modelKey: key, fetchOptions });
 
         const fileName = format === 'config2'
           ? this._inferConfig2PackageFileName({ key, configuredPath, blob, usedNames })
-          : this._inferPackageFileName({ key, configuredPath, blob, usedNames })
+          : this._inferPackageFileName({ key, configuredPath, blob, usedNames });
 
-        const zipPath = `${modelDir}/${fileName}`
-        zip.file(zipPath, blob)
+        const zipPath = `${modelDir}/${fileName}`;
+        zip.file(zipPath, blob);
 
-        packagedPathByKey.set(key, zipPath)
+        packagedPathByKey.set(key, zipPath);
 
         if (format === 'v3') {
-          model.path = zipPath
+          model.path = zipPath;
         }
       }
 
@@ -302,22 +302,22 @@ export class ProjectManager {
         zip.file(
           projectFileName,
           JSON.stringify(this._buildConfig2ForPackage({ packageConfig, packagedPathByKey }), null, 2)
-        )
+        );
       }
     }
 
     if (format === 'v3') {
-      const packageData = this._getPersistedProjectData(packageConfig)
-      zip.file(projectFileName, JSON.stringify(packageData, null, 2))
+      const packageData = this._getPersistedProjectData(packageConfig);
+      zip.file(projectFileName, JSON.stringify(packageData, null, 2));
     } else if (!zip.file(projectFileName)) {
-      zip.file(projectFileName, JSON.stringify(this._buildConfig2ForPackage({ packageConfig }), null, 2))
+      zip.file(projectFileName, JSON.stringify(this._buildConfig2ForPackage({ packageConfig }), null, 2));
     }
 
-    const zipBlob = await zip.generateAsync({ type: 'blob' })
-    this._downloadBlob(zipBlob, `${filename}.zip`)
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    this._downloadBlob(zipBlob, `${filename}.zip`);
 
-    console.log(`[ProjectManager] 项目包已导出: ${filename}.zip`)
-    return true
+    console.log(`[ProjectManager] 项目包已导出: ${filename}.zip`);
+    return true;
   }
 
   /**
@@ -330,7 +330,7 @@ export class ProjectManager {
       ...options,
       includeModels: true,
       format: 'config2'
-    })
+    });
   }
 
   /**
@@ -339,44 +339,44 @@ export class ProjectManager {
    * @returns {Promise<Object>} 项目数据
    */
   async importProjectPackage(file) {
-    const { default: JSZip } = await import('jszip')
-    const zip = await JSZip.loadAsync(file)
+    const { default: JSZip } = await import('jszip');
+    const zip = await JSZip.loadAsync(file);
 
     const projectEntry =
       zip.file('project.json') ||
       zip.file('project.forface.json') ||
-      zip.file('mesh-editor-config.json')
+      zip.file('mesh-editor-config.json');
 
     const projectFileName = projectEntry?.name ||
-      Object.keys(zip.files).find((name) => name.toLowerCase().endsWith('.json'))
+      Object.keys(zip.files).find((name) => name.toLowerCase().endsWith('.json'));
 
-    if (!projectFileName) throw new Error('ZIP 内未找到 project.json')
+    if (!projectFileName) throw new Error('ZIP 内未找到 project.json');
 
     const jsonText = projectEntry
       ? await projectEntry.async('string')
-      : await zip.file(projectFileName).async('string')
+      : await zip.file(projectFileName).async('string');
 
-    const data = JSON.parse(jsonText)
-    const inferredName = file?.name ? this._stripExt(file.name) : undefined
-    const projectData = this.loadProject(data, { name: inferredName })
+    const data = JSON.parse(jsonText);
+    const inferredName = file?.name ? this._stripExt(file.name) : undefined;
+    const projectData = this.loadProject(data, { name: inferredName });
 
-    this._revokePackageObjectUrls()
+    this._revokePackageObjectUrls();
     for (const [name, entry] of Object.entries(zip.files)) {
-      if (entry.dir) continue
-      if (name === projectFileName) continue
+      if (entry.dir) continue;
+      if (name === projectFileName) continue;
 
-      const blob = await zip.file(name).async('blob')
-      const normalized = this._normalizeZipPath(name)
-      const baseName = normalized.split('/').filter(Boolean).pop() || normalized || 'file'
+      const blob = await zip.file(name).async('blob');
+      const normalized = this._normalizeZipPath(name);
+      const baseName = normalized.split('/').filter(Boolean).pop() || normalized || 'file';
       const fileObject = typeof File !== 'undefined'
         ? new File([blob], baseName, { type: blob.type || undefined })
-        : blob
-      const url = URL.createObjectURL(blob)
-      this._packageObjectUrls.set(normalized, { url, file: fileObject })
+        : blob;
+      const url = URL.createObjectURL(blob);
+      this._packageObjectUrls.set(normalized, { url, file: fileObject });
     }
 
-    console.log(`[ProjectManager] 项目包已导入: ${file?.name || 'zip'}`)
-    return projectData
+    console.log(`[ProjectManager] 项目包已导入: ${file?.name || 'zip'}`);
+    return projectData;
   }
 
   /**
@@ -385,50 +385,50 @@ export class ProjectManager {
    * - ZIP 导入：把包内相对路径映射为 blob:URL
    */
   resolveModelPath(modelKey) {
-    const configuredPath = this.config?.models?.[modelKey]?.path || ''
-    if (!configuredPath) return ''
+    const configuredPath = this.config?.models?.[modelKey]?.path || '';
+    if (!configuredPath) return '';
 
     // 带 scheme 的 URI（http/https/blob/data/...）直接返回，不走包内映射
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(configuredPath)) return configuredPath
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(configuredPath)) return configuredPath;
 
-    const normalized = this._normalizeZipPath(configuredPath)
+    const normalized = this._normalizeZipPath(configuredPath);
 
     const _resolveMapped = (key) => {
-      const value = this._packageObjectUrls.get(key)
-      if (!value) return null
-      if (typeof value === 'string') return value
-      return value.file || value.url || null
-    }
+      const value = this._packageObjectUrls.get(key);
+      if (!value) return null;
+      if (typeof value === 'string') return value;
+      return value.file || value.url || null;
+    };
 
-    const direct = _resolveMapped(normalized)
-    if (direct) return direct
+    const direct = _resolveMapped(normalized);
+    if (direct) return direct;
 
     // 兼容：path 可能写成 "origin.stl"，但包里是 "models/origin.stl"
-    const withModels = normalized.startsWith('models/') ? normalized : `models/${normalized}`
-    const alt1 = _resolveMapped(withModels)
-    if (alt1) return alt1
+    const withModels = normalized.startsWith('models/') ? normalized : `models/${normalized}`;
+    const alt1 = _resolveMapped(withModels);
+    if (alt1) return alt1;
 
     // 兼容：path 可能写成 "models/origin.stl"，但包里是 "origin.stl"
     if (normalized.startsWith('models/')) {
-      const withoutModels = normalized.replace(/^models\//, '')
-      const alt2 = _resolveMapped(withoutModels)
-      if (alt2) return alt2
+      const withoutModels = normalized.replace(/^models\//, '');
+      const alt2 = _resolveMapped(withoutModels);
+      if (alt2) return alt2;
     }
 
     // 兜底：按文件名匹配（要求唯一）
-    const baseName = normalized.split('/').filter(Boolean).pop()
+    const baseName = normalized.split('/').filter(Boolean).pop();
     if (baseName) {
-      const matches = []
+      const matches = [];
       for (const [path, value] of this._packageObjectUrls.entries()) {
         if (path === baseName || path.endsWith(`/${baseName}`)) {
-          const resolved = typeof value === 'string' ? value : (value.file || value.url)
-          if (resolved) matches.push(resolved)
+          const resolved = typeof value === 'string' ? value : (value.file || value.url);
+          if (resolved) matches.push(resolved);
         }
       }
-      if (matches.length === 1) return matches[0]
+      if (matches.length === 1) return matches[0];
     }
 
-    return configuredPath
+    return configuredPath;
   }
 
   // ==================== 配置更新方法 ====================
@@ -438,9 +438,9 @@ export class ProjectManager {
    * @param {string} path - 模型路径
    */
   setOriginModelPath(path) {
-    if (!this.config.models?.origin) this.config = normalizeConfig(this.config)
-    this.config.models.origin.path = path || ''
-    this._markDirty()
+    if (!this.config.models?.origin) this.config = normalizeConfig(this.config);
+    this.config.models.origin.path = path || '';
+    this._markDirty();
   }
 
   /**
@@ -448,9 +448,9 @@ export class ProjectManager {
    * @param {string} path - 模型路径
    */
   setBaseModelPath(path) {
-    if (!this.config.models?.base) this.config = normalizeConfig(this.config)
-    this.config.models.base.path = path || ''
-    this._markDirty()
+    if (!this.config.models?.base) this.config = normalizeConfig(this.config);
+    this.config.models.base.path = path || '';
+    this._markDirty();
   }
 
   /**
@@ -458,9 +458,9 @@ export class ProjectManager {
    * @param {Object} config - 模型配置
    */
   updateFinalModelConfig(config) {
-    if (!this.config.models?.final) this.config = normalizeConfig(this.config)
-    Object.assign(this.config.models.final.config, config)
-    this._markDirty()
+    if (!this.config.models?.final) this.config = normalizeConfig(this.config);
+    Object.assign(this.config.models.final.config, config);
+    this._markDirty();
   }
 
   /**
@@ -468,9 +468,9 @@ export class ProjectManager {
    * @param {Object} config - 底座配置
    */
   updateBaseModelConfig(config) {
-    if (!this.config.models?.base) this.config = normalizeConfig(this.config)
-    Object.assign(this.config.models.base.config, config)
-    this._markDirty()
+    if (!this.config.models?.base) this.config = normalizeConfig(this.config);
+    Object.assign(this.config.models.base.config, config);
+    this._markDirty();
   }
 
   /**
@@ -491,11 +491,11 @@ export class ProjectManager {
       rotate: textConfig.rotation || [0, 0, 0],
       wrap: 'surface Project',
       attachmentSurface: textConfig.featureName || ''
-    }
+    };
     
-    this.config.texts.push(text)
-    this._markDirty()
-    return text
+    this.config.texts.push(text);
+    this._markDirty();
+    return text;
   }
 
   /**
@@ -504,21 +504,21 @@ export class ProjectManager {
    * @param {Object} updates - 更新内容
    */
   updateTextConfig(textId, updates) {
-    const text = this.config.texts.find(t => t.index === textId)
-    if (!text) return false
+    const text = this.config.texts.find(t => t.index === textId);
+    if (!text) return false;
     
-    if (updates.content !== undefined) text.text = updates.content
-    if (updates.size !== undefined) text.size = updates.size
-    if (updates.thickness !== undefined) text.depth = updates.thickness
-    if (updates.color !== undefined) text.color = updates.color
+    if (updates.content !== undefined) text.text = updates.content;
+    if (updates.size !== undefined) text.size = updates.size;
+    if (updates.thickness !== undefined) text.depth = updates.thickness;
+    if (updates.color !== undefined) text.color = updates.color;
     if (updates.mode !== undefined) {
-      text.effect = updates.mode === 'engraved' ? 'Engraved' : 'Embossed'
+      text.effect = updates.mode === 'engraved' ? 'Engraved' : 'Embossed';
     }
-    if (updates.position !== undefined) text.position = updates.position
-    if (updates.rotation !== undefined) text.rotate = updates.rotation
+    if (updates.position !== undefined) text.position = updates.position;
+    if (updates.rotation !== undefined) text.rotate = updates.rotation;
     
-    this._markDirty()
-    return true
+    this._markDirty();
+    return true;
   }
 
   /**
@@ -526,13 +526,13 @@ export class ProjectManager {
    * @param {string} textId - 文字ID（index）
    */
   removeTextConfig(textId) {
-    const index = this.config.texts.findIndex(t => t.index === textId)
+    const index = this.config.texts.findIndex(t => t.index === textId);
     if (index !== -1) {
-      this.config.texts.splice(index, 1)
-      this._markDirty()
-      return true
+      this.config.texts.splice(index, 1);
+      this._markDirty();
+      return true;
     }
-    return false
+    return false;
   }
 
   /**
@@ -540,7 +540,7 @@ export class ProjectManager {
    * @returns {Array} 文字配置数组
    */
   getTextConfigs() {
-    return [...this.config.texts]
+    return [...this.config.texts];
   }
 
   /**
@@ -551,9 +551,9 @@ export class ProjectManager {
       `scale:${(this.config.models?.final?.config?.scale || [1, 1, 1]).join(',')}`,
       `texts:${this.config.texts.length}`,
       `base:${this.config.models?.base?.path ? 'yes' : 'no'}`
-    ]
-    this.config.propIdentifier = parts.join('|')
-    this._markDirty()
+    ];
+    this.config.propIdentifier = parts.join('|');
+    this._markDirty();
   }
 
   // ==================== 状态查询 ====================
@@ -563,7 +563,7 @@ export class ProjectManager {
    * @returns {boolean}
    */
   isDirty() {
-    return this._isDirty
+    return this._isDirty;
   }
 
   /**
@@ -571,7 +571,7 @@ export class ProjectManager {
    * @returns {string} 'draft' | 'synced'
    */
   getStatus() {
-    return this.config.status
+    return this.config.status;
   }
 
   /**
@@ -579,7 +579,7 @@ export class ProjectManager {
    * @returns {string}
    */
   getProjectName() {
-    return this.projectInfo.name
+    return this.projectInfo.name;
   }
 
   /**
@@ -587,8 +587,8 @@ export class ProjectManager {
    * @param {string} name
    */
   setProjectName(name) {
-    this.projectInfo.name = name
-    this._markDirty()
+    this.projectInfo.name = name;
+    this._markDirty();
   }
 
   /**
@@ -596,19 +596,19 @@ export class ProjectManager {
    * @returns {Array} 项目列表
    */
   getLocalProjectList() {
-    const list = []
-    const prefix = 'editor_project_'
+    const list = [];
+    const prefix = 'editor_project_';
     
     for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
+      const key = localStorage.key(i);
       if (key.startsWith(prefix) || key === 'editor_project') {
         try {
-          const data = JSON.parse(localStorage.getItem(key))
+          const data = JSON.parse(localStorage.getItem(key));
           list.push({
             key,
             name: data.projectInfo?.name || '未命名',
             updateTime: data.projectInfo?.updateTime || 0
-          })
+          });
         } catch (e) {
           // 忽略无效数据
         }
@@ -616,7 +616,7 @@ export class ProjectManager {
     }
     
     // 按更新时间排序
-    return list.sort((a, b) => b.updateTime - a.updateTime)
+    return list.sort((a, b) => b.updateTime - a.updateTime);
   }
 
   /**
@@ -624,154 +624,154 @@ export class ProjectManager {
    * @param {string} key - 存储键名
    */
   deleteLocalProject(key) {
-    localStorage.removeItem(key)
-    console.log(`[ProjectManager] 已删除本地项目: ${key}`)
+    localStorage.removeItem(key);
+    console.log(`[ProjectManager] 已删除本地项目: ${key}`);
   }
 
   // ==================== 私有方法 ====================
 
   _markDirty() {
-    this._isDirty = true
-    this.config.status = 'draft'
-    this.onChange?.({ type: 'change', isDirty: true })
+    this._isDirty = true;
+    this.config.status = 'draft';
+    this.onChange?.({ type: 'change', isDirty: true });
   }
 
   _generateId() {
-    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   _deepClone(obj) {
-    return JSON.parse(JSON.stringify(obj))
+    return JSON.parse(JSON.stringify(obj));
   }
 
   _downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    setTimeout(() => URL.revokeObjectURL(url), 100)
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   /**
    * 销毁
    */
   dispose() {
-    this._revokePackageObjectUrls()
-    this.config = null
-    this.projectInfo = null
-    this.onChange = null
-    this.onSave = null
-    this.onLoad = null
+    this._revokePackageObjectUrls();
+    this.config = null;
+    this.projectInfo = null;
+    this.onChange = null;
+    this.onSave = null;
+    this.onLoad = null;
   }
 
   _revokePackageObjectUrls() {
-    if (!this._packageObjectUrls) return
+    if (!this._packageObjectUrls) return;
     for (const value of this._packageObjectUrls.values()) {
-      const url = typeof value === 'string' ? value : value?.url
-      if (!url) continue
+      const url = typeof value === 'string' ? value : value?.url;
+      if (!url) continue;
       try {
-        URL.revokeObjectURL(url)
+        URL.revokeObjectURL(url);
       } catch (_) {
         // ignore
       }
     }
-    this._packageObjectUrls.clear()
+    this._packageObjectUrls.clear();
   }
 
   _normalizeZipPath(path) {
-    if (typeof path !== 'string') return ''
-    const cleaned = path.split('#')[0].split('?')[0]
-    return cleaned.replace(/\\/g, '/').replace(/^\.\//, '')
+    if (typeof path !== 'string') return '';
+    const cleaned = path.split('#')[0].split('?')[0];
+    return cleaned.replace(/\\/g, '/').replace(/^\.\//, '');
   }
 
   async _fetchAsBlob(
     source: unknown,
     context: { fetchOptions?: RequestInit; modelKey?: string } = {}
   ) {
-    if (!source) throw new Error('模型路径为空，无法打包')
-    if (source instanceof Blob) return source
-    if (typeof source !== 'string') throw new Error('不支持的模型源类型，无法打包')
+    if (!source) throw new Error('模型路径为空，无法打包');
+    if (source instanceof Blob) return source;
+    if (typeof source !== 'string') throw new Error('不支持的模型源类型，无法打包');
 
     try {
-      const res = await fetch(source, context.fetchOptions)
+      const res = await fetch(source, context.fetchOptions);
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`)
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
       }
-      return await res.blob()
+      return await res.blob();
     } catch (error) {
-      const keyHint = context.modelKey ? ` (${context.modelKey})` : ''
-      throw new Error(`无法下载模型文件${keyHint}: ${source}\n${error?.message || error}`)
+      const keyHint = context.modelKey ? ` (${context.modelKey})` : '';
+      throw new Error(`无法下载模型文件${keyHint}: ${source}\n${error?.message || error}`);
     }
   }
 
   _inferPackageFileName({ key, configuredPath, blob, usedNames }) {
-    const keyBase = this._stripExt(this._sanitizeFileName(String(key || 'model'))) || 'model'
-    const configuredExt = this._extractExt(this._extractFileName(configuredPath))
-    const ext = configuredExt || this._guessExtFromBlob(blob) || 'bin'
-    const base = keyBase
+    const keyBase = this._stripExt(this._sanitizeFileName(String(key || 'model'))) || 'model';
+    const configuredExt = this._extractExt(this._extractFileName(configuredPath));
+    const ext = configuredExt || this._guessExtFromBlob(blob) || 'bin';
+    const base = keyBase;
 
-    let name = `${base}.${ext}`
-    let i = 2
+    let name = `${base}.${ext}`;
+    let i = 2;
     while (usedNames.has(name)) {
-      name = `${base}_${i++}.${ext}`
+      name = `${base}_${i++}.${ext}`;
     }
-    usedNames.add(name)
-    return name
+    usedNames.add(name);
+    return name;
   }
 
   _inferConfig2PackageFileName({ key, configuredPath, blob, usedNames }) {
-    const configuredName = this._extractFileName(configuredPath)
-    const configuredBase = this._stripExt(this._sanitizeFileName(configuredName))
-    const keyBase = this._stripExt(this._sanitizeFileName(String(key || 'model'))) || 'model'
-    const configuredExt = this._extractExt(configuredName)
-    const ext = configuredExt || this._guessExtFromBlob(blob) || 'bin'
-    const base = configuredBase || keyBase || 'model'
+    const configuredName = this._extractFileName(configuredPath);
+    const configuredBase = this._stripExt(this._sanitizeFileName(configuredName));
+    const keyBase = this._stripExt(this._sanitizeFileName(String(key || 'model'))) || 'model';
+    const configuredExt = this._extractExt(configuredName);
+    const ext = configuredExt || this._guessExtFromBlob(blob) || 'bin';
+    const base = configuredBase || keyBase || 'model';
 
-    let name = `${base}.${ext}`
-    let i = 2
+    let name = `${base}.${ext}`;
+    let i = 2;
     while (usedNames.has(name)) {
-      name = `${base}_${i++}.${ext}`
+      name = `${base}_${i++}.${ext}`;
     }
-    usedNames.add(name)
-    return name
+    usedNames.add(name);
+    return name;
   }
 
   _buildConfig2ForPackage(
     { packageConfig, packagedPathByKey }: { packageConfig?: any; packagedPathByKey?: Map<string, string> } = {}
   ) {
-    const cfg = packageConfig && typeof packageConfig === 'object' ? packageConfig : {}
-    const metadata = cfg.metadata && typeof cfg.metadata === 'object' ? cfg.metadata : {}
+    const cfg = packageConfig && typeof packageConfig === 'object' ? packageConfig : {};
+    const metadata = cfg.metadata && typeof cfg.metadata === 'object' ? cfg.metadata : {};
 
-    const version = typeof metadata.version === 'string' ? metadata.version : ''
-    const createTime = typeof metadata.created === 'string' ? metadata.created : ''
+    const version = typeof metadata.version === 'string' ? metadata.version : '';
+    const createTime = typeof metadata.created === 'string' ? metadata.created : '';
 
-    const models = []
-    const modelsObj = cfg.models && typeof cfg.models === 'object' ? cfg.models : {}
+    const models = [];
+    const modelsObj = cfg.models && typeof cfg.models === 'object' ? cfg.models : {};
 
-    const orderedKeys = []
+    const orderedKeys = [];
     for (const key of ['origin', 'base', 'final']) {
-      if (modelsObj[key]) orderedKeys.push(key)
+      if (modelsObj[key]) orderedKeys.push(key);
     }
     for (const key of Object.keys(modelsObj)) {
-      if (!orderedKeys.includes(key)) orderedKeys.push(key)
+      if (!orderedKeys.includes(key)) orderedKeys.push(key);
     }
 
     for (const key of orderedKeys) {
-      const model = modelsObj[key]
-      const configuredPath = model?.path
-      if (!configuredPath) continue
+      const model = modelsObj[key];
+      const configuredPath = model?.path;
+      if (!configuredPath) continue;
 
-      const zipPath = packagedPathByKey?.get?.(key)
-      const url = zipPath ? `./${zipPath}` : configuredPath
+      const zipPath = packagedPathByKey?.get?.(key);
+      const url = zipPath ? `./${zipPath}` : configuredPath;
 
-      const modelConfig = model?.config && typeof model.config === 'object' ? model.config : {}
-      const position = Array.isArray(modelConfig.position) ? modelConfig.position : [0, 0, 0]
-      const scale = Array.isArray(modelConfig.scale) ? modelConfig.scale : [1, 1, 1]
-      const rotation = Array.isArray(modelConfig.rotation) ? modelConfig.rotation : [0, 0, 0]
+      const modelConfig = model?.config && typeof model.config === 'object' ? model.config : {};
+      const position = Array.isArray(modelConfig.position) ? modelConfig.position : [0, 0, 0];
+      const scale = Array.isArray(modelConfig.scale) ? modelConfig.scale : [1, 1, 1];
+      const rotation = Array.isArray(modelConfig.rotation) ? modelConfig.rotation : [0, 0, 0];
 
       models.push({
         type: 'model',
@@ -780,16 +780,16 @@ export class ProjectManager {
         position,
         scale,
         rotation
-      })
+      });
     }
 
-    const texts = Array.isArray(cfg.texts) ? cfg.texts : []
+    const texts = Array.isArray(cfg.texts) ? cfg.texts : [];
     const exportedTexts = texts
       .filter((t) => t && typeof t === 'object')
       .map((t) => {
-        const { index: _ignored, ...rest } = t
-        return rest
-      })
+        const { index: _ignored, ...rest } = t;
+        return rest;
+      });
 
     const config2 = {
       version,
@@ -803,60 +803,60 @@ export class ProjectManager {
       faceRepare: cfg.faceRepare ?? '0',
       modelOptimization: cfg.modelOptimization ?? '0',
       ...(cfg.metadata ? { metadata: cfg.metadata } : {})
-    }
+    };
 
-    return config2
+    return config2;
   }
 
   _resolvePackageModelKeys(models, includeModels) {
-    if (!models || typeof models !== 'object') return []
+    if (!models || typeof models !== 'object') return [];
 
-    const modelsObj = models as Record<string, any>
+    const modelsObj = models as Record<string, any>;
 
-    if (includeModels === false) return []
+    if (includeModels === false) return [];
 
     if (Array.isArray(includeModels)) {
       return includeModels
         .filter((k) => typeof k === 'string' && k.length > 0)
-        .filter((k) => !!modelsObj[k]?.path)
+        .filter((k) => !!modelsObj[k]?.path);
     }
 
     // 默认：全量打包当前 config 里引用到的模型
     return Object.entries(modelsObj)
       .filter(([, model]) => !!model?.path)
-      .map(([key]) => key)
+      .map(([key]) => key);
   }
 
   _extractFileName(path) {
-    if (typeof path !== 'string') return ''
-    const cleaned = path.split('#')[0].split('?')[0].replace(/\\/g, '/')
-    const parts = cleaned.split('/').filter(Boolean)
-    return parts.length ? parts[parts.length - 1] : ''
+    if (typeof path !== 'string') return '';
+    const cleaned = path.split('#')[0].split('?')[0].replace(/\\/g, '/');
+    const parts = cleaned.split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
   }
 
   _extractExt(name) {
-    if (typeof name !== 'string') return ''
-    const m = name.toLowerCase().match(/\.([a-z0-9]+)$/)
-    return m ? m[1] : ''
+    if (typeof name !== 'string') return '';
+    const m = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+    return m ? m[1] : '';
   }
 
   _stripExt(name) {
-    if (typeof name !== 'string') return ''
-    return name.replace(/\.[a-z0-9]+$/i, '')
+    if (typeof name !== 'string') return '';
+    return name.replace(/\.[a-z0-9]+$/i, '');
   }
 
   _sanitizeFileName(name) {
-    if (typeof name !== 'string') return ''
-    return name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim()
+    if (typeof name !== 'string') return '';
+    return name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim();
   }
 
   _guessExtFromBlob(blob) {
-    const type = blob?.type || ''
-    if (type.includes('stl')) return 'stl'
-    if (type.includes('obj')) return 'obj'
-    if (type.includes('zip')) return 'zip'
-    return ''
+    const type = blob?.type || '';
+    if (type.includes('stl')) return 'stl';
+    if (type.includes('obj')) return 'obj';
+    if (type.includes('zip')) return 'zip';
+    return '';
   }
 }
 
-export default ProjectManager
+export default ProjectManager;

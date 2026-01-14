@@ -1,6 +1,6 @@
-import type * as THREE from 'three'
-import type { TextObject, TextListItem } from './text'
-import type { CommandSnapshot } from './history'
+import type * as THREE from 'three';
+import type { TextObject, TextListItem } from './text';
+import type { CommandSnapshot } from './history';
 
 export type FeatureType = 'base' | 'ornament' | 'text' | 'adjust'
 export type ViewMode = 'result' | 'construct'
