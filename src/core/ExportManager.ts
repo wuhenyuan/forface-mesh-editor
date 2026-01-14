@@ -20,24 +20,24 @@ export class ExportManager {
     this.stlExporter = new STLExporter();
     this.objExporter = new OBJExporter();
     this.gltfExporter = new GLTFExporter();
-    
+
     // 导出配置
     this.config = {
       // STL 配置
       stl: {
-        binary: true  // 默认使用二进制格式（文件更小）
+        binary: true, // 默认使用二进制格式（文件更小）
       },
       // GLTF 配置
       gltf: {
-        binary: true,           // 使用 GLB 格式
+        binary: true, // 使用 GLB 格式
         includeCustomExtensions: false,
-        trs: false,             // 使用矩阵而非 TRS
-        onlyVisible: true,      // 只导出可见对象
+        trs: false, // 使用矩阵而非 TRS
+        onlyVisible: true, // 只导出可见对象
         truncateDrawRange: true,
-        maxTextureSize: 4096
-      }
+        maxTextureSize: 4096,
+      },
     };
-    
+
     // 事件回调
     this.onProgress = null;
     this.onError = null;
@@ -52,16 +52,16 @@ export class ExportManager {
    */
   async export(objects: any, format: string, options: Record<string, any> = {}) {
     const objectsArray = Array.isArray(objects) ? objects : [objects];
-    
+
     if (objectsArray.length === 0) {
       throw new Error('没有可导出的对象');
     }
-    
+
     console.log(`[ExportManager] 开始导出 ${objectsArray.length} 个对象，格式: ${format}`);
-    
+
     try {
       let result;
-      
+
       switch (format.toLowerCase()) {
         case 'stl':
           result = await this.exportSTL(objectsArray, options);
@@ -81,10 +81,9 @@ export class ExportManager {
         default:
           throw new Error(`不支持的导出格式: ${format}`);
       }
-      
+
       console.log(`[ExportManager] 导出完成`);
       return result;
-      
     } catch (error) {
       console.error('[ExportManager] 导出失败:', error);
       this.onError?.(error);
@@ -100,13 +99,13 @@ export class ExportManager {
    */
   async exportSTL(objects: any[], options: Record<string, any> = {}) {
     const { binary = this.config.stl.binary } = options;
-    
+
     // 创建临时场景包含所有对象
     const exportScene = this._createExportScene(objects);
-    
+
     try {
       const result = this.stlExporter.parse(exportScene, { binary });
-      
+
       if (binary) {
         // 二进制格式返回 ArrayBuffer
         return new Blob([result], { type: 'application/octet-stream' });
@@ -127,7 +126,7 @@ export class ExportManager {
    */
   async exportOBJ(objects: any[], options: Record<string, any> = {}) {
     const exportScene = this._createExportScene(objects);
-    
+
     try {
       const result = this.objExporter.parse(exportScene);
       return new Blob([result], { type: 'text/plain' });
@@ -180,7 +179,14 @@ export class ExportManager {
         const matName = material.name || `material_${material.uuid.substring(0, 8)}`;
         materials.set(matName, material);
 
-        const textureProps = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
+        const textureProps = [
+          'map',
+          'normalMap',
+          'roughnessMap',
+          'metalnessMap',
+          'aoMap',
+          'emissiveMap',
+        ];
         for (const prop of textureProps) {
           const texture = material[prop];
           if (texture?.image) {
@@ -208,7 +214,9 @@ export class ExportManager {
       if (mat.color) {
         const c = mat.color;
         lines.push(`Kd ${c.r.toFixed(6)} ${c.g.toFixed(6)} ${c.b.toFixed(6)}`);
-        lines.push(`Ka ${(c.r * 0.2).toFixed(6)} ${(c.g * 0.2).toFixed(6)} ${(c.b * 0.2).toFixed(6)}`);
+        lines.push(
+          `Ka ${(c.r * 0.2).toFixed(6)} ${(c.g * 0.2).toFixed(6)} ${(c.b * 0.2).toFixed(6)}`
+        );
       }
 
       lines.push('Ks 0.500000 0.500000 0.500000');
@@ -278,17 +286,17 @@ export class ExportManager {
   async exportGLTF(objects: any[], options: Record<string, any> = {}) {
     const exportOptions = {
       ...this.config.gltf,
-      ...options
+      ...options,
     };
-    
+
     const exportScene = this._createExportScene(objects);
-    
+
     return new Promise((resolve, reject) => {
       this.gltfExporter.parse(
         exportScene,
         (result) => {
           this._disposeExportScene(exportScene);
-          
+
           if (exportOptions.binary) {
             // GLB 格式
             resolve(new Blob([result], { type: 'application/octet-stream' }));
@@ -314,14 +322,19 @@ export class ExportManager {
    * @param {string} filename - 文件名（不含扩展名）
    * @param {Object} options - 导出选项
    */
-  async exportAndDownload(objects: any, format: string, filename: string = 'model', options: Record<string, any> = {}) {
+  async exportAndDownload(
+    objects: any,
+    format: string,
+    filename: string = 'model',
+    options: Record<string, any> = {}
+  ) {
     const blob = await this.export(objects, format, options);
-    
+
     const extension = this._getExtension(format);
     const fullFilename = `${filename}.${extension}`;
-    
+
     this._downloadBlob(blob, fullFilename);
-    
+
     console.log(`[ExportManager] 文件已下载: ${fullFilename}`);
   }
 
@@ -334,7 +347,7 @@ export class ExportManager {
    */
   async exportScene(scene: any, format: string, options: Record<string, any> = {}) {
     const { includeHelpers = false } = options;
-    
+
     const meshes = [];
     scene.traverse((object) => {
       if (object.isMesh) {
@@ -345,11 +358,11 @@ export class ExportManager {
         meshes.push(object);
       }
     });
-    
+
     if (meshes.length === 0) {
       throw new Error('场景中没有可导出的网格');
     }
-    
+
     return this.export(meshes, format, options);
   }
 
@@ -364,7 +377,7 @@ export class ExportManager {
     if (!selectedObject) {
       throw new Error('没有选中的对象');
     }
-    
+
     return this.export(selectedObject, format, options);
   }
 
@@ -379,10 +392,10 @@ export class ExportManager {
     if (meshes.length === 0) {
       throw new Error('没有可合并的网格');
     }
-    
+
     // 合并几何体
     const mergedMesh = this._mergeMeshes(meshes);
-    
+
     try {
       return await this.export(mergedMesh, format, options);
     } finally {
@@ -397,13 +410,13 @@ export class ExportManager {
    */
   _createExportScene(objects: any[]) {
     const scene = new THREE.Scene();
-    
-    objects.forEach(obj => {
+
+    objects.forEach((obj) => {
       // 克隆对象以避免修改原始对象
       const clone = obj.clone();
       scene.add(clone);
     });
-    
+
     return scene;
   }
 
@@ -429,27 +442,27 @@ export class ExportManager {
    */
   _mergeMeshes(meshes: any[]) {
     const geometries = [];
-    
-    meshes.forEach(mesh => {
+
+    meshes.forEach((mesh) => {
       if (!mesh.isMesh || !mesh.geometry) return;
-      
+
       // 克隆几何体并应用世界变换
       const geometry = mesh.geometry.clone();
       geometry.applyMatrix4(mesh.matrixWorld);
       geometries.push(geometry);
     });
-    
+
     if (geometries.length === 0) {
       throw new Error('没有有效的几何体可合并');
     }
-    
+
     // 使用 BufferGeometryUtils 合并（如果可用）
     // 这里使用简单的方式：只取第一个几何体
     // 完整实现需要 import { mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-    
+
     const mergedGeometry = geometries[0];
     const material = meshes[0].material.clone();
-    
+
     return new THREE.Mesh(mergedGeometry, material);
   }
 
@@ -459,11 +472,11 @@ export class ExportManager {
    */
   _getExtension(format: string) {
     const extensions = {
-      'stl': 'stl',
-      'obj': 'obj',
+      stl: 'stl',
+      obj: 'obj',
       'obj-zip': 'zip',
-      'gltf': 'gltf',
-      'glb': 'glb'
+      gltf: 'gltf',
+      glb: 'glb',
     };
     return extensions[format.toLowerCase()] || format;
   }
@@ -478,11 +491,11 @@ export class ExportManager {
     link.href = url;
     link.download = filename;
     link.style.display = 'none';
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     // 延迟释放 URL
     setTimeout(() => URL.revokeObjectURL(url), 100);
   }
@@ -498,29 +511,29 @@ export class ExportManager {
         name: 'STL',
         extension: '.stl',
         description: '立体光刻格式，适用于 3D 打印',
-        binary: true
+        binary: true,
       },
       {
         id: 'obj',
         name: 'OBJ',
         extension: '.obj',
         description: 'Wavefront OBJ 格式，广泛支持',
-        binary: false
+        binary: false,
       },
       {
         id: 'gltf',
         name: 'GLTF',
         extension: '.gltf',
         description: 'GL 传输格式（JSON），包含材质和纹理',
-        binary: false
+        binary: false,
       },
       {
         id: 'glb',
         name: 'GLB',
         extension: '.glb',
         description: 'GL 传输格式（二进制），单文件包含所有资源',
-        binary: true
-      }
+        binary: true,
+      },
     ];
   }
 
@@ -533,10 +546,10 @@ export class ExportManager {
   estimateExportSize(objects: any, format: string) {
     let vertexCount = 0;
     let faceCount = 0;
-    
+
     const objectsArray = Array.isArray(objects) ? objects : [objects];
-    
-    objectsArray.forEach(obj => {
+
+    objectsArray.forEach((obj) => {
       obj.traverse((child) => {
         if (child.isMesh && child.geometry) {
           const geo = child.geometry;
@@ -548,7 +561,7 @@ export class ExportManager {
         }
       });
     });
-    
+
     // 估算文件大小（粗略）
     let estimatedSize = 0;
     switch (format.toLowerCase()) {
@@ -566,12 +579,12 @@ export class ExportManager {
         estimatedSize = vertexCount * 24 + 1000;
         break;
     }
-    
+
     return {
       vertexCount,
       faceCount,
       estimatedSize,
-      estimatedSizeFormatted: this._formatFileSize(estimatedSize)
+      estimatedSizeFormatted: this._formatFileSize(estimatedSize),
     };
   }
 

@@ -34,16 +34,12 @@ export class CylinderSurfaceHelper {
 
     for (let i = 0; i < sampleSize; i++) {
       const idx = i * step * 3;
-      samples.push(new THREE.Vector3(
-        positions[idx],
-        positions[idx + 1], 
-        positions[idx + 2]
-      ));
+      samples.push(new THREE.Vector3(positions[idx], positions[idx + 1], positions[idx + 2]));
     }
 
     // 尝试拟合圆柱面
     const cylinderInfo = this.fitCylinder(samples);
-    
+
     if (cylinderInfo && this.validateCylinder(samples, cylinderInfo)) {
       return cylinderInfo;
     }
@@ -61,12 +57,12 @@ export class CylinderSurfaceHelper {
 
     // 使用RANSAC算法拟合圆柱面
     const bestFit = this.ransacCylinderFit(points);
-    
+
     if (!bestFit) {
       // 如果RANSAC失败，尝试基于主成分分析的方法
       return this.pcaCylinderFit(points);
     }
-    
+
     return bestFit;
   }
 
@@ -79,29 +75,29 @@ export class CylinderSurfaceHelper {
     const maxIterations = 150; // 增加迭代次数
     const minInliers = Math.floor(points.length * 0.5); // 降低要求从60%到50%
     const distanceThreshold = 0.15; // 放宽距离阈值从0.1到0.15
-    
+
     console.log('🎯 RANSAC参数:', {
       maxIterations,
       minInliers,
       distanceThreshold,
-      totalPoints: points.length
+      totalPoints: points.length,
     });
-    
+
     let bestFit = null;
     let bestInlierCount = 0;
 
     for (let iter = 0; iter < maxIterations; iter++) {
       // 随机选择5个点来估计圆柱参数
       const samplePoints = this.randomSample(points, 5);
-      
+
       // 尝试从这5个点估计圆柱参数
       const cylinderCandidate = this.estimateCylinderFrom5Points(samplePoints);
-      
+
       if (!cylinderCandidate) continue;
 
       // 计算有多少点支持这个圆柱
       const inliers = this.countInliers(points, cylinderCandidate, distanceThreshold);
-      
+
       if (inliers > bestInlierCount && inliers >= minInliers) {
         bestInlierCount = inliers;
         bestFit = cylinderCandidate;
@@ -113,7 +109,7 @@ export class CylinderSurfaceHelper {
       console.log('✅ RANSAC拟合成功:', {
         inliers: bestInlierCount,
         totalPoints: points.length,
-        inlierRatio: (bestInlierCount / points.length * 100).toFixed(1) + '%'
+        inlierRatio: ((bestInlierCount / points.length) * 100).toFixed(1) + '%',
       });
     } else {
       console.log('❌ RANSAC拟合失败，将尝试PCA方法');
@@ -141,15 +137,14 @@ export class CylinderSurfaceHelper {
 
       // 计算圆柱中心（圆心在轴上的投影）
       const center = this.projectPointOntoLine(circle.center, new THREE.Vector3(), axis);
-      
+
       return {
         center: center,
         axis: axis.normalize(),
         radius: circle.radius,
         height: this.estimateHeight(points, center, axis),
-        confidence: 0.5 // 初始置信度
+        confidence: 0.5, // 初始置信度
       };
-
     } catch (error) {
       return null;
     }
@@ -169,7 +164,7 @@ export class CylinderSurfaceHelper {
     const v1 = p2.clone().sub(p1);
     const v2 = p3.clone().sub(p1);
     const cross = v1.clone().cross(v2);
-    
+
     if (cross.length() < 0.001) {
       return null; // 三点共线，无法确定圆
     }
@@ -178,31 +173,35 @@ export class CylinderSurfaceHelper {
     const a = p1.distanceTo(p2);
     const b = p2.distanceTo(p3);
     const c = p3.distanceTo(p1);
-    
+
     // 计算外接圆半径
     const s = (a + b + c) / 2; // 半周长
     const area = Math.sqrt(s * (s - a) * (s - b) * (s - c)); // 海伦公式
-    
+
     if (area < 0.001) return null;
-    
+
     const radius = (a * b * c) / (4 * area);
-    
+
     // 计算外接圆圆心
     const d = 2 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
-    
+
     if (Math.abs(d) < 0.001) return null;
-    
-    const ux = ((p1.x * p1.x + p1.y * p1.y) * (p2.y - p3.y) + 
-                (p2.x * p2.x + p2.y * p2.y) * (p3.y - p1.y) + 
-                (p3.x * p3.x + p3.y * p3.y) * (p1.y - p2.y)) / d;
-    
-    const uy = ((p1.x * p1.x + p1.y * p1.y) * (p3.x - p2.x) + 
-                (p2.x * p2.x + p2.y * p2.y) * (p1.x - p3.x) + 
-                (p3.x * p3.x + p3.y * p3.y) * (p2.x - p1.x)) / d;
+
+    const ux =
+      ((p1.x * p1.x + p1.y * p1.y) * (p2.y - p3.y) +
+        (p2.x * p2.x + p2.y * p2.y) * (p3.y - p1.y) +
+        (p3.x * p3.x + p3.y * p3.y) * (p1.y - p2.y)) /
+      d;
+
+    const uy =
+      ((p1.x * p1.x + p1.y * p1.y) * (p3.x - p2.x) +
+        (p2.x * p2.x + p2.y * p2.y) * (p1.x - p3.x) +
+        (p3.x * p3.x + p3.y * p3.y) * (p2.x - p1.x)) /
+      d;
 
     return {
       center: new THREE.Vector3(ux, uy, (p1.z + p2.z + p3.z) / 3),
-      radius: radius
+      radius: radius,
     };
   }
 
@@ -213,7 +212,7 @@ export class CylinderSurfaceHelper {
    */
   pcaCylinderFit(points) {
     console.log('🔧 使用PCA方法拟合圆柱');
-    
+
     // 计算点云的质心
     const centroid = new THREE.Vector3();
     for (const point of points) {
@@ -223,10 +222,10 @@ export class CylinderSurfaceHelper {
 
     // 计算协方差矩阵
     const covariance = this.computeCovarianceMatrix(points, centroid);
-    
+
     // 计算特征值和特征向量
     const eigen = this.computeEigenVectors(covariance);
-    
+
     if (!eigen) {
       console.log('❌ PCA特征向量计算失败');
       return null;
@@ -234,7 +233,7 @@ export class CylinderSurfaceHelper {
 
     // 最大特征值对应的特征向量作为圆柱轴向
     const axis = eigen.maxEigenVector.normalize();
-    
+
     // 将所有点投影到垂直于轴的平面上
     const projectedPoints = [];
     for (const point of points) {
@@ -254,44 +253,47 @@ export class CylinderSurfaceHelper {
     // 计算平均半径和方差
     let totalRadius = 0;
     let radiusVariance = 0;
-    
+
     for (const p of projectedPoints) {
       const radius = p.distanceTo(projectedCenter);
       totalRadius += radius;
     }
-    
+
     const avgRadius = totalRadius / projectedPoints.length;
-    
+
     for (const p of projectedPoints) {
       const radius = p.distanceTo(projectedCenter);
       radiusVariance += Math.pow(radius - avgRadius, 2);
     }
-    
+
     const radiusStdDev = Math.sqrt(radiusVariance / projectedPoints.length);
-    
+
     // 改进置信度计算 - 对低分辨率圆柱更宽容
-    const radiusConsistency = Math.max(0, 1 - (radiusStdDev / avgRadius));
-    
+    const radiusConsistency = Math.max(0, 1 - radiusStdDev / avgRadius);
+
     // 检查几何体的圆柱特征
     const aspectRatio = this.calculateAspectRatio(points);
     const geometryScore = this.calculateGeometryScore(points, centroid, axis, avgRadius);
-    
+
     // 综合置信度计算
-    const confidence = Math.min(1, (radiusConsistency * 0.4 + aspectRatio * 0.3 + geometryScore * 0.3));
-    
+    const confidence = Math.min(
+      1,
+      radiusConsistency * 0.4 + aspectRatio * 0.3 + geometryScore * 0.3
+    );
+
     console.log('📊 PCA分析结果:', {
       avgRadius: avgRadius.toFixed(3),
       radiusStdDev: radiusStdDev.toFixed(3),
       radiusConsistency: radiusConsistency.toFixed(3),
       aspectRatio: aspectRatio.toFixed(3),
       geometryScore: geometryScore.toFixed(3),
-      finalConfidence: confidence.toFixed(3)
+      finalConfidence: confidence.toFixed(3),
     });
-    
+
     // 计算高度范围
     let minHeight = Infinity;
     let maxHeight = -Infinity;
-    
+
     for (const point of points) {
       const height = point.clone().sub(projectedCenter).dot(axis);
       minHeight = Math.min(minHeight, height);
@@ -303,7 +305,7 @@ export class CylinderSurfaceHelper {
       axis: axis,
       radius: avgRadius,
       height: maxHeight - minHeight,
-      confidence: confidence
+      confidence: confidence,
     };
   }
 
@@ -315,20 +317,20 @@ export class CylinderSurfaceHelper {
   calculateAspectRatio(points) {
     const bbox = new THREE.Box3().setFromPoints(points);
     const size = bbox.max.clone().sub(bbox.min);
-    
+
     // 对于圆柱，期望有一个轴明显长于其他两个轴
     const dimensions = [size.x, size.y, size.z].sort((a, b) => b - a);
     const [longest, middle, shortest] = dimensions;
-    
+
     if (longest < 0.001) return 0;
-    
+
     // 检查是否有明显的主轴
     const mainAxisRatio = longest / Math.max(middle, shortest);
     const crossSectionRatio = Math.abs(middle - shortest) / Math.max(middle, shortest);
-    
+
     // 圆柱应该有一个长轴和两个相近的短轴
     const aspectScore = Math.min(1, (mainAxisRatio - 1) / 3) * (1 - crossSectionRatio);
-    
+
     return Math.max(0, aspectScore);
   }
 
@@ -343,14 +345,14 @@ export class CylinderSurfaceHelper {
   calculateGeometryScore(points, center, axis, radius) {
     let validPoints = 0;
     const tolerance = Math.max(0.2, radius * 0.1); // 宽松的容差
-    
+
     for (const point of points) {
       const distance = this.distanceTocylinder(point, { center, axis, radius });
       if (distance < tolerance) {
         validPoints++;
       }
     }
-    
+
     return validPoints / points.length;
   }
 
@@ -364,13 +366,13 @@ export class CylinderSurfaceHelper {
     const cov = [
       [0, 0, 0],
       [0, 0, 0],
-      [0, 0, 0]
+      [0, 0, 0],
     ];
 
     for (const point of points) {
       const diff = point.clone().sub(centroid);
       const coords = [diff.x, diff.y, diff.z];
-      
+
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
           cov[i][j] += coords[i] * coords[j];
@@ -397,14 +399,14 @@ export class CylinderSurfaceHelper {
   computeEigenVectors(matrix) {
     // 这里使用简化的方法，实际应用中可能需要更精确的特征值分解
     // 对于圆柱检测，我们主要关心主方向
-    
+
     // 计算矩阵的迹和行列式来估计主方向
     const trace = matrix[0][0] + matrix[1][1] + matrix[2][2];
-    
+
     // 找到最大的对角元素作为主方向的近似
     let maxIndex = 0;
     let maxValue = matrix[0][0];
-    
+
     for (let i = 1; i < 3; i++) {
       if (matrix[i][i] > maxValue) {
         maxValue = matrix[i][i];
@@ -414,10 +416,10 @@ export class CylinderSurfaceHelper {
 
     const eigenVector = new THREE.Vector3();
     eigenVector.setComponent(maxIndex, 1);
-    
+
     return {
       maxEigenVector: eigenVector,
-      maxEigenValue: maxValue
+      maxEigenValue: maxValue,
     };
   }
 
@@ -430,7 +432,7 @@ export class CylinderSurfaceHelper {
   randomSample(array, count) {
     const result = [];
     const indices = new Set();
-    
+
     while (result.length < count && indices.size < array.length) {
       const index = Math.floor(Math.random() * array.length);
       if (!indices.has(index)) {
@@ -438,7 +440,7 @@ export class CylinderSurfaceHelper {
         result.push(array[index]);
       }
     }
-    
+
     return result;
   }
 
@@ -451,14 +453,14 @@ export class CylinderSurfaceHelper {
    */
   countInliers(points, cylinder, threshold) {
     let count = 0;
-    
+
     for (const point of points) {
       const distance = this.distanceTocylinder(point, cylinder);
       if (distance < threshold) {
         count++;
       }
     }
-    
+
     return count;
   }
 
@@ -471,7 +473,7 @@ export class CylinderSurfaceHelper {
   estimateAxisFromPoints(points, center) {
     // 使用点到中心的向量的主方向作为轴向
     const vectors = [];
-    
+
     for (const point of points) {
       vectors.push(point.clone().sub(center));
     }
@@ -484,7 +486,7 @@ export class CylinderSurfaceHelper {
     const axes = [
       new THREE.Vector3(1, 0, 0),
       new THREE.Vector3(0, 1, 0),
-      new THREE.Vector3(0, 0, 1)
+      new THREE.Vector3(0, 0, 1),
     ];
 
     for (const axis of axes) {
@@ -493,7 +495,7 @@ export class CylinderSurfaceHelper {
         const projection = vec.dot(axis);
         variance += projection * projection;
       }
-      
+
       if (variance > maxVariance) {
         maxVariance = variance;
         maxVarianceAxis = axis.clone();
@@ -526,17 +528,15 @@ export class CylinderSurfaceHelper {
   estimateHeight(points, center, axis) {
     let minHeight = Infinity;
     let maxHeight = -Infinity;
-    
+
     for (const point of points) {
       const height = point.clone().sub(center).dot(axis);
       minHeight = Math.min(minHeight, height);
       maxHeight = Math.max(maxHeight, height);
     }
-    
+
     return maxHeight - minHeight;
   }
-
-
 
   /**
    * 验证圆柱面拟合质量
@@ -553,7 +553,7 @@ export class CylinderSurfaceHelper {
     if (cylinderInfo.radius < 0.05 || cylinderInfo.height < 0.05) {
       console.log('❌ 圆柱验证失败: 尺寸过小', {
         radius: cylinderInfo.radius,
-        height: cylinderInfo.height
+        height: cylinderInfo.height,
       });
       return false;
     }
@@ -566,9 +566,9 @@ export class CylinderSurfaceHelper {
 
     // 标准几何验证
     const validationResults = this.performGeometricValidation(points, cylinderInfo);
-    
+
     console.log('🔍 几何验证结果:', validationResults);
-    
+
     return validationResults.isValid;
   }
 
@@ -580,7 +580,7 @@ export class CylinderSurfaceHelper {
    */
   performLenientValidation(points, cylinderInfo) {
     const { center, axis, radius } = cylinderInfo;
-    
+
     // 计算点到圆柱面的距离
     const distances = [];
     for (const point of points) {
@@ -590,7 +590,7 @@ export class CylinderSurfaceHelper {
 
     // 非常宽松的容差
     const tolerance = Math.max(0.3, radius * 0.2);
-    const validPoints = distances.filter(d => d < tolerance).length;
+    const validPoints = distances.filter((d) => d < tolerance).length;
     const validRatio = validPoints / points.length;
 
     console.log('📊 宽松验证指标:', {
@@ -598,7 +598,7 @@ export class CylinderSurfaceHelper {
       validPoints: validPoints,
       totalPoints: points.length,
       validRatio: validRatio.toFixed(3),
-      threshold: 0.6
+      threshold: 0.6,
     });
 
     // 只要60%的点在容差内就认为是有效圆柱
@@ -613,7 +613,7 @@ export class CylinderSurfaceHelper {
    */
   performGeometricValidation(points, cylinderInfo) {
     const { center, axis, radius } = cylinderInfo;
-    
+
     // 1. 检查点到圆柱面的距离分布
     const distances = [];
     for (const point of points) {
@@ -623,12 +623,13 @@ export class CylinderSurfaceHelper {
 
     // 计算距离统计
     const meanDistance = distances.reduce((a, b) => a + b, 0) / distances.length;
-    const variance = distances.reduce((sum, d) => sum + Math.pow(d - meanDistance, 2), 0) / distances.length;
+    const variance =
+      distances.reduce((sum, d) => sum + Math.pow(d - meanDistance, 2), 0) / distances.length;
     const stdDev = Math.sqrt(variance);
 
     // 2. 检查有多少点在合理距离内
     const tolerance = Math.max(0.15, radius * 0.08); // 增加容差，特别是对小半径圆柱
-    const validPoints = distances.filter(d => d < tolerance).length;
+    const validPoints = distances.filter((d) => d < tolerance).length;
     const validRatio = validPoints / points.length;
 
     // 3. 检查点的分布是否符合圆柱特征
@@ -638,12 +639,11 @@ export class CylinderSurfaceHelper {
     const axialDistribution = this.analyzeAxialDistribution(points, cylinderInfo);
 
     // 放宽验证条件，特别是对低分辨率圆柱
-    const isValid = (
-      validRatio > 0.7 &&           // 降低从80%到70%
-      stdDev < radius * 0.15 &&     // 放宽标准差要求从10%到15%
-      distributionScore > 0.6 &&    // 降低分布得分要求从0.7到0.6
-      axialDistribution.coverage > 0.5  // 降低轴向覆盖度要求从0.6到0.5
-    );
+    const isValid =
+      validRatio > 0.7 && // 降低从80%到70%
+      stdDev < radius * 0.15 && // 放宽标准差要求从10%到15%
+      distributionScore > 0.6 && // 降低分布得分要求从0.7到0.6
+      axialDistribution.coverage > 0.5; // 降低轴向覆盖度要求从0.6到0.5
 
     console.log('📊 验证指标:', {
       validRatio: validRatio.toFixed(3),
@@ -652,7 +652,7 @@ export class CylinderSurfaceHelper {
       distributionScore: distributionScore.toFixed(3),
       axialCoverage: axialDistribution.coverage.toFixed(3),
       tolerance: tolerance.toFixed(3),
-      isValid: isValid
+      isValid: isValid,
     });
 
     return {
@@ -662,7 +662,7 @@ export class CylinderSurfaceHelper {
       stdDev,
       distributionScore,
       axialDistribution,
-      tolerance
+      tolerance,
     };
   }
 
@@ -674,7 +674,7 @@ export class CylinderSurfaceHelper {
    */
   analyzePointDistribution(points, cylinderInfo) {
     const { center, axis, radius } = cylinderInfo;
-    
+
     // 将点投影到垂直于轴的平面上，分析角度分布
     const angles = [];
     const refDirection = this.getPerpendicularVector(axis);
@@ -684,7 +684,7 @@ export class CylinderSurfaceHelper {
       const toPoint = point.clone().sub(center);
       const axialComponent = toPoint.dot(axis);
       const radialVector = toPoint.clone().sub(axis.clone().multiplyScalar(axialComponent));
-      
+
       if (radialVector.length() > 0.001) {
         const angle = Math.atan2(
           radialVector.dot(tangentDirection),
@@ -698,21 +698,22 @@ export class CylinderSurfaceHelper {
 
     // 检查角度分布的均匀性
     angles.sort((a, b) => a - b);
-    
+
     // 计算相邻角度的间隔
     const intervals = [];
     for (let i = 1; i < angles.length; i++) {
-      intervals.push(angles[i] - angles[i-1]);
+      intervals.push(angles[i] - angles[i - 1]);
     }
-    
+
     // 添加首尾间隔
     intervals.push(2 * Math.PI - (angles[angles.length - 1] - angles[0]));
 
     // 计算间隔的方差，方差越小说明分布越均匀
-    const meanInterval = 2 * Math.PI / angles.length;
-    const intervalVariance = intervals.reduce((sum, interval) => {
-      return sum + Math.pow(interval - meanInterval, 2);
-    }, 0) / intervals.length;
+    const meanInterval = (2 * Math.PI) / angles.length;
+    const intervalVariance =
+      intervals.reduce((sum, interval) => {
+        return sum + Math.pow(interval - meanInterval, 2);
+      }, 0) / intervals.length;
 
     // 转换为得分（方差越小得分越高）
     const maxVariance = Math.pow(Math.PI, 2); // 最大可能方差
@@ -729,7 +730,7 @@ export class CylinderSurfaceHelper {
    */
   analyzeAxialDistribution(points, cylinderInfo) {
     const { center, axis, height } = cylinderInfo;
-    
+
     // 计算每个点在轴向的位置
     const axialPositions = [];
     for (const point of points) {
@@ -738,36 +739,39 @@ export class CylinderSurfaceHelper {
     }
 
     axialPositions.sort((a, b) => a - b);
-    
+
     const minPos = axialPositions[0];
     const maxPos = axialPositions[axialPositions.length - 1];
     const actualHeight = maxPos - minPos;
-    
+
     // 计算覆盖度
     const coverage = Math.min(1, actualHeight / height);
-    
+
     // 检查分布密度的均匀性
     const segments = 10;
     const segmentHeight = actualHeight / segments;
     const segmentCounts = new Array(segments).fill(0);
-    
+
     for (const pos of axialPositions) {
       const segmentIndex = Math.floor((pos - minPos) / segmentHeight);
       const clampedIndex = Math.max(0, Math.min(segments - 1, segmentIndex));
       segmentCounts[clampedIndex]++;
     }
-    
+
     // 计算分布均匀性
     const expectedCount = axialPositions.length / segments;
-    const uniformity = 1 - segmentCounts.reduce((sum, count) => {
-      return sum + Math.abs(count - expectedCount);
-    }, 0) / (2 * axialPositions.length);
+    const uniformity =
+      1 -
+      segmentCounts.reduce((sum, count) => {
+        return sum + Math.abs(count - expectedCount);
+      }, 0) /
+        (2 * axialPositions.length);
 
     return {
       coverage,
       uniformity,
       actualHeight,
-      expectedHeight: height
+      expectedHeight: height,
     };
   }
 
@@ -779,13 +783,13 @@ export class CylinderSurfaceHelper {
    */
   distanceTocylinder(point, cylinderInfo) {
     const { center, axis, radius } = cylinderInfo;
-    
+
     // 计算点到圆柱轴的距离
     const toPoint = point.clone().sub(center);
     const axialComponent = toPoint.dot(axis);
     const radialVector = toPoint.clone().sub(axis.clone().multiplyScalar(axialComponent));
     const radialDistance = radialVector.length();
-    
+
     return Math.abs(radialDistance - radius);
   }
 
@@ -797,17 +801,17 @@ export class CylinderSurfaceHelper {
    */
   worldToCylinderCoords(point, cylinderInfo) {
     const { center, axis } = cylinderInfo;
-    
+
     // 计算相对于圆柱中心的向量
     const toPoint = point.clone().sub(center);
-    
+
     // 计算高度（沿轴方向的投影）
     const height = toPoint.dot(axis);
-    
+
     // 计算径向向量
     const radialVector = toPoint.clone().sub(axis.clone().multiplyScalar(height));
     const radius = radialVector.length();
-    
+
     // 计算角度
     let theta = 0;
     if (radius > 0.001) {
@@ -818,7 +822,7 @@ export class CylinderSurfaceHelper {
         radialVector.dot(refDirection)
       );
     }
-    
+
     return { theta, height, radius };
   }
 
@@ -831,21 +835,23 @@ export class CylinderSurfaceHelper {
    */
   cylinderToWorldCoords(theta, height, cylinderInfo) {
     const { center, axis, radius } = cylinderInfo;
-    
+
     // 获取参考方向
     const refDirection = this.getPerpendicularVector(axis);
     const tangentDirection = refDirection.clone().cross(axis).normalize();
-    
+
     // 计算径向位置
-    const radialDirection = refDirection.clone()
+    const radialDirection = refDirection
+      .clone()
       .multiplyScalar(Math.cos(theta))
       .add(tangentDirection.clone().multiplyScalar(Math.sin(theta)));
-    
+
     // 计算最终位置
-    const position = center.clone()
+    const position = center
+      .clone()
       .add(axis.clone().multiplyScalar(height))
       .add(radialDirection.multiplyScalar(radius));
-    
+
     return position;
   }
 
@@ -856,7 +862,7 @@ export class CylinderSurfaceHelper {
    */
   getPerpendicularVector(vector) {
     const normalized = vector.clone().normalize();
-    
+
     // 选择一个不平行的向量
     let perpendicular;
     if (Math.abs(normalized.x) < 0.9) {
@@ -864,7 +870,7 @@ export class CylinderSurfaceHelper {
     } else {
       perpendicular = new THREE.Vector3(0, 1, 0);
     }
-    
+
     // 计算叉积得到垂直向量
     return perpendicular.cross(normalized).normalize();
   }
@@ -877,12 +883,12 @@ export class CylinderSurfaceHelper {
    */
   getCylinderNormal(point, cylinderInfo) {
     const { center, axis } = cylinderInfo;
-    
+
     // 计算径向向量
     const toPoint = point.clone().sub(center);
     const axialComponent = toPoint.dot(axis);
     const radialVector = toPoint.clone().sub(axis.clone().multiplyScalar(axialComponent));
-    
+
     // 法向量就是归一化的径向向量
     return radialVector.normalize();
   }
@@ -899,36 +905,32 @@ export class CylinderSurfaceHelper {
     const {
       fontSize = 1,
       letterSpacing = 0.1,
-      direction = 1 // 1为顺时针，-1为逆时针
+      direction = 1, // 1为顺时针，-1为逆时针
     } = options;
 
     // 转换起始点到圆柱坐标
     const startCoords = this.worldToCylinderCoords(startPoint, cylinderInfo);
-    
+
     const pathPoints = [];
     const letterWidth = fontSize * 0.6; // 估算字符宽度
-    
+
     for (let i = 0; i < text.length; i++) {
       // 计算当前字符的角度偏移
-      const angleOffset = direction * (i * (letterWidth + letterSpacing)) / cylinderInfo.radius;
+      const angleOffset = (direction * (i * (letterWidth + letterSpacing))) / cylinderInfo.radius;
       const currentTheta = startCoords.theta + angleOffset;
-      
+
       // 转换回世界坐标
-      const worldPos = this.cylinderToWorldCoords(
-        currentTheta, 
-        startCoords.height, 
-        cylinderInfo
-      );
-      
+      const worldPos = this.cylinderToWorldCoords(currentTheta, startCoords.height, cylinderInfo);
+
       pathPoints.push({
         position: worldPos,
         theta: currentTheta,
         height: startCoords.height,
         char: text[i],
-        index: i
+        index: i,
       });
     }
-    
+
     return pathPoints;
   }
 }

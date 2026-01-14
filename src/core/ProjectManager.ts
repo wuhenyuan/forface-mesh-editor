@@ -5,16 +5,16 @@
 import defaultConfig, { normalizeConfig, serializeConfig } from '../../config/config';
 
 interface ProjectInfo {
-  id: string | null
-  name: string
-  createTime: number | null
-  updateTime: number | null
-  version: number
+  id: string | null;
+  name: string;
+  createTime: number | null;
+  updateTime: number | null;
+  version: number;
 }
 
-type ProjectManagerCallback = ((event: any) => void) | null
+type ProjectManagerCallback = ((event: any) => void) | null;
 
-type PackageObjectUrlEntry = string | { url: string; file?: File | Blob }
+type PackageObjectUrlEntry = string | { url: string; file?: File | Blob };
 
 export class ProjectManager {
   config: any;
@@ -28,19 +28,19 @@ export class ProjectManager {
   constructor() {
     // 当前项目配置（深拷贝默认配置）
     this.config = normalizeConfig(this._deepClone(defaultConfig));
-    
+
     // 项目元信息
     this.projectInfo = {
       id: null,
       name: '未命名项目',
       createTime: null,
       updateTime: null,
-      version: 1
+      version: 1,
     };
-    
+
     // 是否有未保存的修改
     this._isDirty = false;
-    
+
     // 事件回调
     this.onChange = null;
     this.onSave = null;
@@ -57,25 +57,25 @@ export class ProjectManager {
    */
   createProject(options: Record<string, any> = {}) {
     const { name = '未命名项目', originModelPath = '' } = options;
-    
+
     // 重置为默认配置
     this._revokePackageObjectUrls();
     this.config = normalizeConfig(this._deepClone(defaultConfig));
     this.config.models.origin.path = originModelPath || '';
     this.config.status = 'draft';
-    
+
     // 设置项目信息
     this.projectInfo = {
       id: this._generateId(),
       name,
       createTime: Date.now(),
       updateTime: Date.now(),
-      version: 1
+      version: 1,
     };
-    
+
     this._isDirty = false;
     this.onChange?.({ type: 'create', project: this.getProjectData() });
-    
+
     console.log(`[ProjectManager] 创建新项目: ${name}`);
     return this.getProjectData();
   }
@@ -87,14 +87,14 @@ export class ProjectManager {
   getProjectData() {
     return {
       projectInfo: { ...this.projectInfo },
-      config: this._deepClone(this.config)
+      config: this._deepClone(this.config),
     };
   }
 
   _getPersistedProjectData(configOverride?: any) {
     return {
       projectInfo: { ...this.projectInfo },
-      config: serializeConfig(configOverride || this.config)
+      config: serializeConfig(configOverride || this.config),
     };
   }
 
@@ -112,16 +112,16 @@ export class ProjectManager {
 
       const data = {
         projectInfo: projectInfoForSave,
-        config: serializeConfig(configForSave)
+        config: serializeConfig(configForSave),
       };
-      
+
       localStorage.setItem(key, JSON.stringify(data));
 
       this.projectInfo.updateTime = nextUpdateTime;
       this._isDirty = false;
       this.config.status = 'synced';
       this.onSave?.({ type: 'local', key, data });
-      
+
       console.log(`[ProjectManager] 项目已保存到本地: ${key}`);
       return true;
     } catch (error) {
@@ -142,7 +142,7 @@ export class ProjectManager {
         console.warn(`[ProjectManager] 未找到本地项目: ${key}`);
         return null;
       }
-      
+
       const data = JSON.parse(json);
       return this.loadProject(data);
     } catch (error) {
@@ -171,26 +171,24 @@ export class ProjectManager {
     if (isProjectWrapper) {
       this.projectInfo = {
         ...this.projectInfo,
-        ...source.projectInfo
+        ...source.projectInfo,
       };
     } else {
       const now = Date.now();
       const inferredName =
-        typeof options?.name === 'string' && options.name.trim()
-          ? options.name.trim()
-          : '导入项目';
+        typeof options?.name === 'string' && options.name.trim() ? options.name.trim() : '导入项目';
       this.projectInfo = {
         id: this._generateId(),
         name: inferredName,
         createTime: now,
         updateTime: now,
-        version: 1
+        version: 1,
       };
     }
-    
+
     this._isDirty = false;
     this.onLoad?.({ type: 'load', project: this.getProjectData() });
-    
+
     console.log(`[ProjectManager] 项目已加载: ${this.projectInfo.name}`);
     return this.getProjectData();
   }
@@ -203,7 +201,7 @@ export class ProjectManager {
     const data = this._getPersistedProjectData();
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    
+
     this._downloadBlob(blob, `${filename}.json`);
     console.log(`[ProjectManager] 项目已导出: ${filename}.json`);
   }
@@ -220,7 +218,7 @@ export class ProjectManager {
 
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      
+
       reader.onload = (e) => {
         try {
           const result = (e as any)?.target?.result;
@@ -233,7 +231,7 @@ export class ProjectManager {
           reject(new Error('无效的项目文件'));
         }
       };
-      
+
       reader.onerror = () => reject(new Error('文件读取失败'));
       reader.readAsText(file);
     });
@@ -262,7 +260,7 @@ export class ProjectManager {
       includeModels = true,
       format = 'v3',
       projectFileName = 'project.json',
-      fetchOptions = undefined
+      fetchOptions = undefined,
     } = options;
 
     const { default: JSZip } = await import('jszip');
@@ -284,9 +282,10 @@ export class ProjectManager {
         const runtimePath = this.resolveModelPath(key);
         const blob = await this._fetchAsBlob(runtimePath, { modelKey: key, fetchOptions });
 
-        const fileName = format === 'config2'
-          ? this._inferConfig2PackageFileName({ key, configuredPath, blob, usedNames })
-          : this._inferPackageFileName({ key, configuredPath, blob, usedNames });
+        const fileName =
+          format === 'config2'
+            ? this._inferConfig2PackageFileName({ key, configuredPath, blob, usedNames })
+            : this._inferPackageFileName({ key, configuredPath, blob, usedNames });
 
         const zipPath = `${modelDir}/${fileName}`;
         zip.file(zipPath, blob);
@@ -301,7 +300,11 @@ export class ProjectManager {
       if (format === 'config2') {
         zip.file(
           projectFileName,
-          JSON.stringify(this._buildConfig2ForPackage({ packageConfig, packagedPathByKey }), null, 2)
+          JSON.stringify(
+            this._buildConfig2ForPackage({ packageConfig, packagedPathByKey }),
+            null,
+            2
+          )
         );
       }
     }
@@ -310,7 +313,10 @@ export class ProjectManager {
       const packageData = this._getPersistedProjectData(packageConfig);
       zip.file(projectFileName, JSON.stringify(packageData, null, 2));
     } else if (!zip.file(projectFileName)) {
-      zip.file(projectFileName, JSON.stringify(this._buildConfig2ForPackage({ packageConfig }), null, 2));
+      zip.file(
+        projectFileName,
+        JSON.stringify(this._buildConfig2ForPackage({ packageConfig }), null, 2)
+      );
     }
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -329,7 +335,7 @@ export class ProjectManager {
     return await this.exportProjectPackage({
       ...options,
       includeModels: true,
-      format: 'config2'
+      format: 'config2',
     });
   }
 
@@ -347,7 +353,8 @@ export class ProjectManager {
       zip.file('project.forface.json') ||
       zip.file('mesh-editor-config.json');
 
-    const projectFileName = projectEntry?.name ||
+    const projectFileName =
+      projectEntry?.name ||
       Object.keys(zip.files).find((name) => name.toLowerCase().endsWith('.json'));
 
     if (!projectFileName) throw new Error('ZIP 内未找到 project.json');
@@ -368,9 +375,10 @@ export class ProjectManager {
       const blob = await zip.file(name).async('blob');
       const normalized = this._normalizeZipPath(name);
       const baseName = normalized.split('/').filter(Boolean).pop() || normalized || 'file';
-      const fileObject = typeof File !== 'undefined'
-        ? new File([blob], baseName, { type: blob.type || undefined })
-        : blob;
+      const fileObject =
+        typeof File !== 'undefined'
+          ? new File([blob], baseName, { type: blob.type || undefined })
+          : blob;
       const url = URL.createObjectURL(blob);
       this._packageObjectUrls.set(normalized, { url, file: fileObject });
     }
@@ -421,7 +429,7 @@ export class ProjectManager {
       const matches = [];
       for (const [path, value] of this._packageObjectUrls.entries()) {
         if (path === baseName || path.endsWith(`/${baseName}`)) {
-          const resolved = typeof value === 'string' ? value : (value.file || value.url);
+          const resolved = typeof value === 'string' ? value : value.file || value.url;
           if (resolved) matches.push(resolved);
         }
       }
@@ -490,9 +498,9 @@ export class ProjectManager {
       position: textConfig.position || [0, 0, 0],
       rotate: textConfig.rotation || [0, 0, 0],
       wrap: 'surface Project',
-      attachmentSurface: textConfig.featureName || ''
+      attachmentSurface: textConfig.featureName || '',
     };
-    
+
     this.config.texts.push(text);
     this._markDirty();
     return text;
@@ -504,9 +512,9 @@ export class ProjectManager {
    * @param {Object} updates - 更新内容
    */
   updateTextConfig(textId, updates) {
-    const text = this.config.texts.find(t => t.index === textId);
+    const text = this.config.texts.find((t) => t.index === textId);
     if (!text) return false;
-    
+
     if (updates.content !== undefined) text.text = updates.content;
     if (updates.size !== undefined) text.size = updates.size;
     if (updates.thickness !== undefined) text.depth = updates.thickness;
@@ -516,7 +524,7 @@ export class ProjectManager {
     }
     if (updates.position !== undefined) text.position = updates.position;
     if (updates.rotation !== undefined) text.rotate = updates.rotation;
-    
+
     this._markDirty();
     return true;
   }
@@ -526,7 +534,7 @@ export class ProjectManager {
    * @param {string} textId - 文字ID（index）
    */
   removeTextConfig(textId) {
-    const index = this.config.texts.findIndex(t => t.index === textId);
+    const index = this.config.texts.findIndex((t) => t.index === textId);
     if (index !== -1) {
       this.config.texts.splice(index, 1);
       this._markDirty();
@@ -550,7 +558,7 @@ export class ProjectManager {
     const parts = [
       `scale:${(this.config.models?.final?.config?.scale || [1, 1, 1]).join(',')}`,
       `texts:${this.config.texts.length}`,
-      `base:${this.config.models?.base?.path ? 'yes' : 'no'}`
+      `base:${this.config.models?.base?.path ? 'yes' : 'no'}`,
     ];
     this.config.propIdentifier = parts.join('|');
     this._markDirty();
@@ -598,7 +606,7 @@ export class ProjectManager {
   getLocalProjectList() {
     const list = [];
     const prefix = 'editor_project_';
-    
+
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key.startsWith(prefix) || key === 'editor_project') {
@@ -607,14 +615,14 @@ export class ProjectManager {
           list.push({
             key,
             name: data.projectInfo?.name || '未命名',
-            updateTime: data.projectInfo?.updateTime || 0
+            updateTime: data.projectInfo?.updateTime || 0,
           });
         } catch (e) {
           // 忽略无效数据
         }
       }
     }
-    
+
     // 按更新时间排序
     return list.sort((a, b) => b.updateTime - a.updateTime);
   }
@@ -740,9 +748,10 @@ export class ProjectManager {
     return name;
   }
 
-  _buildConfig2ForPackage(
-    { packageConfig, packagedPathByKey }: { packageConfig?: any; packagedPathByKey?: Map<string, string> } = {}
-  ) {
+  _buildConfig2ForPackage({
+    packageConfig,
+    packagedPathByKey,
+  }: { packageConfig?: any; packagedPathByKey?: Map<string, string> } = {}) {
     const cfg = packageConfig && typeof packageConfig === 'object' ? packageConfig : {};
     const metadata = cfg.metadata && typeof cfg.metadata === 'object' ? cfg.metadata : {};
 
@@ -779,7 +788,7 @@ export class ProjectManager {
         url,
         position,
         scale,
-        rotation
+        rotation,
       });
     }
 
@@ -802,7 +811,7 @@ export class ProjectManager {
       lookupTable: cfg.lookupTable || {},
       faceRepare: cfg.faceRepare ?? '0',
       modelOptimization: cfg.modelOptimization ?? '0',
-      ...(cfg.metadata ? { metadata: cfg.metadata } : {})
+      ...(cfg.metadata ? { metadata: cfg.metadata } : {}),
     };
 
     return config2;

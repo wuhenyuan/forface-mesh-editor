@@ -23,7 +23,7 @@ export class BooleanOperator {
   /**
    * 初始化CSG评估器
    */
-  _init () {
+  _init() {
     try {
       this.evaluator = new Evaluator();
       // 启用材质组，保留来源信息
@@ -40,7 +40,7 @@ export class BooleanOperator {
    * 检查库是否已加载
    * @returns {boolean} 是否已加载
    */
-  isReady () {
+  isReady() {
     return this.isLibraryLoaded && this.evaluator !== null;
   }
 
@@ -51,7 +51,7 @@ export class BooleanOperator {
    * @param {THREE.Matrix4} [matrix] - 可选的变换矩阵
    * @returns {Brush} Brush 对象
    */
-  createBrush (geometry, material = null, matrix = null) {
+  createBrush(geometry, material = null, matrix = null) {
     // 确保几何体有索引
     let processedGeometry = geometry;
     if (!geometry.index) {
@@ -79,7 +79,12 @@ export class BooleanOperator {
    * @param {string} [options.textId] - 文字ID，用于标识
    * @returns {Promise<{geometry: THREE.BufferGeometry, materials: THREE.Material[]}>} 操作结果
    */
-  async subtract (targetGeometry, toolGeometry, toolMatrix = null, options: Record<string, any> = {}) {
+  async subtract(
+    targetGeometry,
+    toolGeometry,
+    toolMatrix = null,
+    options: Record<string, any> = {}
+  ) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪');
     }
@@ -99,39 +104,49 @@ export class BooleanOperator {
     console.log('[DEBUG] 目标几何体边界框:', {
       min: `(${targetBox.min.x.toFixed(2)}, ${targetBox.min.y.toFixed(2)}, ${targetBox.min.z.toFixed(2)})`,
       max: `(${targetBox.max.x.toFixed(2)}, ${targetBox.max.y.toFixed(2)}, ${targetBox.max.z.toFixed(2)})`,
-      vertexCount: targetGeometry.attributes.position?.count || 0
+      vertexCount: targetGeometry.attributes.position?.count || 0,
     });
 
     console.log('[DEBUG] 工具几何体边界框:', {
       min: `(${toolBox.min.x.toFixed(2)}, ${toolBox.min.y.toFixed(2)}, ${toolBox.min.z.toFixed(2)})`,
       max: `(${toolBox.max.x.toFixed(2)}, ${toolBox.max.y.toFixed(2)}, ${toolBox.max.z.toFixed(2)})`,
-      vertexCount: toolGeometry.attributes.position?.count || 0
+      vertexCount: toolGeometry.attributes.position?.count || 0,
     });
 
     // 预检查几何体相交性（使用综合检测）
-    const intersectionCheck = this.checkIntersectionComprehensive(targetGeometry, toolGeometry, toolMatrix, {
-      useBVH: true,
-      fastOnly: false
-    });
+    const intersectionCheck = this.checkIntersectionComprehensive(
+      targetGeometry,
+      toolGeometry,
+      toolMatrix,
+      {
+        useBVH: true,
+        fastOnly: false,
+      }
+    );
 
     console.log('[DEBUG] 相交检测结果:', {
       finalResult: intersectionCheck.finalResult,
       confidence: intersectionCheck.confidence,
       method: intersectionCheck.method || 'unknown',
       boundingBoxIntersects: intersectionCheck.boundingBoxCheck?.intersects,
-      bvhIntersects: intersectionCheck.bvhCheck?.intersects
+      bvhIntersects: intersectionCheck.bvhCheck?.intersects,
     });
 
     if (!intersectionCheck.finalResult) {
       const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒';
-      console.warn(`⚠️ 几何体不相交 (${method}检测):`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason);
+      console.warn(
+        `⚠️ 几何体不相交 (${method}检测):`,
+        intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason
+      );
 
       // 🔧 即使检测到不相交，仍然尝试执行布尔操作
       // 因为检测可能有误差，特别是对于复杂的弯曲几何体
       console.log('[DEBUG] 尽管检测到不相交，仍将尝试执行布尔操作...');
 
       if (options.strictMode) {
-        throw new Error(`几何体不相交: ${intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason}`);
+        throw new Error(
+          `几何体不相交: ${intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason}`
+        );
       }
     } else if (intersectionCheck.confidence === 'high') {
       console.log(`✅ 几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)`);
@@ -145,12 +160,12 @@ export class BooleanOperator {
       console.log('[DEBUG] 目标几何体详情:', {
         vertexCount: targetGeometry.attributes.position?.count,
         hasIndex: !!targetGeometry.index,
-        indexCount: targetGeometry.index?.count
+        indexCount: targetGeometry.index?.count,
       });
       console.log('[DEBUG] 工具几何体详情:', {
         vertexCount: toolGeometry.attributes.position?.count,
         hasIndex: !!toolGeometry.index,
-        indexCount: toolGeometry.index?.count
+        indexCount: toolGeometry.index?.count,
       });
 
       // 创建材质用于标识来源
@@ -158,11 +173,11 @@ export class BooleanOperator {
       // 材质1: 雕刻区域（来自文字几何体的切割面）
       const targetMaterial = new THREE.MeshStandardMaterial({
         color: 0x409eff,
-        name: 'original_surface'
+        name: 'original_surface',
       });
       const toolMaterial = new THREE.MeshStandardMaterial({
         color: 0xff0000,
-        name: options.textId ? `engraved_${options.textId}` : 'engraved_text'
+        name: options.textId ? `engraved_${options.textId}` : 'engraved_text',
       });
       // 存储 textId 到材质的 userData
       toolMaterial.userData = { textId: options.textId, isEngravedText: true };
@@ -173,7 +188,7 @@ export class BooleanOperator {
 
       console.log('[DEBUG] Brush 创建完成:', {
         targetBrushValid: !!targetBrush,
-        toolBrushValid: !!toolBrush
+        toolBrushValid: !!toolBrush,
       });
 
       // 执行布尔减法
@@ -181,7 +196,7 @@ export class BooleanOperator {
 
       console.log('[DEBUG] 布尔操作执行完成，resultBrush:', {
         valid: !!resultBrush,
-        hasGeometry: !!(resultBrush && resultBrush.geometry)
+        hasGeometry: !!(resultBrush && resultBrush.geometry),
       });
 
       // 获取结果几何体
@@ -200,7 +215,7 @@ export class BooleanOperator {
         hasIndex: !!resultGeometry.index,
         indexCount: resultGeometry.index?.count,
         groupsCount: resultGeometry.groups?.length || 0,
-        groups: resultGeometry.groups
+        groups: resultGeometry.groups,
       });
 
       // 清理临时对象
@@ -209,9 +224,8 @@ export class BooleanOperator {
 
       return {
         geometry: resultGeometry,
-        materials: [targetMaterial, toolMaterial]
+        materials: [targetMaterial, toolMaterial],
       };
-
     } catch (error) {
       console.error('布尔减法操作失败:', error);
       throw error;
@@ -226,7 +240,7 @@ export class BooleanOperator {
    * @param {Object} [options] - 选项
    * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async union (geometry1, geometry2, matrix2 = null, options: Record<string, any> = {}) {
+  async union(geometry1, geometry2, matrix2 = null, options: Record<string, any> = {}) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪');
     }
@@ -234,14 +248,19 @@ export class BooleanOperator {
     // 预检查几何体相交性（联合操作对不相交的几何体也有意义）
     const intersectionCheck = this.checkIntersectionComprehensive(geometry1, geometry2, matrix2, {
       useBVH: true,
-      fastOnly: false
+      fastOnly: false,
     });
 
     if (!intersectionCheck.finalResult) {
       const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒';
-      console.info(`几何体不相交 (${method}检测)，将执行简单合并:`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason);
+      console.info(
+        `几何体不相交 (${method}检测)，将执行简单合并:`,
+        intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason
+      );
     } else {
-      console.log(`几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)，将执行真正的联合操作`);
+      console.log(
+        `几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)，将执行真正的联合操作`
+      );
     }
 
     try {
@@ -269,7 +288,6 @@ export class BooleanOperator {
       brush2.geometry.dispose();
 
       return resultGeometry;
-
     } catch (error) {
       console.error('布尔加法操作失败:', error);
       throw error;
@@ -284,7 +302,7 @@ export class BooleanOperator {
    * @param {Object} [options] - 选项
    * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async intersect (geometry1, geometry2, matrix2 = null, options: Record<string, any> = {}) {
+  async intersect(geometry1, geometry2, matrix2 = null, options: Record<string, any> = {}) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪');
     }
@@ -292,14 +310,19 @@ export class BooleanOperator {
     // 预检查几何体相交性
     const intersectionCheck = this.checkIntersectionComprehensive(geometry1, geometry2, matrix2, {
       useBVH: true,
-      fastOnly: false
+      fastOnly: false,
     });
 
     if (!intersectionCheck.finalResult) {
       const method = intersectionCheck.bvhCheck ? 'BVH' : '边界盒';
-      console.warn(`几何体不相交 (${method}检测)，交集操作将返回空结果:`, intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason);
+      console.warn(
+        `几何体不相交 (${method}检测)，交集操作将返回空结果:`,
+        intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason
+      );
       if (options.strictMode) {
-        throw new Error(`几何体不相交，无法计算交集: ${intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason}`);
+        throw new Error(
+          `几何体不相交，无法计算交集: ${intersectionCheck.boundingBoxCheck?.reason || intersectionCheck.bvhCheck?.reason}`
+        );
       }
     } else {
       console.log(`几何体相交确认 (${intersectionCheck.bvhCheck ? 'BVH' : '边界盒'}检测)`);
@@ -330,7 +353,6 @@ export class BooleanOperator {
       brush2.geometry.dispose();
 
       return resultGeometry;
-
     } catch (error) {
       console.error('布尔交集操作失败:', error);
       throw error;
@@ -343,7 +365,7 @@ export class BooleanOperator {
    * @param {Array<{geometry: THREE.BufferGeometry, matrix?: THREE.Matrix4, operation: string}>} operations - 操作列表
    * @returns {Promise<THREE.BufferGeometry>} 最终结果几何体
    */
-  async batchOperation (baseGeometry, operations) {
+  async batchOperation(baseGeometry, operations) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪');
     }
@@ -398,7 +420,6 @@ export class BooleanOperator {
       console.log(`批量布尔操作完成，耗时: ${(endTime - startTime).toFixed(2)}ms`);
 
       return resultGeometry;
-
     } catch (error) {
       console.error('批量布尔操作失败:', error);
       throw error;
@@ -412,7 +433,7 @@ export class BooleanOperator {
    * @param {THREE.Matrix4} [matrix2] - 几何体2的变换矩阵
    * @returns {Object} 相交检查结果
    */
-  checkGeometryIntersection (geometry1, geometry2, matrix2 = null) {
+  checkGeometryIntersection(geometry1, geometry2, matrix2 = null) {
     try {
       // 计算边界盒
       geometry1.computeBoundingBox();
@@ -443,7 +464,7 @@ export class BooleanOperator {
           distance,
           box1,
           box2,
-          method: 'boundingBox'
+          method: 'boundingBox',
         };
       }
 
@@ -459,16 +480,15 @@ export class BooleanOperator {
         contains2,
         box1,
         box2,
-        method: 'boundingBox'
+        method: 'boundingBox',
       };
-
     } catch (error) {
       console.warn('几何体相交检查失败:', error);
       return {
         intersects: true, // 默认假设相交，避免阻止操作
         reason: 'intersection check failed',
         error: error.message,
-        method: 'boundingBox'
+        method: 'boundingBox',
       };
     }
   }
@@ -479,20 +499,24 @@ export class BooleanOperator {
    * @param {THREE.Mesh} meshB - 网格B
    * @returns {Object} 精确相交检查结果
    */
-  checkMeshIntersectionBVH (meshA, meshB) {
+  checkMeshIntersectionBVH(meshA, meshB) {
     try {
       // 确保几何体有 BVH 树
       if (!meshA.geometry.boundsTree) {
-        meshA.geometry.computeBoundsTree = meshA.geometry.computeBoundsTree || (() => {
-          meshA.geometry.boundsTree = new MeshBVH(meshA.geometry);
-        });
+        meshA.geometry.computeBoundsTree =
+          meshA.geometry.computeBoundsTree ||
+          (() => {
+            meshA.geometry.boundsTree = new MeshBVH(meshA.geometry);
+          });
         meshA.geometry.computeBoundsTree();
       }
 
       if (!meshB.geometry.boundsTree) {
-        meshB.geometry.computeBoundsTree = meshB.geometry.computeBoundsTree || (() => {
-          meshB.geometry.boundsTree = new MeshBVH(meshB.geometry);
-        });
+        meshB.geometry.computeBoundsTree =
+          meshB.geometry.computeBoundsTree ||
+          (() => {
+            meshB.geometry.boundsTree = new MeshBVH(meshB.geometry);
+          });
         meshB.geometry.computeBoundsTree();
       }
 
@@ -507,9 +531,8 @@ export class BooleanOperator {
         intersects,
         reason: intersects ? 'BVH trees intersect' : 'BVH trees do not intersect',
         method: 'BVH',
-        precision: 'high'
+        precision: 'high',
       };
-
     } catch (error) {
       console.warn('BVH 相交检测失败:', error);
       return {
@@ -517,7 +540,7 @@ export class BooleanOperator {
         reason: 'BVH intersection check failed',
         error: error.message,
         method: 'BVH',
-        fallback: true
+        fallback: true,
       };
     }
   }
@@ -528,7 +551,7 @@ export class BooleanOperator {
    * @param {THREE.Matrix4} [matrix] - 变换矩阵
    * @returns {THREE.Mesh} 临时网格
    */
-  createTempMesh (geometry, matrix = null) {
+  createTempMesh(geometry, matrix = null) {
     const material = new THREE.MeshBasicMaterial();
     const mesh = new THREE.Mesh(geometry, material);
 
@@ -548,7 +571,12 @@ export class BooleanOperator {
    * @param {Object} [options] - 检测选项
    * @returns {Object} 综合相交检查结果
    */
-  checkIntersectionComprehensive (geometry1, geometry2, matrix2 = null, options: Record<string, any> = {}) {
+  checkIntersectionComprehensive(
+    geometry1,
+    geometry2,
+    matrix2 = null,
+    options: Record<string, any> = {}
+  ) {
     const { useBVH = true, fastOnly = false } = options;
 
     // 第一步：快速边界盒检测
@@ -560,7 +588,7 @@ export class BooleanOperator {
         ...boundingBoxCheck,
         bvhCheck: null,
         finalResult: false,
-        confidence: 'high'
+        confidence: 'high',
       };
     }
 
@@ -570,7 +598,7 @@ export class BooleanOperator {
         ...boundingBoxCheck,
         bvhCheck: null,
         finalResult: true,
-        confidence: 'medium'
+        confidence: 'medium',
       };
     }
 
@@ -592,9 +620,8 @@ export class BooleanOperator {
         bvhCheck,
         finalResult: bvhCheck.intersects,
         confidence: bvhCheck.fallback ? 'medium' : 'high',
-        method: 'comprehensive'
+        method: 'comprehensive',
       };
-
     } catch (error) {
       console.warn('BVH 检测失败，回退到边界盒结果:', error);
       return {
@@ -602,7 +629,7 @@ export class BooleanOperator {
         bvhCheck: { error: error.message },
         finalResult: boundingBoxCheck.intersects,
         confidence: 'medium',
-        fallback: true
+        fallback: true,
       };
     }
   }
@@ -612,7 +639,7 @@ export class BooleanOperator {
    * @param {THREE.BufferGeometry} geometry - 几何体
    * @returns {Object} 验证结果
    */
-  validateGeometry (geometry) {
+  validateGeometry(geometry) {
     const errors = [];
     const warnings = [];
 
@@ -652,7 +679,7 @@ export class BooleanOperator {
       errors,
       warnings,
       faceCount,
-      vertexCount
+      vertexCount,
     };
   }
 
@@ -661,7 +688,7 @@ export class BooleanOperator {
    * @param {THREE.BufferGeometry} geometry - 几何体
    * @returns {THREE.BufferGeometry} 优化后的几何体
    */
-  optimizeGeometry (geometry) {
+  optimizeGeometry(geometry) {
     if (!geometry) return geometry;
 
     const optimized = geometry.clone();
@@ -692,13 +719,13 @@ export class BooleanOperator {
    * 获取操作统计信息
    * @returns {Object} 统计信息
    */
-  getStats () {
+  getStats() {
     return {
       libraryLoaded: this.isLibraryLoaded,
       libraryName: 'three-bvh-csg',
       libraryVersion: '0.0.17',
       supportedOperations: ['subtract', 'union', 'intersect'],
-      isSimulated: false
+      isSimulated: false,
     };
   }
 
@@ -706,7 +733,7 @@ export class BooleanOperator {
    * 设置评估器选项
    * @param {Object} options - 选项
    */
-  setOptions (options: Record<string, any> = {}) {
+  setOptions(options: Record<string, any> = {}) {
     if (!this.evaluator) return;
 
     // three-bvh-csg Evaluator 的可配置选项
@@ -720,7 +747,7 @@ export class BooleanOperator {
   /**
    * 销毁操作器，清理资源
    */
-  destroy () {
+  destroy() {
     this.evaluator = null;
     this.isLibraryLoaded = false;
     console.log('布尔操作器已销毁');

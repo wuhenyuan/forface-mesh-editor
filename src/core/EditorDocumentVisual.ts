@@ -168,7 +168,7 @@ export class EditorDocumentVisual extends EditorViewer {
 
       const result = await this.assetsManager.load(entry.source, {
         modelId: key,
-        ...loaderOptions
+        ...loaderOptions,
       });
 
       if (this._loadTokens.get(key) !== token || this._isDisposed) return;
@@ -182,7 +182,7 @@ export class EditorDocumentVisual extends EditorViewer {
         model: result.model,
         modelId: key,
         format: result.format,
-        metadata: result.metadata
+        metadata: result.metadata,
       });
     } catch (error) {
       this.events.emit('loadError', { error, modelId: key });

@@ -54,7 +54,7 @@ export class SurfaceTextManager {
     this.config = {
       maxTextObjects: 100,
       defaultTextConfig: this.getDefaultTextConfig(),
-      performanceMode: false
+      performanceMode: false,
     };
 
     // 绑定事件处理器
@@ -65,11 +65,11 @@ export class SurfaceTextManager {
    * 设置可点击的目标网格
    * @param {THREE.Mesh[]} meshes - 网格数组
    */
-  setTargetMeshes (meshes) {
-    this.targetMeshes = meshes.filter(m => m && m.isMesh);
+  setTargetMeshes(meshes) {
+    this.targetMeshes = meshes.filter((m) => m && m.isMesh);
 
     // 注册所有网格到表面标识器
-    this.targetMeshes.forEach(mesh => {
+    this.targetMeshes.forEach((mesh) => {
       surfaceIdentifier.registerMesh(mesh);
     });
 
@@ -80,7 +80,7 @@ export class SurfaceTextManager {
    * 添加目标网格
    * @param {THREE.Mesh} mesh - 网格
    */
-  addTargetMesh (mesh) {
+  addTargetMesh(mesh) {
     if (mesh && mesh.isMesh && !this.targetMeshes.includes(mesh)) {
       this.targetMeshes.push(mesh);
     }
@@ -90,7 +90,7 @@ export class SurfaceTextManager {
    * 移除目标网格
    * @param {THREE.Mesh} mesh - 网格
    */
-  removeTargetMesh (mesh) {
+  removeTargetMesh(mesh) {
     const index = this.targetMeshes.indexOf(mesh);
     if (index !== -1) {
       this.targetMeshes.splice(index, 1);
@@ -100,7 +100,7 @@ export class SurfaceTextManager {
   /**
    * 启用文字添加模式（可以创建新文字）
    */
-  enableTextMode () {
+  enableTextMode() {
     if (this.isTextMode) return;
     this.isTextMode = true;
     console.log('文字添加模式已启用');
@@ -110,7 +110,7 @@ export class SurfaceTextManager {
   /**
    * 禁用文字添加模式（只能选择/编辑已有文字）
    */
-  disableTextMode () {
+  disableTextMode() {
     if (!this.isTextMode) return;
     this.isTextMode = false;
     this.inputOverlay.hide();
@@ -121,7 +121,7 @@ export class SurfaceTextManager {
   /**
    * 启用点击监听（初始化时调用）
    */
-  enableClickListener () {
+  enableClickListener() {
     const canvas = this.renderer.domElement;
     canvas.addEventListener('click', this._boundOnClick);
     console.log('点击监听已启用');
@@ -130,7 +130,7 @@ export class SurfaceTextManager {
   /**
    * 禁用点击监听（销毁时调用）
    */
-  disableClickListener () {
+  disableClickListener() {
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('click', this._boundOnClick);
     console.log('点击监听已禁用');
@@ -140,7 +140,7 @@ export class SurfaceTextManager {
    * 画布点击事件处理（始终监听，不管文字模式是否开启）
    * @param {MouseEvent} event - 鼠标事件
    */
-  async _onCanvasClick (event) {
+  async _onCanvasClick(event) {
     // 计算归一化设备坐标（相对于 canvas）
     const canvas = this.renderer.domElement;
     const rect = canvas.getBoundingClientRect();
@@ -156,10 +156,7 @@ export class SurfaceTextManager {
     const textMeshes = Array.from(this.textObjects.values() as Iterable<any>)
       .map((t: any) => t.mesh)
       .filter((m: any) => m.visible);
-    const allMeshes = [
-      ...this.targetMeshes,
-      ...textMeshes
-    ];
+    const allMeshes = [...this.targetMeshes, ...textMeshes];
 
     // 执行射线检测
     const intersects = this.raycaster.intersectObjects(allMeshes, false);
@@ -182,7 +179,7 @@ export class SurfaceTextManager {
       face: hit.face,
       point: hit.point.clone(),
       distance: hit.distance,
-      uv: hit.uv
+      uv: hit.uv,
     };
 
     // 处理点击
@@ -194,7 +191,7 @@ export class SurfaceTextManager {
    * @param {Object} faceInfo - 面信息
    * @param {MouseEvent} event - 原始鼠标事件
    */
-  async _handleClick (faceInfo, event) {
+  async _handleClick(faceInfo, event) {
     try {
       // 1. 检查是否点击了凸起模式的文字对象
       if (faceInfo.mesh.userData && faceInfo.mesh.userData.isTextObject) {
@@ -228,7 +225,7 @@ export class SurfaceTextManager {
       // 4. 文字模式下，点击普通表面创建新文字
       const screenPosition = {
         x: event.clientX,
-        y: event.clientY
+        y: event.clientY,
       };
 
       // 显示输入覆盖层
@@ -238,7 +235,6 @@ export class SurfaceTextManager {
         // 创建文字对象
         await this.createTextObject(textContent, faceInfo);
       }
-
     } catch (error) {
       console.error('处理点击失败:', error);
       this.emit('error', { type: 'click', error });
@@ -251,7 +247,7 @@ export class SurfaceTextManager {
    * @param {MouseEvent} originalEvent - 原始鼠标事件
    * @deprecated 使用内部 _handleClick 代替
    */
-  async handleFaceSelected (faceInfo, originalEvent = null) {
+  async handleFaceSelected(faceInfo, originalEvent = null) {
     await this._handleClick(faceInfo, originalEvent || { clientX: 0, clientY: 0 });
   }
 
@@ -264,7 +260,7 @@ export class SurfaceTextManager {
    * @param {number} faceIndex - 点击的面索引
    * @returns {string|null} 文字ID或null
    */
-  findTextIdFromEngravedMesh (mesh, point, face, faceIndex) {
+  findTextIdFromEngravedMesh(mesh, point, face, faceIndex) {
     // 检查这个网格是否有关联的内嵌文字
     const textIds = this.meshTextMap.get(mesh.uuid);
     if (!textIds || textIds.size === 0) return null;
@@ -326,7 +322,7 @@ export class SurfaceTextManager {
    * 进入编辑模式（用于编辑内嵌文字）
    * @param {string} textId - 文字ID
    */
-  enterEditMode (textId) {
+  enterEditMode(textId) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
@@ -396,7 +392,7 @@ export class SurfaceTextManager {
    * 退出编辑模式
    * @param {boolean} applyChanges - 是否应用更改（重新执行布尔操作）
    */
-  async exitEditMode (applyChanges = true) {
+  async exitEditMode(applyChanges = true) {
     if (!this.isEditing || !this.selectedTextId) return;
 
     const textObject = this.textObjects.get(this.selectedTextId);
@@ -447,7 +443,7 @@ export class SurfaceTextManager {
    * 重新应用内嵌效果（支持多个文字）
    * @param {Object} textObject - 文字对象
    */
-  async reapplyEngraving (textObject) {
+  async reapplyEngraving(textObject) {
     try {
       // 获取该网格上所有的内嵌文字
       const textIds = this.meshTextMap.get(textObject.targetMesh.uuid);
@@ -479,11 +475,13 @@ export class SurfaceTextManager {
           const bboxBefore = textGeometryForCSG.boundingBox;
           console.log('[DEBUG] 文字几何体边界框（世界坐标，变换前）:', {
             min: `(${bboxBefore.min.x.toFixed(2)}, ${bboxBefore.min.y.toFixed(2)}, ${bboxBefore.min.z.toFixed(2)})`,
-            max: `(${bboxBefore.max.x.toFixed(2)}, ${bboxBefore.max.y.toFixed(2)}, ${bboxBefore.max.z.toFixed(2)})`
+            max: `(${bboxBefore.max.x.toFixed(2)}, ${bboxBefore.max.y.toFixed(2)}, ${bboxBefore.max.z.toFixed(2)})`,
           });
 
           // 🔧 关键修复：先将文字几何体转换到局部坐标系
-          const targetInverseMatrix = new THREE.Matrix4().copy(textObj.targetMesh.matrixWorld).invert();
+          const targetInverseMatrix = new THREE.Matrix4()
+            .copy(textObj.targetMesh.matrixWorld)
+            .invert();
           textGeometryForCSG.applyMatrix4(targetInverseMatrix);
 
           // � 调试：试打印转换到局部坐标系后的边界框
@@ -491,7 +489,7 @@ export class SurfaceTextManager {
           const bboxLocal = textGeometryForCSG.boundingBox;
           console.log('[DEBUG] 文字几何体边界框（局部坐标，转换后）:', {
             min: `(${bboxLocal.min.x.toFixed(2)}, ${bboxLocal.min.y.toFixed(2)}, ${bboxLocal.min.z.toFixed(2)})`,
-            max: `(${bboxLocal.max.x.toFixed(2)}, ${bboxLocal.max.y.toFixed(2)}, ${bboxLocal.max.z.toFixed(2)})`
+            max: `(${bboxLocal.max.x.toFixed(2)}, ${bboxLocal.max.y.toFixed(2)}, ${bboxLocal.max.z.toFixed(2)})`,
           });
 
           // 🔧 调试：打印目标几何体的边界框
@@ -499,7 +497,7 @@ export class SurfaceTextManager {
           const targetBbox = currentGeometry.boundingBox;
           console.log('[DEBUG] 目标几何体边界框（局部坐标）:', {
             min: `(${targetBbox.min.x.toFixed(2)}, ${targetBbox.min.y.toFixed(2)}, ${targetBbox.min.z.toFixed(2)})`,
-            max: `(${targetBbox.max.x.toFixed(2)}, ${targetBbox.max.y.toFixed(2)}, ${targetBbox.max.z.toFixed(2)})`
+            max: `(${targetBbox.max.x.toFixed(2)}, ${targetBbox.max.y.toFixed(2)}, ${targetBbox.max.z.toFixed(2)})`,
           });
 
           if (cylinderInfo) {
@@ -509,7 +507,9 @@ export class SurfaceTextManager {
         } else {
           // 平面文字：先应用网格变换到世界坐标系，再转换到目标网格的局部坐标系
           textGeometryForCSG.applyMatrix4(textObj.mesh.matrixWorld);
-          const targetInverseMatrix = new THREE.Matrix4().copy(textObj.targetMesh.matrixWorld).invert();
+          const targetInverseMatrix = new THREE.Matrix4()
+            .copy(textObj.targetMesh.matrixWorld)
+            .invert();
           textGeometryForCSG.applyMatrix4(targetInverseMatrix);
         }
 
@@ -544,7 +544,6 @@ export class SurfaceTextManager {
       this.updateMeshMaterials(textObject.targetMesh, textObject);
 
       console.log('内嵌效果重新应用成功');
-
     } catch (error) {
       console.error('重新应用内嵌效果失败:', error);
       throw error;
@@ -560,7 +559,7 @@ export class SurfaceTextManager {
    * @param {Object} options.config - 指定文字配置（会与默认配置合并）
    * @returns {Promise<string>} 文字对象ID
    */
-  async createTextObject (content, faceInfo, options: Record<string, any> = {}) {
+  async createTextObject(content, faceInfo, options: Record<string, any> = {}) {
     if (this.textObjects.size >= this.config.maxTextObjects) {
       throw new Error(`文字对象数量已达到最大限制: ${this.config.maxTextObjects}`);
     }
@@ -578,21 +577,17 @@ export class SurfaceTextManager {
 
       const initialConfig = {
         ...this.config.defaultTextConfig,
-        ...(options.config || {})
+        ...(options.config || {}),
       };
 
       // 生成文字几何体（根据表面类型选择生成方式）
-      const geometry = await this.geometryGenerator.generate(
-        content,
-        initialConfig,
-        surfaceInfo
-      );
+      const geometry = await this.geometryGenerator.generate(content, initialConfig, surfaceInfo);
 
       // 创建文字网格
       // 使用双面渲染，因为弯曲变换可能导致某些面的法向量翻转
       const material = new THREE.MeshPhongMaterial({
         color: initialConfig.color,
-        side: THREE.FrontSide  // 只渲染正面，方便调试面朝向
+        side: THREE.FrontSide, // 只渲染正面，方便调试面朝向
       });
       const mesh = new THREE.Mesh(geometry, material);
 
@@ -602,7 +597,7 @@ export class SurfaceTextManager {
         isTextObject: true,
         textId: textId,
         type: 'text',
-        surfaceType: surfaceInfo?.surfaceType || 'plane'
+        surfaceType: surfaceInfo?.surfaceType || 'plane',
       };
 
       // 计算文字位置和方向（根据表面类型）
@@ -632,7 +627,7 @@ export class SurfaceTextManager {
         engraveStatus: null, // 'success' | 'failed' | null
         engraveError: null,
         created: Date.now(),
-        modified: Date.now()
+        modified: Date.now(),
       };
 
       // 添加到场景和管理器
@@ -649,7 +644,6 @@ export class SurfaceTextManager {
       this.emit('textCreated', textObject);
 
       return textId;
-
     } catch (error) {
       console.error('创建文字对象失败:', error);
       this.emit('error', { type: 'textCreation', error, textId });
@@ -662,13 +656,13 @@ export class SurfaceTextManager {
    * @param {Object} faceInfo - 面信息
    * @returns {Object|null} 表面信息
    */
-  analyzeSurface (faceInfo) {
+  analyzeSurface(faceInfo) {
     const { mesh } = faceInfo;
 
     console.log('🔍 开始表面分析:', {
       meshName: mesh.name || 'Unnamed',
       geometryType: mesh.geometry.type,
-      vertexCount: mesh.geometry.attributes.position?.count || 0
+      vertexCount: mesh.geometry.attributes.position?.count || 0,
     });
 
     // 检查几何体类型 - BoxGeometry 直接返回平面
@@ -676,20 +670,23 @@ export class SurfaceTextManager {
       console.log('📦 检测到 BoxGeometry，直接使用平面模式');
       return {
         surfaceType: 'plane',
-        attachPoint: faceInfo.point.clone()
+        attachPoint: faceInfo.point.clone(),
       };
     }
 
     // 只对 CylinderGeometry 或顶点数较多的几何体进行圆柱检测
     const vertexCount = mesh.geometry.attributes.position?.count || 0;
-    if (mesh.geometry.type === 'CylinderGeometry' || mesh.geometry.type === 'CylinderBufferGeometry') {
+    if (
+      mesh.geometry.type === 'CylinderGeometry' ||
+      mesh.geometry.type === 'CylinderBufferGeometry'
+    ) {
       console.log('🔵 检测到 CylinderGeometry，进行圆柱面检测');
     } else if (vertexCount < 100) {
       // 顶点数太少，不太可能是圆柱面
       console.log('📝 顶点数较少，使用平面模式');
       return {
         surfaceType: 'plane',
-        attachPoint: faceInfo.point.clone()
+        attachPoint: faceInfo.point.clone(),
       };
     }
 
@@ -703,16 +700,20 @@ export class SurfaceTextManager {
         console.log('✅ 检测器成功识别圆柱面!', {
           confidence: (simpleCylinderInfo.confidence * 100).toFixed(1) + '%',
           radius: simpleCylinderInfo.radius.toFixed(2),
-          height: simpleCylinderInfo.height.toFixed(2)
+          height: simpleCylinderInfo.height.toFixed(2),
         });
 
         return {
           surfaceType: 'cylinder',
           cylinderInfo: simpleCylinderInfo,
-          attachPoint: faceInfo.point.clone()
+          attachPoint: faceInfo.point.clone(),
         };
       } else {
-        console.log('⚠️ 圆柱面置信度不足 (' + (simpleCylinderInfo.confidence * 100).toFixed(1) + '%)，使用平面模式');
+        console.log(
+          '⚠️ 圆柱面置信度不足 (' +
+            (simpleCylinderInfo.confidence * 100).toFixed(1) +
+            '%)，使用平面模式'
+        );
       }
     }
 
@@ -721,13 +722,13 @@ export class SurfaceTextManager {
 
     if (cylinderInfo && cylinderInfo.confidence > 0.7) {
       console.log('✅ 复杂检测器识别圆柱面', {
-        confidence: (cylinderInfo.confidence * 100).toFixed(1) + '%'
+        confidence: (cylinderInfo.confidence * 100).toFixed(1) + '%',
       });
 
       return {
         surfaceType: 'cylinder',
         cylinderInfo: cylinderInfo,
-        attachPoint: faceInfo.point.clone()
+        attachPoint: faceInfo.point.clone(),
       };
     }
 
@@ -735,7 +736,7 @@ export class SurfaceTextManager {
     console.log('📝 使用平面模式');
     return {
       surfaceType: 'plane',
-      attachPoint: faceInfo.point.clone()
+      attachPoint: faceInfo.point.clone(),
     };
   }
 
@@ -745,7 +746,7 @@ export class SurfaceTextManager {
    * @param {Object} faceInfo - 面信息
    * @param {Object} surfaceInfo - 表面信息
    */
-  positionTextOnCylinder (textMesh, faceInfo, surfaceInfo) {
+  positionTextOnCylinder(textMesh, faceInfo, surfaceInfo) {
     console.log('🎯 圆柱面文字定位');
 
     // 🔧 重要：对于圆柱面文字，几何体变换已在 CurvedTextGeometry 中完成
@@ -765,7 +766,7 @@ export class SurfaceTextManager {
    * @param {Object} cylinderInfo - 圆柱信息
    * @param {number} distance - 向内移动的距离
    */
-  moveVerticesInward (geometry, cylinderInfo, distance) {
+  moveVerticesInward(geometry, cylinderInfo, distance) {
     const { center, axis } = cylinderInfo;
     const positions = geometry.attributes.position;
     const positionArray = positions.array;
@@ -774,14 +775,14 @@ export class SurfaceTextManager {
       center: `(${center.x}, ${center.y}, ${center.z})`,
       axis: `(${axis.x}, ${axis.y}, ${axis.z})`,
       distance: distance,
-      vertexCount: positionArray.length / 3
+      vertexCount: positionArray.length / 3,
     });
 
     // 打印前3个顶点的原始位置
     console.log('[DEBUG] 移动前顶点示例:', {
       v0: `(${positionArray[0].toFixed(2)}, ${positionArray[1].toFixed(2)}, ${positionArray[2].toFixed(2)})`,
       v1: `(${positionArray[3].toFixed(2)}, ${positionArray[4].toFixed(2)}, ${positionArray[5].toFixed(2)})`,
-      v2: `(${positionArray[6].toFixed(2)}, ${positionArray[7].toFixed(2)}, ${positionArray[8].toFixed(2)})`
+      v2: `(${positionArray[6].toFixed(2)}, ${positionArray[7].toFixed(2)}, ${positionArray[8].toFixed(2)})`,
     });
 
     let movedCount = 0;
@@ -818,7 +819,7 @@ export class SurfaceTextManager {
     console.log('[DEBUG] 移动后顶点示例:', {
       v0: `(${positionArray[0].toFixed(2)}, ${positionArray[1].toFixed(2)}, ${positionArray[2].toFixed(2)})`,
       v1: `(${positionArray[3].toFixed(2)}, ${positionArray[4].toFixed(2)}, ${positionArray[5].toFixed(2)})`,
-      v2: `(${positionArray[6].toFixed(2)}, ${positionArray[7].toFixed(2)}, ${positionArray[8].toFixed(2)})`
+      v2: `(${positionArray[6].toFixed(2)}, ${positionArray[7].toFixed(2)}, ${positionArray[8].toFixed(2)})`,
     });
 
     console.log('[DEBUG] moveVerticesInward 完成, 移动了', movedCount, '个顶点');
@@ -833,7 +834,7 @@ export class SurfaceTextManager {
    * @param {THREE.BufferGeometry} geometry - 几何体（局部坐标系）
    * @param {number} distance - 偏移距离
    */
-  moveTextOutwardXZ (geometry, distance) {
+  moveTextOutwardXZ(geometry, distance) {
     const positions = geometry.attributes.position;
     const positionArray = positions.array;
 
@@ -863,7 +864,7 @@ export class SurfaceTextManager {
    * @param {Object} cylinderInfo - 圆柱信息（局部坐标系）
    * @param {number} distance - 移动距离（正值向外，负值向内）
    */
-  moveTextRadially (geometry, cylinderInfo, distance) {
+  moveTextRadially(geometry, cylinderInfo, distance) {
     const { center, axis } = cylinderInfo;
     const positions = geometry.attributes.position;
     const positionArray = positions.array;
@@ -897,16 +898,16 @@ export class SurfaceTextManager {
   /**
    * 将圆柱面文字几何体扩展用于内嵌布尔操作
    * 内嵌模式需要文字从圆柱表面向内延伸
-   * 
+   *
    * 🔧 修复说明：
    * 原来的方法试图通过顶点到圆柱轴的距离来区分内外表面，但这在弯曲文字几何体上不可靠。
    * 新方法：直接将文字几何体沿径向"拉伸"，使其从圆柱外表面穿透到内部。
-   * 
+   *
    * @param {THREE.BufferGeometry} geometry - 文字几何体（世界坐标系）
    * @param {Object} cylinderInfo - 圆柱信息（世界坐标系）
    * @param {number} depth - 内嵌深度
    */
-  offsetCylinderTextInward (geometry, cylinderInfo, depth) {
+  offsetCylinderTextInward(geometry, cylinderInfo, depth) {
     const { center, axis, radius } = cylinderInfo;
     const positions = geometry.attributes.position;
     const positionArray = positions.array;
@@ -916,7 +917,7 @@ export class SurfaceTextManager {
       axis: `(${axis.x.toFixed(2)}, ${axis.y.toFixed(2)}, ${axis.z.toFixed(2)})`,
       cylinderRadius: radius,
       depth: depth,
-      vertexCount: positionArray.length / 3
+      vertexCount: positionArray.length / 3,
     });
 
     // 首先分析所有顶点的径向分布
@@ -944,7 +945,7 @@ export class SurfaceTextManager {
       minRadius: minRadius.toFixed(3),
       maxRadius: maxRadius.toFixed(3),
       cylinderRadius: radius.toFixed(3),
-      textThickness: textThickness.toFixed(3)
+      textThickness: textThickness.toFixed(3),
     });
 
     // 🔧 新策略：将文字几何体的径向范围映射到穿透圆柱表面的范围
@@ -952,9 +953,9 @@ export class SurfaceTextManager {
     // 目标范围: [radius - depth, radius + 突出量]
     // 这样文字会从圆柱表面稍微突出，同时向内延伸到指定深度
 
-    const protrusion = 0.5;  // 🔧 增加突出量，确保穿透
-    const targetOuterRadius = radius + protrusion;  // 外表面目标半径
-    const targetInnerRadius = radius - depth - 1.0;  // 🔧 增加内嵌深度，确保穿透
+    const protrusion = 0.5; // 🔧 增加突出量，确保穿透
+    const targetOuterRadius = radius + protrusion; // 外表面目标半径
+    const targetInnerRadius = radius - depth - 1.0; // 🔧 增加内嵌深度，确保穿透
 
     // 记录修改前后的一些顶点位置
     const sampleBefore = [];
@@ -981,7 +982,7 @@ export class SurfaceTextManager {
 
         // 🔧 线性映射：将原始径向位置映射到目标范围
         // t = 0 表示最内层顶点，t = 1 表示最外层顶点
-        let t = 0.5;  // 默认中间位置
+        let t = 0.5; // 默认中间位置
         if (textThickness > 0.001) {
           t = (currentRadius - minRadius) / textThickness;
         }
@@ -991,7 +992,9 @@ export class SurfaceTextManager {
 
         // 计算新位置
         const axialPosition = center.clone().add(axis.clone().multiplyScalar(axialComponent));
-        const newPosition = axialPosition.clone().add(radialDir.clone().multiplyScalar(targetRadius));
+        const newPosition = axialPosition
+          .clone()
+          .add(radialDir.clone().multiplyScalar(targetRadius));
 
         positionArray[i] = newPosition.x;
         positionArray[i + 1] = newPosition.y;
@@ -999,7 +1002,11 @@ export class SurfaceTextManager {
 
         // 记录前10个顶点的新位置
         if (i < 30) {
-          sampleAfter.push({ x: newPosition.x.toFixed(2), y: newPosition.y.toFixed(2), z: newPosition.z.toFixed(2) });
+          sampleAfter.push({
+            x: newPosition.x.toFixed(2),
+            y: newPosition.y.toFixed(2),
+            z: newPosition.z.toFixed(2),
+          });
         }
       }
     }
@@ -1022,8 +1029,8 @@ export class SurfaceTextManager {
       targetInnerRadius: targetInnerRadius.toFixed(3),
       newBoundingBox: {
         min: `(${bbox.min.x.toFixed(2)}, ${bbox.min.y.toFixed(2)}, ${bbox.min.z.toFixed(2)})`,
-        max: `(${bbox.max.x.toFixed(2)}, ${bbox.max.y.toFixed(2)}, ${bbox.max.z.toFixed(2)})`
-      }
+        max: `(${bbox.max.x.toFixed(2)}, ${bbox.max.y.toFixed(2)}, ${bbox.max.z.toFixed(2)})`,
+      },
     });
   }
 
@@ -1033,14 +1040,15 @@ export class SurfaceTextManager {
    * @param {Object} cylinderInfo - 圆柱信息
    * @returns {THREE.Vector3} 切线向量
    */
-  calculateCylinderTangent (theta, cylinderInfo) {
+  calculateCylinderTangent(theta, cylinderInfo) {
     const { axis } = cylinderInfo;
 
     // 获取垂直于轴的参考方向
     const refDirection = cylinderSurfaceHelper.getPerpendicularVector(axis);
 
     // 计算切线方向（垂直于径向，沿圆周）
-    const radialDirection = refDirection.clone()
+    const radialDirection = refDirection
+      .clone()
       .multiplyScalar(Math.cos(theta))
       .add(refDirection.clone().cross(axis).multiplyScalar(Math.sin(theta)));
 
@@ -1054,7 +1062,7 @@ export class SurfaceTextManager {
    * @param {THREE.Mesh} mesh - 目标网格
    * @param {string} textId - 文字ID
    */
-  addMeshTextMapping (mesh, textId) {
+  addMeshTextMapping(mesh, textId) {
     if (!this.meshTextMap.has(mesh.uuid)) {
       this.meshTextMap.set(mesh.uuid, new Set());
     }
@@ -1066,7 +1074,7 @@ export class SurfaceTextManager {
    * @param {THREE.Mesh} mesh - 目标网格
    * @param {string} textId - 文字ID
    */
-  removeMeshTextMapping (mesh, textId) {
+  removeMeshTextMapping(mesh, textId) {
     const textIds = this.meshTextMap.get(mesh.uuid);
     if (textIds) {
       textIds.delete(textId);
@@ -1081,7 +1089,7 @@ export class SurfaceTextManager {
    * @param {THREE.Mesh} textMesh - 文字网格
    * @param {Object} faceInfo - 面信息
    */
-  positionTextOnSurface (textMesh, faceInfo) {
+  positionTextOnSurface(textMesh, faceInfo) {
     // 设置位置
     textMesh.position.copy(faceInfo.point);
 
@@ -1109,7 +1117,7 @@ export class SurfaceTextManager {
    * @param {THREE.Vector3} worldPosition - 世界坐标位置
    * @returns {Object} 屏幕坐标 {x, y}
    */
-  calculateScreenPosition (worldPosition) {
+  calculateScreenPosition(worldPosition) {
     const vector = worldPosition.clone();
     vector.project(this.camera);
 
@@ -1124,7 +1132,7 @@ export class SurfaceTextManager {
    * 选中文字对象
    * @param {string} textId - 文字ID
    */
-  selectText (textId) {
+  selectText(textId) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
@@ -1152,7 +1160,7 @@ export class SurfaceTextManager {
    * 取消选中文字对象
    * @param {boolean} applyChanges - 是否应用更改（仅对编辑模式有效）
    */
-  async deselectText (applyChanges = true) {
+  async deselectText(applyChanges = true) {
     if (!this.selectedTextId) return;
 
     const textObject = this.textObjects.get(this.selectedTextId);
@@ -1178,7 +1186,7 @@ export class SurfaceTextManager {
    * 添加选择高亮效果
    * @param {THREE.Mesh} mesh - 网格对象
    */
-  addSelectionHighlight (mesh) {
+  addSelectionHighlight(mesh) {
     // 保存原始材质
     if (!mesh.userData.originalMaterial) {
       mesh.userData.originalMaterial = mesh.material;
@@ -1190,7 +1198,7 @@ export class SurfaceTextManager {
       transparent: true,
       opacity: 0.5,
       depthTest: false, // 不进行深度测试，不被遮挡
-      depthWrite: false // 不写入深度缓冲
+      depthWrite: false, // 不写入深度缓冲
     });
 
     mesh.material = highlightMaterial;
@@ -1201,7 +1209,7 @@ export class SurfaceTextManager {
    * 移除选择高亮效果
    * @param {THREE.Mesh} mesh - 网格对象
    */
-  removeSelectionHighlight (mesh) {
+  removeSelectionHighlight(mesh) {
     // 恢复原始材质
     if (mesh.userData.originalMaterial) {
       mesh.material = mesh.userData.originalMaterial;
@@ -1214,7 +1222,7 @@ export class SurfaceTextManager {
    * 删除文字对象
    * @param {string} textId - 文字ID
    */
-  async deleteText (textId) {
+  async deleteText(textId) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
@@ -1268,16 +1276,24 @@ export class SurfaceTextManager {
               // 🔧 圆柱面文字需要向内偏移才能正确进行布尔减法
               const cylinderInfo = otherTextObj.surfaceInfo.cylinderInfo;
               if (cylinderInfo) {
-                this.offsetCylinderTextInward(textGeometryForCSG, cylinderInfo, otherTextObj.config.thickness || 0.5);
+                this.offsetCylinderTextInward(
+                  textGeometryForCSG,
+                  cylinderInfo,
+                  otherTextObj.config.thickness || 0.5
+                );
               }
 
               // 圆柱面文字：几何体已经在世界坐标系
-              const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert();
+              const targetInverseMatrix = new THREE.Matrix4()
+                .copy(otherTextObj.targetMesh.matrixWorld)
+                .invert();
               textGeometryForCSG.applyMatrix4(targetInverseMatrix);
             } else {
               // 平面文字：需要应用网格变换
               textGeometryForCSG.applyMatrix4(otherTextObj.mesh.matrixWorld);
-              const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert();
+              const targetInverseMatrix = new THREE.Matrix4()
+                .copy(otherTextObj.targetMesh.matrixWorld)
+                .invert();
               textGeometryForCSG.applyMatrix4(targetInverseMatrix);
             }
 
@@ -1307,7 +1323,6 @@ export class SurfaceTextManager {
 
           // 更新多材质数组
           this.updateMeshMaterials(textObject.targetMesh, otherEngravedTexts[0]);
-
         } catch (error) {
           console.error('重新应用其他内嵌文字失败:', error);
           // 回退：恢复原始几何体
@@ -1317,7 +1332,6 @@ export class SurfaceTextManager {
             textObject.targetMesh.material = textObject.originalTargetMaterial;
           }
         }
-
       } else {
         // 没有其他内嵌文字，直接恢复原始几何体和材质
         textObject.targetMesh.geometry.dispose();
@@ -1331,7 +1345,6 @@ export class SurfaceTextManager {
 
       // 清理原始几何体引用
       textObject.originalTargetGeometry.dispose();
-
     } else {
       // 非内嵌模式，只需移除映射关系
       this.removeMeshTextMapping(textObject.targetMesh, textId);
@@ -1362,7 +1375,7 @@ export class SurfaceTextManager {
    * @param {string} textId - 文字ID
    * @param {string} newContent - 新内容
    */
-  async updateTextContent (textId, newContent) {
+  async updateTextContent(textId, newContent) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
@@ -1388,7 +1401,6 @@ export class SurfaceTextManager {
 
       console.log(`文字内容已更新: ${textId}`, { oldContent, newContent });
       this.emit('textContentUpdated', { textObject, oldContent, newContent });
-
     } catch (error) {
       console.error('更新文字内容失败:', error);
       this.emit('error', { type: 'contentUpdate', error, textId });
@@ -1401,7 +1413,7 @@ export class SurfaceTextManager {
    * @param {string} textId - 文字ID
    * @param {Object} configUpdates - 配置更新
    */
-  async updateTextConfig (textId, configUpdates) {
+  async updateTextConfig(textId, configUpdates) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
@@ -1415,7 +1427,10 @@ export class SurfaceTextManager {
       Object.assign(textObject.config, configUpdates);
 
       // 重新生成几何体
-      const newGeometry = await this.geometryGenerator.generate(textObject.content, textObject.config);
+      const newGeometry = await this.geometryGenerator.generate(
+        textObject.content,
+        textObject.config
+      );
 
       // 更新网格几何体
       textObject.mesh.geometry.dispose();
@@ -1425,7 +1440,6 @@ export class SurfaceTextManager {
 
       console.log(`文字配置已更新: ${textId}`, { oldConfig, newConfig: textObject.config });
       this.emit('textConfigUpdated', { textObject, oldConfig, newConfig: textObject.config });
-
     } catch (error) {
       console.error('更新文字配置失败:', error);
       // 回滚配置
@@ -1440,7 +1454,7 @@ export class SurfaceTextManager {
    * @param {string} textId - 文字ID
    * @param {number} color - 新颜色
    */
-  updateTextColor (textId, color) {
+  updateTextColor(textId, color) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
@@ -1486,7 +1500,7 @@ export class SurfaceTextManager {
    * @param {string} textId - 文字ID
    * @param {string} mode - 模式 ('raised' | 'engraved')
    */
-  async switchTextMode (textId, mode) {
+  async switchTextMode(textId, mode) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
@@ -1540,9 +1554,8 @@ export class SurfaceTextManager {
         oldMode,
         newMode: mode,
         engraveStatus: textObject.engraveStatus,
-        engraveError: textObject.engraveError
+        engraveError: textObject.engraveError,
       });
-
     } catch (error) {
       console.error('切换文字模式失败:', error);
 
@@ -1558,7 +1571,7 @@ export class SurfaceTextManager {
           oldMode,
           newMode: 'engraved',
           engraveStatus: 'failed',
-          engraveError: textObject.engraveError
+          engraveError: textObject.engraveError,
         });
 
         this.emit('error', { type: 'modeSwitch', error, textId });
@@ -1577,7 +1590,7 @@ export class SurfaceTextManager {
    * 注意：仅支持平面文字，圆柱面文字在 switchTextMode 中已被拦截
    * @param {Object} textObject - 文字对象
    */
-  async applyEngravingMode (textObject) {
+  async applyEngravingMode(textObject) {
     // 保存原始几何体和材质（用于恢复）
     if (!textObject.originalTargetGeometry) {
       textObject.originalTargetGeometry = textObject.targetMesh.geometry.clone();
@@ -1607,7 +1620,7 @@ export class SurfaceTextManager {
           console.log('[DEBUG] 圆柱信息（世界坐标系）:', {
             center: `(${cylinderInfo.center.x.toFixed(2)}, ${cylinderInfo.center.y.toFixed(2)}, ${cylinderInfo.center.z.toFixed(2)})`,
             axis: `(${cylinderInfo.axis.x.toFixed(2)}, ${cylinderInfo.axis.y.toFixed(2)}, ${cylinderInfo.axis.z.toFixed(2)})`,
-            radius: cylinderInfo.radius.toFixed(2)
+            radius: cylinderInfo.radius.toFixed(2),
           });
 
           // 🔧 调试：打印变换前的几何体边界框
@@ -1615,13 +1628,15 @@ export class SurfaceTextManager {
           const bboxBefore = textGeometryForCSG.boundingBox;
           console.log('[DEBUG] 文字几何体边界框（世界坐标，变换前）:', {
             min: `(${bboxBefore.min.x.toFixed(2)}, ${bboxBefore.min.y.toFixed(2)}, ${bboxBefore.min.z.toFixed(2)})`,
-            max: `(${bboxBefore.max.x.toFixed(2)}, ${bboxBefore.max.y.toFixed(2)}, ${bboxBefore.max.z.toFixed(2)})`
+            max: `(${bboxBefore.max.x.toFixed(2)}, ${bboxBefore.max.y.toFixed(2)}, ${bboxBefore.max.z.toFixed(2)})`,
           });
         }
 
         // 🔧 关键：将文字几何体从世界坐标系转换到目标网格的局部坐标系
         // 因为布尔操作是在局部坐标系中进行的
-        const targetInverseMatrix = new THREE.Matrix4().copy(textObject.targetMesh.matrixWorld).invert();
+        const targetInverseMatrix = new THREE.Matrix4()
+          .copy(textObject.targetMesh.matrixWorld)
+          .invert();
         textGeometryForCSG.applyMatrix4(targetInverseMatrix);
 
         // 调试：打印转换到局部坐标系后的边界框
@@ -1629,7 +1644,7 @@ export class SurfaceTextManager {
         const bboxLocal = textGeometryForCSG.boundingBox;
         console.log('[DEBUG] 文字几何体边界框（局部坐标，转换后）:', {
           min: `(${bboxLocal.min.x.toFixed(2)}, ${bboxLocal.min.y.toFixed(2)}, ${bboxLocal.min.z.toFixed(2)})`,
-          max: `(${bboxLocal.max.x.toFixed(2)}, ${bboxLocal.max.y.toFixed(2)}, ${bboxLocal.max.z.toFixed(2)})`
+          max: `(${bboxLocal.max.x.toFixed(2)}, ${bboxLocal.max.y.toFixed(2)}, ${bboxLocal.max.z.toFixed(2)})`,
         });
 
         // 🔧 调试：打印目标几何体的边界框
@@ -1637,13 +1652,15 @@ export class SurfaceTextManager {
         const targetBbox = textObject.targetMesh.geometry.boundingBox;
         console.log('[DEBUG] 目标几何体边界框（局部坐标）:', {
           min: `(${targetBbox.min.x.toFixed(2)}, ${targetBbox.min.y.toFixed(2)}, ${targetBbox.min.z.toFixed(2)})`,
-          max: `(${targetBbox.max.x.toFixed(2)}, ${targetBbox.max.y.toFixed(2)}, ${targetBbox.max.z.toFixed(2)})`
+          max: `(${targetBbox.max.x.toFixed(2)}, ${targetBbox.max.y.toFixed(2)}, ${targetBbox.max.z.toFixed(2)})`,
         });
       } else {
         console.log('[DEBUG] 平面文字内嵌模式 - 需要应用网格变换');
         // 平面文字：先应用网格变换到世界坐标系，再转换到目标网格的局部坐标系
         textGeometryForCSG.applyMatrix4(textObject.mesh.matrixWorld);
-        const targetInverseMatrix = new THREE.Matrix4().copy(textObject.targetMesh.matrixWorld).invert();
+        const targetInverseMatrix = new THREE.Matrix4()
+          .copy(textObject.targetMesh.matrixWorld)
+          .invert();
         textGeometryForCSG.applyMatrix4(targetInverseMatrix);
       }
 
@@ -1653,7 +1670,7 @@ export class SurfaceTextManager {
 
       console.log('[DEBUG] 准备执行布尔操作:', {
         targetVertexCount: targetGeometryForCSG.attributes.position?.count,
-        toolVertexCount: textGeometryForCSG.attributes.position?.count
+        toolVertexCount: textGeometryForCSG.attributes.position?.count,
       });
 
       const result = await this.booleanOperator.subtract(
@@ -1669,17 +1686,18 @@ export class SurfaceTextManager {
         hasMaterials: !!(result && result.materials),
         geometryType: result?.geometry?.type,
         vertexCount: result?.geometry?.attributes?.position?.count,
-        groupsCount: result?.geometry?.groups?.length || 0
+        groupsCount: result?.geometry?.groups?.length || 0,
       });
 
       if (result && result.geometry) {
         // 🔧 调试：比较原始几何体和结果几何体的顶点数
-        const originalVertexCount = textObject.originalTargetGeometry.attributes.position?.count || 0;
+        const originalVertexCount =
+          textObject.originalTargetGeometry.attributes.position?.count || 0;
         const resultVertexCount = result.geometry.attributes.position?.count || 0;
         console.log('[DEBUG] 顶点数变化:', {
           original: originalVertexCount,
           result: resultVertexCount,
-          difference: resultVertexCount - originalVertexCount
+          difference: resultVertexCount - originalVertexCount,
         });
 
         // 如果顶点数没有变化，说明布尔操作可能没有生效
@@ -1714,7 +1732,7 @@ export class SurfaceTextManager {
           console.log('[DEBUG] 已应用布尔操作返回的材质:', {
             materialsCount: result.materials.length,
             originalColor: originalColor.toString(16),
-            engravedColor: engravedColor.toString(16)
+            engravedColor: engravedColor.toString(16),
           });
         } else {
           // 回退到旧方法
@@ -1726,7 +1744,7 @@ export class SurfaceTextManager {
 
         console.log('[DEBUG] 内嵌模式应用成功:', {
           resultVertexCount: result.geometry.attributes.position?.count,
-          groupsCount: result.geometry.groups?.length || 0
+          groupsCount: result.geometry.groups?.length || 0,
         });
       } else {
         console.error('[DEBUG] 布尔操作结果无效:', result);
@@ -1735,7 +1753,6 @@ export class SurfaceTextManager {
 
       // 清理临时几何体
       textGeometryForCSG.dispose();
-
     } catch (error) {
       console.error('应用内嵌模式失败:', error);
       throw error;
@@ -1747,7 +1764,7 @@ export class SurfaceTextManager {
    * @param {THREE.Mesh} mesh - 目标网格
    * @param {Object} newTextObject - 新添加的文字对象
    */
-  updateMeshMaterials (mesh, newTextObject) {
+  updateMeshMaterials(mesh, newTextObject) {
     const textIds = this.meshTextMap.get(mesh.uuid);
     if (!textIds) return;
 
@@ -1768,7 +1785,7 @@ export class SurfaceTextManager {
       const originalColor = originalMaterial.color?.getHex() || 0x409eff;
 
       // 🔧 调试：使用明显的红色来标识内嵌区域
-      const engravedColor = 0xff0000;  // 红色，方便调试
+      const engravedColor = 0xff0000; // 红色，方便调试
 
       // 原来的深色计算（调试完成后恢复）
       // const r = ((originalColor >> 16) & 0xff) * 0.6
@@ -1779,9 +1796,9 @@ export class SurfaceTextManager {
       // 创建或复用雕刻材质
       if (!textObj.engravedMaterial) {
         textObj.engravedMaterial = new THREE.MeshStandardMaterial({
-          color: engravedColor,  // 使用更深的颜色
-          roughness: 0.9,        // 更粗糙，减少反光
-          metalness: 0.0         // 非金属
+          color: engravedColor, // 使用更深的颜色
+          roughness: 0.9, // 更粗糙，减少反光
+          metalness: 0.0, // 非金属
         });
       } else {
         // 更新颜色
@@ -1791,7 +1808,7 @@ export class SurfaceTextManager {
       textObj.engravedMaterial.userData = {
         textId: textObj.id,
         isEngravedText: true,
-        materialIndex: materialIndex
+        materialIndex: materialIndex,
       };
 
       materials.push(textObj.engravedMaterial);
@@ -1809,7 +1826,7 @@ export class SurfaceTextManager {
    * 应用凸起模式（支持多个文字）
    * @param {Object} textObject - 文字对象
    */
-  async applyRaisedMode (textObject) {
+  async applyRaisedMode(textObject) {
     // 如果之前是内嵌模式，需要处理几何体
     if (textObject.mode === 'engraved' && textObject.originalTargetGeometry) {
       // 清理雕刻材质
@@ -1859,16 +1876,24 @@ export class SurfaceTextManager {
               // 🔧 圆柱面文字需要向内偏移才能正确进行布尔减法
               const cylinderInfo = otherTextObj.surfaceInfo.cylinderInfo;
               if (cylinderInfo) {
-                this.offsetCylinderTextInward(textGeometryForCSG, cylinderInfo, otherTextObj.config.thickness || 0.5);
+                this.offsetCylinderTextInward(
+                  textGeometryForCSG,
+                  cylinderInfo,
+                  otherTextObj.config.thickness || 0.5
+                );
               }
 
               // 圆柱面文字：几何体已经在世界坐标系
-              const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert();
+              const targetInverseMatrix = new THREE.Matrix4()
+                .copy(otherTextObj.targetMesh.matrixWorld)
+                .invert();
               textGeometryForCSG.applyMatrix4(targetInverseMatrix);
             } else {
               // 平面文字：需要应用网格变换
               textGeometryForCSG.applyMatrix4(otherTextObj.mesh.matrixWorld);
-              const targetInverseMatrix = new THREE.Matrix4().copy(otherTextObj.targetMesh.matrixWorld).invert();
+              const targetInverseMatrix = new THREE.Matrix4()
+                .copy(otherTextObj.targetMesh.matrixWorld)
+                .invert();
               textGeometryForCSG.applyMatrix4(targetInverseMatrix);
             }
 
@@ -1900,7 +1925,6 @@ export class SurfaceTextManager {
           this.updateMeshMaterials(textObject.targetMesh, otherEngravedTexts[0]);
 
           console.log('凸起模式应用成功，已重新应用其他内嵌文字');
-
         } catch (error) {
           console.error('重新应用其他内嵌文字失败:', error);
           // 回退：恢复原始几何体
@@ -1911,7 +1935,6 @@ export class SurfaceTextManager {
           }
           throw error;
         }
-
       } else {
         // 没有其他内嵌文字，直接恢复原始几何体和材质
         textObject.targetMesh.geometry.dispose();
@@ -1924,7 +1947,6 @@ export class SurfaceTextManager {
 
         console.log('凸起模式应用成功，已恢复原始几何体');
       }
-
     } else {
       // 确保文字网格可见
       textObject.mesh.visible = true;
@@ -1935,7 +1957,7 @@ export class SurfaceTextManager {
    * 获取所有文字对象
    * @returns {Array} 文字对象数组
    */
-  getAllTextObjects () {
+  getAllTextObjects() {
     return Array.from(this.textObjects.values() as Iterable<any>);
   }
 
@@ -1943,7 +1965,7 @@ export class SurfaceTextManager {
    * 获取选中的文字对象
    * @returns {Object|null} 文字对象或null
    */
-  getSelectedTextObject () {
+  getSelectedTextObject() {
     return this.selectedTextId ? this.textObjects.get(this.selectedTextId) : null;
   }
 
@@ -1952,7 +1974,7 @@ export class SurfaceTextManager {
    * @param {string} textId - 文字ID
    * @returns {Object|null} 可序列化快照
    */
-  getTextSnapshot (textId) {
+  getTextSnapshot(textId) {
     const textObject = this.textObjects.get(textId);
     if (!textObject) return null;
 
@@ -1983,16 +2005,16 @@ export class SurfaceTextManager {
 
       meshTransform: mesh
         ? {
-          position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
-          rotation: {
-            x: mesh.rotation.x,
-            y: mesh.rotation.y,
-            z: mesh.rotation.z,
-            order: mesh.rotation.order
-          },
-          scale: { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z }
-        }
-        : null
+            position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+            rotation: {
+              x: mesh.rotation.x,
+              y: mesh.rotation.y,
+              z: mesh.rotation.z,
+              order: mesh.rotation.order,
+            },
+            scale: { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z },
+          }
+        : null,
     };
   }
 
@@ -2001,7 +2023,7 @@ export class SurfaceTextManager {
    * @param {Object} snapshot - 文字快照
    * @returns {Promise<string>} 文字ID
    */
-  async restoreText (snapshot) {
+  async restoreText(snapshot) {
     if (!snapshot?.id) {
       throw new Error('Invalid text snapshot');
     }
@@ -2012,14 +2034,16 @@ export class SurfaceTextManager {
 
     const targetMesh =
       (snapshot.targetMeshUuid
-        ? this.targetMeshes.find(m => m.uuid === snapshot.targetMeshUuid)
+        ? this.targetMeshes.find((m) => m.uuid === snapshot.targetMeshUuid)
         : null) ||
       (snapshot.targetMeshUuid
         ? this.scene.getObjectByProperty('uuid', snapshot.targetMeshUuid)
         : null);
 
     if (!targetMesh) {
-      throw new Error(`Target mesh not found for text restore: ${snapshot.targetMeshUuid || snapshot.targetMeshName}`);
+      throw new Error(
+        `Target mesh not found for text restore: ${snapshot.targetMeshUuid || snapshot.targetMeshName}`
+      );
     }
 
     const point = snapshot.point
@@ -2038,12 +2062,12 @@ export class SurfaceTextManager {
       face: normal ? { normal } : null,
       point,
       distance: 0,
-      uv
+      uv,
     };
 
     const textId = await this.createTextObject(snapshot.content, faceInfo, {
       id: snapshot.id,
-      config: snapshot.config || {}
+      config: snapshot.config || {},
     });
 
     const textObject = this.textObjects.get(textId);
@@ -2076,7 +2100,7 @@ export class SurfaceTextManager {
           oldMode: 'raised',
           newMode: 'engraved',
           engraveStatus: 'failed',
-          error: textObject.engraveError
+          error: textObject.engraveError,
         });
       } else {
         await this.switchTextMode(textId, 'engraved');
@@ -2089,7 +2113,7 @@ export class SurfaceTextManager {
   /**
    * 设置事件处理器
    */
-  setupEventHandlers () {
+  setupEventHandlers() {
     // 监听变换控制器事件
     this.transformControls.on('change', () => {
       if (this.selectedTextId) {
@@ -2169,7 +2193,7 @@ export class SurfaceTextManager {
    * @param {string} eventName - 事件名称
    * @param {Function} callback - 回调函数
    */
-  on (eventName, callback) {
+  on(eventName, callback) {
     if (!this.eventListeners.has(eventName)) {
       this.eventListeners.set(eventName, []);
     }
@@ -2181,7 +2205,7 @@ export class SurfaceTextManager {
    * @param {string} eventName - 事件名称
    * @param {Function} callback - 回调函数
    */
-  off (eventName, callback) {
+  off(eventName, callback) {
     if (!this.eventListeners.has(eventName)) return;
 
     const listeners = this.eventListeners.get(eventName);
@@ -2196,11 +2220,11 @@ export class SurfaceTextManager {
    * @param {string} eventName - 事件名称
    * @param {...any} args - 事件参数
    */
-  emit (eventName, ...args) {
+  emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;
 
     const listeners = this.eventListeners.get(eventName);
-    listeners.forEach(callback => {
+    listeners.forEach((callback) => {
       try {
         callback(...args);
       } catch (error) {
@@ -2213,12 +2237,12 @@ export class SurfaceTextManager {
    * 导出文字配置（符合config.js格式）
    * @returns {Object} 文字配置数据
    */
-  exportTextConfig () {
+  exportTextConfig() {
     const texts = [];
 
     this.textObjects.forEach((textObject, textId) => {
       const config = {
-        // id 
+        // id
         id: textObject.content,
         // uuid 标识， 查找管理
         index: textId,
@@ -2241,7 +2265,7 @@ export class SurfaceTextManager {
         // 文字贴合方式
         wrap: 'surface Project',
         // 在那个表面上添加文字
-        attachmentSurface: textObject.surfaceId
+        attachmentSurface: textObject.surfaceId,
       };
 
       texts.push(config);
@@ -2254,7 +2278,7 @@ export class SurfaceTextManager {
    * 导入文字配置（从config.js格式）
    * @param {Array} textsConfig - 文字配置数组
    */
-  async importTextConfig (textsConfig) {
+  async importTextConfig(textsConfig) {
     if (!Array.isArray(textsConfig)) {
       console.warn('文字配置格式错误');
       return;
@@ -2274,7 +2298,7 @@ export class SurfaceTextManager {
           font: textConfig.type || 'helvetiker',
           size: (textConfig.size || 33) / 1000, // 毫米转米
           thickness: (textConfig.depth || 3) / 1000, // 毫米转米
-          color: parseInt(textConfig.color?.replace('#', '') || 'ff00ff', 16)
+          color: parseInt(textConfig.color?.replace('#', '') || 'ff00ff', 16),
         };
 
         // 创建文字对象
@@ -2299,7 +2323,6 @@ export class SurfaceTextManager {
           textObject.config = { ...textObject.config, ...config };
           textObject.material.color.setHex(config.color);
         }
-
       } catch (error) {
         console.error('导入文字配置失败:', textConfig, error);
       }
@@ -2310,7 +2333,7 @@ export class SurfaceTextManager {
    * 导出完整的表面标识配置
    * @returns {Object} 表面标识配置
    */
-  exportSurfaceConfig () {
+  exportSurfaceConfig() {
     return surfaceIdentifier.exportConfig();
   }
 
@@ -2318,14 +2341,14 @@ export class SurfaceTextManager {
    * 导入表面标识配置
    * @param {Object} config - 表面标识配置
    */
-  importSurfaceConfig (config) {
+  importSurfaceConfig(config) {
     surfaceIdentifier.importConfig(config);
   }
 
   /**
    * 销毁管理器，清理资源
    */
-  async destroy () {
+  async destroy() {
     // 禁用点击监听
     this.disableClickListener();
 
@@ -2353,7 +2376,7 @@ export class SurfaceTextManager {
    * @param {string} content - 文字内容
    * @returns {boolean} 是否有效
    */
-  validateTextContent (content) {
+  validateTextContent(content) {
     return typeof content === 'string' && content.trim().length > 0;
   }
 
@@ -2361,7 +2384,7 @@ export class SurfaceTextManager {
    * 生成唯一文字ID
    * @returns {string} 唯一ID
    */
-  generateTextId () {
+  generateTextId() {
     return `text_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
 
@@ -2369,7 +2392,7 @@ export class SurfaceTextManager {
    * 获取默认文字配置
    * @returns {Object} 默认配置
    */
-  getDefaultTextConfig () {
+  getDefaultTextConfig() {
     return {
       font: 'helvetiker',
       size: 3, // 字体大小设置为3
@@ -2381,7 +2404,7 @@ export class SurfaceTextManager {
       bevelThickness: 0.02, // 倒角厚度
       bevelSize: 0.01, // 倒角大小
       bevelOffset: 0,
-      bevelSegments: 5
+      bevelSegments: 5,
     };
   }
 
@@ -2391,7 +2414,7 @@ export class SurfaceTextManager {
    *   - 'csg': 使用 CSG 布尔操作（更精确，文字完美贴合曲面）
    *   - 'mapping': 使用坐标映射（较快，但可能有轻微变形）
    */
-  setCylinderTextMethod (method) {
+  setCylinderTextMethod(method) {
     this.geometryGenerator.setCylinderTextMethod(method);
   }
 
@@ -2399,7 +2422,7 @@ export class SurfaceTextManager {
    * 获取当前圆柱面文字生成方法
    * @returns {string} 'csg' | 'mapping'
    */
-  getCylinderTextMethod () {
+  getCylinderTextMethod() {
     return this.geometryGenerator.getCylinderTextMethod();
   }
 
@@ -2407,7 +2430,7 @@ export class SurfaceTextManager {
    * 检查是否处于编辑模式
    * @returns {boolean} 是否处于编辑模式
    */
-  isInEditMode () {
+  isInEditMode() {
     return this.isEditing;
   }
 
@@ -2415,7 +2438,7 @@ export class SurfaceTextManager {
    * 检查是否正在拖动
    * @returns {boolean} 是否正在拖动
    */
-  isCurrentlyDragging () {
+  isCurrentlyDragging() {
     return this.isDragging;
   }
 
@@ -2424,12 +2447,12 @@ export class SurfaceTextManager {
    * @param {THREE.Mesh} mesh - 目标网格
    * @returns {Array} 文字对象数组
    */
-  getTextObjectsOnMesh (mesh) {
+  getTextObjectsOnMesh(mesh) {
     const textIds = this.meshTextMap.get(mesh.uuid);
     if (!textIds) return [];
 
     return Array.from(textIds)
-      .map(id => this.textObjects.get(id) as any)
+      .map((id) => this.textObjects.get(id) as any)
       .filter((obj): obj is any => obj !== undefined);
   }
 
@@ -2438,18 +2461,18 @@ export class SurfaceTextManager {
    * @param {THREE.Mesh} mesh - 目标网格
    * @returns {Array} 内嵌文字对象数组
    */
-  getEngravedTextObjectsOnMesh (mesh) {
-    return this.getTextObjectsOnMesh(mesh).filter(obj => obj.mode === 'engraved');
+  getEngravedTextObjectsOnMesh(mesh) {
+    return this.getTextObjectsOnMesh(mesh).filter((obj) => obj.mode === 'engraved');
   }
 
   /**
    * 手动触发重新应用所有内嵌效果
    * @param {THREE.Mesh} targetMesh - 目标网格（可选，不传则处理所有）
    */
-  async refreshAllEngravings (targetMesh = null) {
+  async refreshAllEngravings(targetMesh = null) {
     const textObjects = targetMesh
       ? this.getEngravedTextObjectsOnMesh(targetMesh)
-      : this.getAllTextObjects().filter(obj => obj.mode === 'engraved');
+      : this.getAllTextObjects().filter((obj) => obj.mode === 'engraved');
 
     for (const textObject of textObjects) {
       try {
@@ -2467,7 +2490,7 @@ export class SurfaceTextManager {
    * @param {string} textId - 文字ID
    * @param {boolean} constrain - 是否限制
    */
-  setConstrainToSurface (textId, constrain) {
+  setConstrainToSurface(textId, constrain) {
     if (!this.textObjects.has(textId)) return;
 
     const textObject = this.textObjects.get(textId);

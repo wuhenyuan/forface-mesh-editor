@@ -1,13 +1,13 @@
 /**
  * 圆柱面文字几何体生成器
- * 
+ *
  * 核心思路：对已生成的 TextGeometry（闭合流形）进行圆柱坐标映射
- * 
+ *
  * 对于垂直圆柱（Y轴为轴向）：
  * - 文字的 X 方向（宽度）→ 沿圆周方向（角度 θ）
  * - 文字的 Y 方向（高度）→ 沿轴向（Y 坐标）
  * - 文字的 Z 方向（厚度）→ 径向（向外突出）
- * 
+ *
  * 映射公式：
  * - theta = startTheta + (localX / radius)
  * - worldY = startHeight + localY
@@ -26,7 +26,7 @@ export class CylinderTextGeometry {
       depth: 0.5,
       bevelEnabled: false,
       bevelThickness: 0.02,
-      bevelSize: 0.01
+      bevelSize: 0.01,
     };
   }
 
@@ -39,7 +39,7 @@ export class CylinderTextGeometry {
    * @param {Object} config - 配置参数
    * @returns {THREE.BufferGeometry} 闭合的文字几何体（世界坐标系）
    */
-  generate (text, font, cylinderInfo, startPoint, config = {}) {
+  generate(text, font, cylinderInfo, startPoint, config = {}) {
     const finalConfig = { ...this.defaultConfig, ...config };
     const { center, axis, radius } = cylinderInfo;
 
@@ -48,7 +48,7 @@ export class CylinderTextGeometry {
       radius,
       center: `(${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`,
       axis: `(${axis.x.toFixed(2)}, ${axis.y.toFixed(2)}, ${axis.z.toFixed(2)})`,
-      startPoint: `(${startPoint.x.toFixed(2)}, ${startPoint.y.toFixed(2)}, ${startPoint.z.toFixed(2)})`
+      startPoint: `(${startPoint.x.toFixed(2)}, ${startPoint.y.toFixed(2)}, ${startPoint.z.toFixed(2)})`,
     });
 
     // 1. 生成平面 TextGeometry（这是一个闭合流形）
@@ -59,7 +59,7 @@ export class CylinderTextGeometry {
       curveSegments: finalConfig.curveSegments,
       bevelEnabled: finalConfig.bevelEnabled,
       bevelThickness: finalConfig.bevelThickness,
-      bevelSize: finalConfig.bevelSize
+      bevelSize: finalConfig.bevelSize,
     });
 
     // 计算边界框
@@ -72,7 +72,7 @@ export class CylinderTextGeometry {
     // 将文字几何体居中（X 方向居中，Y 方向居中，Z 从 0 开始向外）
     const centerOffsetX = -0.5 * textWidth - bbox.min.x;
     const centerOffsetY = -0.5 * textHeight - bbox.min.y;
-    const centerOffsetZ = -bbox.min.z;  // Z=0 是文字底面（贴着圆柱表面）
+    const centerOffsetZ = -bbox.min.z; // Z=0 是文字底面（贴着圆柱表面）
 
     textGeometry.translate(centerOffsetX, centerOffsetY, centerOffsetZ);
 
@@ -80,20 +80,25 @@ export class CylinderTextGeometry {
       width: textWidth.toFixed(3),
       height: textHeight.toFixed(3),
       depth: textDepth.toFixed(3),
-      vertexCount: textGeometry.attributes.position.count
+      vertexCount: textGeometry.attributes.position.count,
     });
 
     // 2. 计算起始点在圆柱坐标系中的位置
     const startCylCoord = this.worldToCylinderCoord(startPoint, cylinderInfo);
 
     console.log('🎯 起始位置（圆柱坐标）:', {
-      theta: (startCylCoord.theta * 180 / Math.PI).toFixed(2) + '°',
+      theta: ((startCylCoord.theta * 180) / Math.PI).toFixed(2) + '°',
       height: startCylCoord.height.toFixed(3),
-      radius: startCylCoord.radius.toFixed(3)
+      radius: startCylCoord.radius.toFixed(3),
     });
 
     // 3. 对每个顶点应用圆柱坐标映射
-    this.applyCylinderMapping(textGeometry, cylinderInfo, startCylCoord.theta, startCylCoord.height);
+    this.applyCylinderMapping(
+      textGeometry,
+      cylinderInfo,
+      startCylCoord.theta,
+      startCylCoord.height
+    );
 
     // 4. 重新计算法向量 - 使用平滑法向量避免接缝
     this.computeSmoothNormals(textGeometry, cylinderInfo);
@@ -108,13 +113,13 @@ export class CylinderTextGeometry {
       cylinderInfo: {
         radius: radius,
         center: center.clone(),
-        axis: axis.clone()
-      }
+        axis: axis.clone(),
+      },
     };
 
     console.log('✅ 圆柱面文字几何体生成完成:', {
       vertexCount: textGeometry.attributes.position.count,
-      isManifold: true
+      isManifold: true,
     });
 
     return textGeometry;
@@ -126,7 +131,7 @@ export class CylinderTextGeometry {
    * @param {Object} cylinderInfo - 圆柱信息
    * @returns {Object} { theta: 角度, height: 沿轴高度, radius: 径向距离 }
    */
-  worldToCylinderCoord (worldPoint, cylinderInfo) {
+  worldToCylinderCoord(worldPoint, cylinderInfo) {
     const { center, axis } = cylinderInfo;
     const axisNorm = axis.clone().normalize();
 
@@ -163,18 +168,18 @@ export class CylinderTextGeometry {
 
   /**
    * 对几何体应用圆柱坐标映射
-   * 
+   *
    * 对于垂直圆柱（Y轴为轴向）：
    * - localX（文字宽度）→ 角度偏移
    * - localY（文字高度）→ Y 坐标偏移
    * - localZ（文字厚度）→ 径向偏移
-   * 
+   *
    * @param {THREE.BufferGeometry} geometry - 文字几何体
    * @param {Object} cylinderInfo - 圆柱信息
    * @param {number} startTheta - 起始角度
    * @param {number} startHeight - 起始高度（沿轴向）
    */
-  applyCylinderMapping (geometry, cylinderInfo, startTheta, startHeight) {
+  applyCylinderMapping(geometry, cylinderInfo, startTheta, startHeight) {
     const { center, axis, radius } = cylinderInfo;
     const axisNorm = axis.clone().normalize();
     const positions = geometry.attributes.position;
@@ -183,20 +188,20 @@ export class CylinderTextGeometry {
     console.log('🔄 开始圆柱坐标映射:', {
       vertexCount: positionArray.length / 3,
       radius,
-      startTheta: (startTheta * 180 / Math.PI).toFixed(2) + '°',
+      startTheta: ((startTheta * 180) / Math.PI).toFixed(2) + '°',
       startHeight: startHeight.toFixed(3),
-      axisDirection: `(${axisNorm.x.toFixed(2)}, ${axisNorm.y.toFixed(2)}, ${axisNorm.z.toFixed(2)})`
+      axisDirection: `(${axisNorm.x.toFixed(2)}, ${axisNorm.y.toFixed(2)}, ${axisNorm.z.toFixed(2)})`,
     });
 
     // 判断圆柱轴向
-    const isVertical = Math.abs(axisNorm.y) > 0.9;  // Y 轴为主轴
+    const isVertical = Math.abs(axisNorm.y) > 0.9; // Y 轴为主轴
 
     // 记录一些顶点用于调试
     const sampleVertices = [];
 
     for (let i = 0; i < positionArray.length; i += 3) {
       // 原始顶点坐标（文字局部坐标系，已居中）
-      const localX = positionArray[i];     // 宽度方向 → 角度
+      const localX = positionArray[i]; // 宽度方向 → 角度
       const localY = positionArray[i + 1]; // 高度方向 → 轴向
       const localZ = positionArray[i + 2]; // 厚度方向 → 径向
 
@@ -220,14 +225,15 @@ export class CylinderTextGeometry {
         const correctedTheta = startTheta - deltaTheta;
         worldX = center.x + vertexRadius * Math.cos(correctedTheta);
         worldZ = center.z + vertexRadius * Math.sin(correctedTheta);
-        worldY = center.y + startHeight + localY;  // Y 是轴向
+        worldY = center.y + startHeight + localY; // Y 是轴向
       } else {
         // 其他方向的圆柱（通用处理）
         // 需要建立局部坐标系
         const refDir = this.getPerpendicularVector(axisNorm);
         const tangentDir = axisNorm.clone().cross(refDir).normalize();
 
-        const radialDir = refDir.clone()
+        const radialDir = refDir
+          .clone()
           .multiplyScalar(Math.cos(theta))
           .add(tangentDir.clone().multiplyScalar(Math.sin(theta)));
 
@@ -246,13 +252,13 @@ export class CylinderTextGeometry {
 
       // 记录前几个顶点用于调试
       if (sampleVertices.length < 5) {
-        const displayTheta = isVertical ? (startTheta - deltaTheta) : theta;
+        const displayTheta = isVertical ? startTheta - deltaTheta : theta;
         sampleVertices.push({
           index: i / 3,
           local: `(${localX.toFixed(2)}, ${localY.toFixed(2)}, ${localZ.toFixed(2)})`,
-          theta: (displayTheta * 180 / Math.PI).toFixed(2) + '°',
+          theta: ((displayTheta * 180) / Math.PI).toFixed(2) + '°',
           radius: vertexRadius.toFixed(2),
-          world: `(${worldX.toFixed(2)}, ${worldY.toFixed(2)}, ${worldZ.toFixed(2)})`
+          world: `(${worldX.toFixed(2)}, ${worldY.toFixed(2)}, ${worldZ.toFixed(2)})`,
         });
       }
     }
@@ -268,7 +274,7 @@ export class CylinderTextGeometry {
    * @param {THREE.Vector3} vector - 输入向量
    * @returns {THREE.Vector3} 垂直向量
    */
-  getPerpendicularVector (vector) {
+  getPerpendicularVector(vector) {
     const normalized = vector.clone().normalize();
 
     // 选择一个不平行的向量
@@ -287,11 +293,11 @@ export class CylinderTextGeometry {
    * 计算平滑法向量
    * 对于圆柱面上的文字，顶面和底面的法向量应该是径向的
    * 侧面的法向量需要根据面的朝向计算
-   * 
+   *
    * @param {THREE.BufferGeometry} geometry - 几何体
    * @param {Object} cylinderInfo - 圆柱信息
    */
-  computeSmoothNormals (geometry, cylinderInfo) {
+  computeSmoothNormals(geometry, cylinderInfo) {
     const { center, axis } = cylinderInfo;
     const axisNorm = axis.clone().normalize();
     const isVertical = Math.abs(axisNorm.y) > 0.9;
@@ -321,7 +327,10 @@ export class CylinderTextGeometry {
         // 通用情况
         const toVertex = new THREE.Vector3(x, y, z).sub(center);
         const axialComponent = toVertex.dot(axisNorm);
-        radialDir = toVertex.clone().sub(axisNorm.clone().multiplyScalar(axialComponent)).normalize();
+        radialDir = toVertex
+          .clone()
+          .sub(axisNorm.clone().multiplyScalar(axialComponent))
+          .normalize();
       }
 
       // 检查当前法向量与径向方向的关系

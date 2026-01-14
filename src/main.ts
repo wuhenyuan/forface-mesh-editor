@@ -6,8 +6,8 @@ import EditorLayout from './components/EditorLayout.vue';
 
 // install 方法
 const install = function (Vue: any, _options: Record<string, any> = {}) {
-  if ((install as any).installed) return
-  ;(install as any).installed = true;
+  if ((install as any).installed) return;
+  (install as any).installed = true;
 
   Vue.component((EditorLayout as any).name, EditorLayout);
 };
@@ -20,7 +20,7 @@ if (typeof window !== 'undefined' && (window as any).Vue) {
 // 默认导出
 export default {
   install,
-  EditorLayout
+  EditorLayout,
 };
 
 // 具名导出

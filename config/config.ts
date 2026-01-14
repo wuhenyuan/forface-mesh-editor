@@ -26,8 +26,8 @@ const INTERNAL_DEFAULT_CONFIG = {
         volume: 1000,
         boundingBox: [10, 10, 10],
         // obb 包围盒，如果准的话可以加，不准就不加
-        obb: [10, 10, 10]
-      }
+        obb: [10, 10, 10],
+      },
     },
     final: {
       id: 'final',
@@ -36,9 +36,9 @@ const INTERNAL_DEFAULT_CONFIG = {
         scale: [1, 1, 1],
         surface: 100,
         volume: 1000,
-        boundingBox: [10, 10, 10]
-      }
-    }
+        boundingBox: [10, 10, 10],
+      },
+    },
   },
 
   // 装饰配置（暂时没有）
@@ -58,13 +58,13 @@ const INTERNAL_DEFAULT_CONFIG = {
       position: [0, 0, 0],
       rotate: [0, 0, 0],
       wrap: 'surface Project',
-      attachmentSurface: 'in0in1100'
-    }
+      attachmentSurface: 'in0in1100',
+    },
   ],
 
   lookupTable: {},
   faceRepare: '0',
-  modelOptimization: '0'
+  modelOptimization: '0',
 };
 
 function _normalizeModelEntry(key: string, input: any, fallback: any) {
@@ -75,11 +75,11 @@ function _normalizeModelEntry(key: string, input: any, fallback: any) {
     ...base,
     ...value,
     id: value.id || base.id || key,
-    path: typeof value.path === 'string' ? value.path : (base.path || ''),
+    path: typeof value.path === 'string' ? value.path : base.path || '',
     config: {
       ...(base.config || {}),
-      ...(value.config && typeof value.config === 'object' ? value.config : {})
-    }
+      ...(value.config && typeof value.config === 'object' ? value.config : {}),
+    },
   };
 }
 
@@ -115,12 +115,12 @@ export function normalizeConfig(inputConfig: any): any {
     rest.metadata = {
       ...(rest.metadata && typeof rest.metadata === 'object' ? rest.metadata : {}),
       version,
-      ...(typeof createTime === 'string' && createTime ? { created: createTime } : {})
+      ...(typeof createTime === 'string' && createTime ? { created: createTime } : {}),
     };
   } else if (typeof createTime === 'string' && createTime) {
     rest.metadata = {
       ...(rest.metadata && typeof rest.metadata === 'object' ? rest.metadata : {}),
-      created: createTime
+      created: createTime,
     };
   }
 
@@ -140,7 +140,7 @@ export function normalizeConfig(inputConfig: any): any {
         modelsFromFeatures[key] = {
           id: key,
           path: typeof payload.path === 'string' ? payload.path : '',
-          config: payload.config && typeof payload.config === 'object' ? payload.config : {}
+          config: payload.config && typeof payload.config === 'object' ? payload.config : {},
         };
         continue;
       }
@@ -163,15 +163,23 @@ export function normalizeConfig(inputConfig: any): any {
       const configuredPath =
         typeof entry.url === 'string'
           ? entry.url
-          : (typeof entry.path === 'string' ? entry.path : '');
+          : typeof entry.path === 'string'
+            ? entry.path
+            : '';
       if (!configuredPath) continue;
 
       const key =
         typeof entry.id === 'string' && entry.id
           ? entry.id
-          : (typeof entry.key === 'string' && entry.key
+          : typeof entry.key === 'string' && entry.key
             ? entry.key
-            : (i === 0 ? 'origin' : (i === 1 ? 'base' : (i === 2 ? 'final' : `model_${i + 1}`))));
+            : i === 0
+              ? 'origin'
+              : i === 1
+                ? 'base'
+                : i === 2
+                  ? 'final'
+                  : `model_${i + 1}`;
 
       const nextConfig: any = {};
       if (Array.isArray(entry.position)) nextConfig.position = entry.position;
@@ -181,7 +189,7 @@ export function normalizeConfig(inputConfig: any): any {
       modelsFromList[key] = {
         id: key,
         path: configuredPath,
-        config: nextConfig
+        config: nextConfig,
       };
     }
   }
@@ -194,11 +202,15 @@ export function normalizeConfig(inputConfig: any): any {
       ...base.models,
       ...modelsFromFeatures,
       ...modelsFromList,
-      ...(modelsField && typeof modelsField === 'object' && !Array.isArray(modelsField) ? modelsField : {})
+      ...(modelsField && typeof modelsField === 'object' && !Array.isArray(modelsField)
+        ? modelsField
+        : {}),
     },
     texts: Array.isArray(textsField)
       ? textsField
-      : (textsFromFeatures.length > 0 ? textsFromFeatures : base.texts)
+      : textsFromFeatures.length > 0
+        ? textsFromFeatures
+        : base.texts,
   };
 
   // 归一化 models（包含未来扩展的未知 key）
@@ -215,7 +227,7 @@ export function normalizeConfig(inputConfig: any): any {
         if (typeof t.index === 'string' && t.index) return t;
         return {
           ...t,
-          index: `text_${now}_${idx}_${Math.random().toString(36).slice(2, 10)}`
+          index: `text_${now}_${idx}_${Math.random().toString(36).slice(2, 10)}`,
         };
       });
   }
@@ -236,14 +248,14 @@ export function normalizeConfig(inputConfig: any): any {
     merged.models.final.config = {
       ...(base.models.final.config || {}),
       ...(finalModelConfig || {}),
-      ...(merged.models.final.config || {})
+      ...(merged.models.final.config || {}),
     };
   }
   if (baseModelConfig && typeof baseModelConfig === 'object') {
     merged.models.base.config = {
       ...(base.models.base.config || {}),
       ...(baseModelConfig || {}),
-      ...(merged.models.base.config || {})
+      ...(merged.models.base.config || {}),
     };
   }
 
@@ -270,8 +282,8 @@ export function serializeConfig(inputConfig: any): any {
       id: key,
       payload: {
         path: model?.path || '',
-        config: model?.config || {}
-      }
+        config: model?.config || {},
+      },
     });
   }
 
@@ -279,11 +291,14 @@ export function serializeConfig(inputConfig: any): any {
   for (const textConfig of textsList) {
     if (!textConfig || typeof textConfig !== 'object') continue;
     const { index, ...payload } = textConfig;
-    const id = typeof index === 'string' && index ? index : `text_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const id =
+      typeof index === 'string' && index
+        ? index
+        : `text_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     nextFeatures.push({
       kind: 'text',
       id,
-      payload
+      payload,
     });
   }
 
@@ -295,7 +310,7 @@ export function serializeConfig(inputConfig: any): any {
     decorations: normalized.decorations || [],
     lookupTable: normalized.lookupTable || {},
     faceRepare: normalized.faceRepare ?? '0',
-    modelOptimization: normalized.modelOptimization ?? '0'
+    modelOptimization: normalized.modelOptimization ?? '0',
   };
 
   if (normalized.metadata) {

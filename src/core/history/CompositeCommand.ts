@@ -4,7 +4,7 @@ export class CompositeCommand extends BaseCommand {
   constructor(name, commands = []) {
     super('COMPOSITE', name);
     this.commands = commands;
-    this.isAsync = commands.some(cmd => cmd?.isAsync);
+    this.isAsync = commands.some((cmd) => cmd?.isAsync);
   }
 
   async execute() {

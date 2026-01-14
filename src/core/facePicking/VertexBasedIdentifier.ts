@@ -1,12 +1,12 @@
 /**
  * 基于顶点索引的稳定标识符
- * 
+ *
  * 核心原理：
  * 1. 基于原始模型的固定顶点索引
  * 2. 获取面的所有顶点索引，排序去重
  * 3. 相邻压缩：0,1,2,3,4,5 → "i0i5"
  * 4. 非连续分段：0,1,2,5,6,7 → "i0i2,i5i7"
- * 
+ *
  * 优势：
  * - 绝对稳定：基于原始模型的固定顶点索引
  * - 天然唯一：每个面的顶点集合都是唯一的
@@ -23,13 +23,13 @@ export class VertexBasedIdentifier {
   generateVertexBasedId(triangleIndices: number[], geometry: any) {
     // 1. 获取所有顶点索引
     const vertexIndices = this.extractVertexIndices(triangleIndices, geometry);
-    
+
     // 2. 去重并排序
     const uniqueVertices = [...new Set(vertexIndices)].sort((a, b) => a - b);
-    
+
     // 3. 相邻压缩
     const compressed = this.compressConsecutiveIndices(uniqueVertices);
-    
+
     return compressed;
   }
 
@@ -42,8 +42,8 @@ export class VertexBasedIdentifier {
   extractVertexIndices(triangleIndices: number[], geometry: any) {
     const vertexIndices = [];
     const indices = geometry.index;
-    
-    triangleIndices.forEach(triangleIndex => {
+
+    triangleIndices.forEach((triangleIndex) => {
       if (indices) {
         // 有索引的几何体
         const i1 = indices.getX(triangleIndex * 3);
@@ -58,7 +58,7 @@ export class VertexBasedIdentifier {
         vertexIndices.push(i1, i2, i3);
       }
     });
-    
+
     return vertexIndices;
   }
 
@@ -70,11 +70,11 @@ export class VertexBasedIdentifier {
   compressConsecutiveIndices(indices: number[]) {
     if (indices.length === 0) return '';
     if (indices.length === 1) return `i${indices[0]}`;
-    
+
     const ranges = [];
     let start = indices[0];
     let end = indices[0];
-    
+
     for (let i = 1; i < indices.length; i++) {
       if (indices[i] === end + 1) {
         // 连续索引，扩展范围
@@ -85,10 +85,10 @@ export class VertexBasedIdentifier {
         start = end = indices[i];
       }
     }
-    
+
     // 保存最后一个范围
     ranges.push(this.formatRange(start, end));
-    
+
     return ranges.join(',');
   }
 
@@ -113,11 +113,11 @@ export class VertexBasedIdentifier {
    */
   decompressIndices(compressed: string) {
     if (!compressed) return [];
-    
+
     const indices = [];
     const ranges = compressed.split(',');
-    
-    ranges.forEach(range => {
+
+    ranges.forEach((range) => {
       if (range.startsWith('i')) {
         const numbers = range.substring(1).split('i');
         if (numbers.length === 1) {
@@ -133,7 +133,7 @@ export class VertexBasedIdentifier {
         }
       }
     });
-    
+
     return indices.sort((a, b) => a - b);
   }
 
@@ -146,14 +146,14 @@ export class VertexBasedIdentifier {
   calculateCompressionStats(originalIndices: number[], compressed: string) {
     const originalSize = originalIndices.length * 4; // 假设每个索引4字节
     const compressedSize = compressed.length; // 字符串长度
-    const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
-    
+    const compressionRatio = (((originalSize - compressedSize) / originalSize) * 100).toFixed(1);
+
     return {
       originalCount: originalIndices.length,
       originalSize: originalSize,
       compressedSize: compressedSize,
       compressionRatio: `${compressionRatio}%`,
-      compressed: compressed
+      compressed: compressed,
     };
   }
 
@@ -166,14 +166,14 @@ export class VertexBasedIdentifier {
     const uniqueSorted = [...new Set(originalIndices)].sort((a, b) => a - b);
     const compressed = this.compressConsecutiveIndices(uniqueSorted);
     const decompressed = this.decompressIndices(compressed);
-    
+
     // 比较原始和解压后的数组
     if (uniqueSorted.length !== decompressed.length) return false;
-    
+
     for (let i = 0; i < uniqueSorted.length; i++) {
       if (uniqueSorted[i] !== decompressed[i]) return false;
     }
-    
+
     return true;
   }
 }

@@ -61,34 +61,32 @@ export const FacePickingUtils = {
     if (!mesh || !mesh.geometry) {
       return false;
     }
-    
+
     if (!mesh.visible) {
       return false;
     }
-    
+
     const geometry = mesh.geometry;
-    
+
     if (geometry.isBufferGeometry) {
       const positionAttribute = geometry.getAttribute('position');
       if (!positionAttribute || positionAttribute.count === 0) {
         return false;
       }
-      
+
       const indexAttribute = geometry.getIndex();
-      const faceCount = indexAttribute 
-        ? indexAttribute.count / 3 
-        : positionAttribute.count / 3;
-      
+      const faceCount = indexAttribute ? indexAttribute.count / 3 : positionAttribute.count / 3;
+
       return faceCount >= 1;
     }
-    
+
     if (geometry.isGeometry) {
       return geometry.vertices?.length > 0 && geometry.faces?.length > 0;
     }
-    
+
     return false;
   },
-  
+
   /**
    * 从场景中获取所有可拾取的网格
    * @param {THREE.Scene} scene - Three.js场景
@@ -97,7 +95,7 @@ export const FacePickingUtils = {
    */
   getPickableMeshes(scene, includeChildren = true) {
     const meshes = [];
-    
+
     if (includeChildren) {
       scene.traverse((object) => {
         if (object.isMesh && this.validateMesh(object) && this.isMeshPickable(object)) {
@@ -111,10 +109,10 @@ export const FacePickingUtils = {
         }
       });
     }
-    
+
     return meshes;
   },
-  
+
   /**
    * 为网格添加面拾取标记
    * @param {THREE.Mesh} mesh - 网格对象
@@ -125,7 +123,7 @@ export const FacePickingUtils = {
       mesh.userData.facePickable = pickable;
     }
   },
-  
+
   /**
    * 检查网格是否标记为可拾取
    * @param {THREE.Mesh} mesh - 网格对象
@@ -134,16 +132,16 @@ export const FacePickingUtils = {
   isMeshPickable(mesh) {
     return mesh && mesh.userData && mesh.userData.facePickable !== false;
   },
-  
+
   /**
    * 批量设置网格的可拾取状态
    * @param {THREE.Mesh[]} meshes - 网格数组
    * @param {boolean} pickable - 是否可拾取
    */
   setMeshesPickable(meshes, pickable = true) {
-    meshes.forEach(mesh => this.setMeshPickable(mesh, pickable));
+    meshes.forEach((mesh) => this.setMeshPickable(mesh, pickable));
   },
-  
+
   /**
    * 获取网格的几何体信息
    * @param {THREE.Mesh} mesh - 网格对象
@@ -153,7 +151,7 @@ export const FacePickingUtils = {
     if (!mesh || !mesh.geometry) {
       return null;
     }
-    
+
     // 直接实现兼容性检查，避免循环依赖
     const geometry = mesh.geometry;
     const compatibility = {
@@ -161,16 +159,16 @@ export const FacePickingUtils = {
       type: 'unknown',
       faceCount: 0,
       hasIndices: false,
-      warnings: []
+      warnings: [],
     };
-    
+
     if (geometry.isBufferGeometry) {
       compatibility.type = 'BufferGeometry';
       const positionAttribute = geometry.getAttribute('position');
       if (positionAttribute) {
         const indexAttribute = geometry.getIndex();
-        compatibility.faceCount = indexAttribute 
-          ? indexAttribute.count / 3 
+        compatibility.faceCount = indexAttribute
+          ? indexAttribute.count / 3
           : positionAttribute.count / 3;
         compatibility.hasIndices = !!indexAttribute;
         compatibility.isCompatible = compatibility.faceCount > 0;
@@ -180,7 +178,7 @@ export const FacePickingUtils = {
       compatibility.faceCount = geometry.faces ? geometry.faces.length : 0;
       compatibility.isCompatible = compatibility.faceCount > 0;
     }
-    
+
     return {
       name: mesh.name || 'Unnamed Mesh',
       uuid: mesh.uuid,
@@ -189,23 +187,21 @@ export const FacePickingUtils = {
       geometry: compatibility,
       position: mesh.position.clone(),
       rotation: mesh.rotation.clone(),
-      scale: mesh.scale.clone()
+      scale: mesh.scale.clone(),
     };
   },
-  
+
   /**
    * 过滤出有效的可拾取网格
    * @param {THREE.Mesh[]} meshes - 网格数组
    * @returns {THREE.Mesh[]} 有效的网格数组
    */
   filterValidMeshes(meshes) {
-    return meshes.filter(mesh => 
-      this.validateMesh(mesh) && 
-      this.isMeshPickable(mesh) && 
-      mesh.visible
+    return meshes.filter(
+      (mesh) => this.validateMesh(mesh) && this.isMeshPickable(mesh) && mesh.visible
     );
   },
-  
+
   /**
    * 创建网格的调试信息
    * @param {THREE.Mesh[]} meshes - 网格数组
@@ -213,22 +209,22 @@ export const FacePickingUtils = {
    */
   createDebugInfo(meshes) {
     const validMeshes = this.filterValidMeshes(meshes);
-    const invalidMeshes = meshes.filter(mesh => !this.validateMesh(mesh));
-    
+    const invalidMeshes = meshes.filter((mesh) => !this.validateMesh(mesh));
+
     return {
       total: meshes.length,
       valid: validMeshes.length,
       invalid: invalidMeshes.length,
-      validMeshes: validMeshes.map(mesh => this.getMeshInfo(mesh)),
-      invalidMeshes: invalidMeshes.map(mesh => ({
+      validMeshes: validMeshes.map((mesh) => this.getMeshInfo(mesh)),
+      invalidMeshes: invalidMeshes.map((mesh) => ({
         name: mesh.name || 'Unnamed Mesh',
         uuid: mesh.uuid,
-        issues: this.validateMesh(mesh) ? [] : ['Invalid geometry']
-      }))
+        issues: this.validateMesh(mesh) ? [] : ['Invalid geometry'],
+      })),
     };
   },
-  
+
   async runValidationTests() {
     throw new Error('Validation test helpers are not bundled in this build');
-  }
+  },
 };

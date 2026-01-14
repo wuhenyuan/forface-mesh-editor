@@ -1,10 +1,6 @@
 <template>
   <transition name="fade">
-    <div 
-      v-if="visible" 
-      class="color-picker-popup"
-      :style="popupStyle"
-    >
+    <div v-if="visible" class="color-picker-popup" :style="popupStyle">
       <div class="picker-header">
         <span>选择颜色</span>
         <i class="el-icon-close" @click="handleClose"></i>
@@ -17,8 +13,8 @@
           @change="handleChange"
         />
         <div class="color-presets">
-          <div 
-            v-for="color in predefineColors" 
+          <div
+            v-for="color in predefineColors"
             :key="color"
             class="preset-item"
             :style="{ background: color }"
@@ -35,67 +31,79 @@
 </template>
 
 <script>
-  import { computed, ref, watch } from 'vue';
-  import { useEditorStore } from '../../store';
+import { computed, ref, watch } from 'vue';
+import { useEditorStore } from '../../store';
 
-  export default {
-    name: 'ColorPicker',
-    setup(props, { emit }) {
-      const store = useEditorStore();
-    
-      const visible = computed(() => store.state.colorPicker.visible);
-      const target = computed(() => store.state.colorPicker.target);
-    
-      const localColor = ref('#ffffff');
-    
-      const popupStyle = computed(() => ({
-        left: store.state.colorPicker.x + 'px',
-        top: store.state.colorPicker.y + 'px'
-      }));
-    
-      const predefineColors = [
-        '#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1',
-        '#1e90ff', '#c71585', '#333333', '#666666', '#999999'
-      ];
-    
-      // 同步 store 颜色到本地
-      watch(() => store.state.colorPicker.currentColor, (val) => {
+export default {
+  name: 'ColorPicker',
+  setup(props, { emit }) {
+    const store = useEditorStore();
+
+    const visible = computed(() => store.state.colorPicker.visible);
+    const target = computed(() => store.state.colorPicker.target);
+
+    const localColor = ref('#ffffff');
+
+    const popupStyle = computed(() => ({
+      left: store.state.colorPicker.x + 'px',
+      top: store.state.colorPicker.y + 'px',
+    }));
+
+    const predefineColors = [
+      '#ff4500',
+      '#ff8c00',
+      '#ffd700',
+      '#90ee90',
+      '#00ced1',
+      '#1e90ff',
+      '#c71585',
+      '#333333',
+      '#666666',
+      '#999999',
+    ];
+
+    // 同步 store 颜色到本地
+    watch(
+      () => store.state.colorPicker.currentColor,
+      (val) => {
         localColor.value = val;
-      }, { immediate: true });
-    
-      const handleChange = (color) => {
-        store.setPickerColor(color);
-      };
-    
-      const selectPreset = (color) => {
-        localColor.value = color;
-        store.setPickerColor(color);
-      };
-    
-      const handleClose = () => {
-        store.hideColorPicker();
-      };
-    
-      const handleConfirm = () => {
-        emit('confirm', {
-          color: localColor.value,
-          target: target.value
-        });
-        store.hideColorPicker();
-      };
-    
-      return {
-        visible,
-        localColor,
-        popupStyle,
-        predefineColors,
-        handleChange,
-        selectPreset,
-        handleClose,
-        handleConfirm
-      };
-    }
-  };
+      },
+      { immediate: true }
+    );
+
+    const handleChange = (color) => {
+      store.setPickerColor(color);
+    };
+
+    const selectPreset = (color) => {
+      localColor.value = color;
+      store.setPickerColor(color);
+    };
+
+    const handleClose = () => {
+      store.hideColorPicker();
+    };
+
+    const handleConfirm = () => {
+      emit('confirm', {
+        color: localColor.value,
+        target: target.value,
+      });
+      store.hideColorPicker();
+    };
+
+    return {
+      visible,
+      localColor,
+      popupStyle,
+      predefineColors,
+      handleChange,
+      selectPreset,
+      handleClose,
+      handleConfirm,
+    };
+  },
+};
 </script>
 
 <style scoped>

@@ -16,98 +16,98 @@ export class FacePicker {
     this.camera = camera;
     this.renderer = renderer;
     this.domElement = domElement;
-    
+
     // 初始化管理器
     this.raycastManager = new RaycastManager(camera);
     this.selectionManager = new SelectionManager();
     this.highlightRenderer = new HighlightRenderer(scene);
     this.eventHandler = new EventHandler(this, domElement);
-    
+
     // 事件系统
     this.eventListeners = new Map();
-    
+
     // 状态
     this.enabled = false;
     this.meshes = []; // 可拾取的网格列表
     this.currentHoverFace = null; // 当前悬停的面
-    
+
     // 性能监控
     this.performanceMonitor = {
       enabled: true,
       responseTimeThreshold: 50, // 50ms响应时间要求
-      maxFaceCount: 100000,      // 最大面数限制
-      recentOperations: [],      // 最近操作记录
-      maxHistorySize: 100        // 历史记录最大数量
+      maxFaceCount: 100000, // 最大面数限制
+      recentOperations: [], // 最近操作记录
+      maxHistorySize: 100, // 历史记录最大数量
     };
-    
+
     // 错误处理
     this.errorHandler = {
       maxRetries: 3,
       fallbackMode: false,
       lastError: null,
-      errorCount: 0
+      errorCount: 0,
     };
-    
+
     // 配置选项
     this.options = {
-      enableHover: true,        // 是否启用悬停效果
-      enableDoubleClick: true,  // 是否启用双击
-      enableRightClick: true,   // 是否启用右键
-      hoverDelay: 0,           // 悬停延迟（毫秒）
-      dragThreshold: 5,        // 拖拽阈值（像素）
+      enableHover: true, // 是否启用悬停效果
+      enableDoubleClick: true, // 是否启用双击
+      enableRightClick: true, // 是否启用右键
+      hoverDelay: 0, // 悬停延迟（毫秒）
+      dragThreshold: 5, // 拖拽阈值（像素）
       enablePerformanceMonitoring: true, // 是否启用性能监控
-      enableErrorRecovery: true // 是否启用错误恢复
+      enableErrorRecovery: true, // 是否启用错误恢复
     };
-    
+
     // 绑定方法（保持向后兼容）
     this.handleClick = this.handleClick.bind(this);
     this.handleMouseMove = this.handleMouseMove.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
-    
+
     // 设置选择管理器事件监听
     this.setupSelectionEvents();
   }
-  
+
   /**
    * 启用面拾取功能
    */
   enable() {
     if (this.enabled) return;
-    
+
     this.enabled = true;
-    
+
     // 启用事件处理器
     this.eventHandler.enable();
-    
+
     // 设置事件处理器配置
     this.eventHandler.setDragThreshold(this.options.dragThreshold);
-    
+
     debugLogger.info('面拾取功能已启用', {
       meshCount: this.meshes.length,
-      options: this.options
+      options: this.options,
     });
-    
+
     this.emit('enabled');
   }
-  
+
   /**
    * 禁用面拾取功能
    */
   disable() {
     if (!this.enabled) return;
-    
+
     this.enabled = false;
-    
+
     // 禁用事件处理器
     this.eventHandler.disable();
-    
+
     // 清除所有高亮效果
     this.highlightRenderer.clearAllHighlights(true);
     this.currentHoverFace = null;
-    
+
     this.emit('disabled');
   }
-  
+
   /**
    * 设置可拾取的网格列表
    * @param {THREE.Mesh[]} meshes - 网格数组
@@ -115,7 +115,7 @@ export class FacePicker {
   setMeshes(meshes) {
     this.meshes = meshes;
   }
-  
+
   /**
    * 添加可拾取的网格
    * @param {THREE.Mesh} mesh - 网格对象
@@ -125,7 +125,7 @@ export class FacePicker {
       this.meshes.push(mesh);
     }
   }
-  
+
   /**
    * 移除可拾取的网格
    * @param {THREE.Mesh} mesh - 网格对象
@@ -136,7 +136,7 @@ export class FacePicker {
       this.meshes.splice(index, 1);
     }
   }
-  
+
   /**
    * 选择面
    * @param {Object} faceInfo - 面信息对象
@@ -145,15 +145,15 @@ export class FacePicker {
    */
   selectFace(faceInfo, additive = false, originalEvent = null) {
     if (!faceInfo) return;
-    
+
     const monitor = debugLogger.createPerformanceMonitor('selectFace');
-    
+
     const wasSelected = this.selectionManager.contains(faceInfo);
-    
+
     if (additive) {
       // 多选模式：切换选择状态
       this.selectionManager.setSelectionMode('multi', false);
-      
+
       if (wasSelected) {
         this.selectionManager.removeFace(faceInfo);
         debugLogger.logFacePickingEvent('面取消选择', faceInfo);
@@ -166,81 +166,78 @@ export class FacePicker {
     } else {
       // 单选模式：替换当前选择
       this.selectionManager.setSelectionMode('single', false);
-      
+
       const previousSelection = this.selectionManager.getAll();
       this.selectionManager.clearAll(false);
-      
+
       // 发出取消选择事件
-      previousSelection.forEach(face => {
+      previousSelection.forEach((face) => {
         this.emit('faceDeselected', face, originalEvent);
       });
-      
+
       // 选择新面
       this.selectionManager.addFace(faceInfo);
       debugLogger.logFacePickingEvent('面选择 (单选)', faceInfo);
       this.emit('faceSelected', faceInfo, originalEvent);
     }
-    
+
     // 发出选择变化事件
     const selectionSummary = this.selectionManager.getSelectionSummary();
     debugLogger.logSelectionChange('选择状态变化', selectionSummary);
     this.emit('selectionChanged', selectionSummary);
-    
+
     monitor.end({ additive, wasSelected });
   }
-  
+
   /**
    * 清除所有选择
    */
   clearSelection() {
     const selectedFaces = this.selectionManager.getAll();
     this.selectionManager.clearAll();
-    
+
     // 清除选择高亮
-    selectedFaces.forEach(face => {
+    selectedFaces.forEach((face) => {
       this.highlightRenderer.removeHighlight(face.mesh, face.faceIndex, false);
       this.emit('faceDeselected', face);
     });
-    
+
     this.emit('selectionCleared');
     this.emit('selectionChanged', this.selectionManager.getSelectionSummary());
   }
-  
+
   /**
    * 处理鼠标移动事件（悬停效果）
    * @param {MouseEvent} event - 鼠标事件
    */
   handleMouseMove(event) {
     if (!this.enabled || !this.options.enableHover) return;
-    
+
     const startTime = performance.now();
-    
+
     try {
       // 计算鼠标位置
       const rect = this.domElement.getBoundingClientRect();
-      const mousePosition = this.raycastManager.screenToNDC(
-        event.clientX, 
-        event.clientY, 
-        rect
-      );
-      
+      const mousePosition = this.raycastManager.screenToNDC(event.clientX, event.clientY, rect);
+
       // 执行射线投射
       const intersection = this.raycastManager.intersectFaces(mousePosition, this.meshes);
-      
+
       if (intersection) {
         // 检查是否与当前悬停面不同
-        if (!this.currentHoverFace || 
-            this.currentHoverFace.mesh !== intersection.mesh || 
-            this.currentHoverFace.faceIndex !== intersection.faceIndex) {
-          
+        if (
+          !this.currentHoverFace ||
+          this.currentHoverFace.mesh !== intersection.mesh ||
+          this.currentHoverFace.faceIndex !== intersection.faceIndex
+        ) {
           // 清除之前的悬停效果
           if (this.currentHoverFace) {
             this.highlightRenderer.hideHoverEffect(
-              this.currentHoverFace.mesh, 
+              this.currentHoverFace.mesh,
               this.currentHoverFace.faceIndex
             );
           }
-          
+
           // 显示新的悬停效果（只有在面未被选中时才显示）
           if (!this.selectionManager.contains(intersection)) {
             this.highlightRenderer.showHoverEffect(intersection.mesh, intersection.faceIndex);
@@ -254,35 +251,34 @@ export class FacePicker {
         // 鼠标不在任何面上，清除悬停效果
         if (this.currentHoverFace) {
           this.highlightRenderer.hideHoverEffect(
-            this.currentHoverFace.mesh, 
+            this.currentHoverFace.mesh,
             this.currentHoverFace.faceIndex
           );
           this.currentHoverFace = null;
           this.emit('faceHoverEnd');
         }
       }
-      
+
       // 记录性能数据
       this.recordPerformance('hover', performance.now() - startTime);
-      
     } catch (error) {
       this.handleError('handleMouseMove', error);
     }
   }
-  
+
   /**
    * 设置配置选项
    * @param {Object} options - 配置选项
    */
   setOptions(options) {
     Object.assign(this.options, options);
-    
+
     // 更新事件处理器配置
     if (options.dragThreshold !== undefined) {
       this.eventHandler.setDragThreshold(options.dragThreshold);
     }
   }
-  
+
   /**
    * 获取配置选项
    * @returns {Object} 当前配置
@@ -290,23 +286,23 @@ export class FacePicker {
   getOptions() {
     return { ...this.options };
   }
-  
+
   /**
    * 启用/禁用悬停效果
    * @param {boolean} enabled - 是否启用
    */
   setHoverEnabled(enabled) {
     this.options.enableHover = enabled;
-    
+
     if (!enabled && this.currentHoverFace) {
       this.highlightRenderer.hideHoverEffect(
-        this.currentHoverFace.mesh, 
+        this.currentHoverFace.mesh,
         this.currentHoverFace.faceIndex
       );
       this.currentHoverFace = null;
     }
   }
-  
+
   /**
    * 获取当前悬停的面
    * @returns {Object|null} 悬停面信息
@@ -314,7 +310,7 @@ export class FacePicker {
   getCurrentHoverFace() {
     return this.currentHoverFace;
   }
-  
+
   /**
    * 手动触发面选择（程序化选择）
    * @param {THREE.Mesh} mesh - 网格对象
@@ -326,24 +322,24 @@ export class FacePicker {
     if (!mesh || faceIndex < 0) {
       return false;
     }
-    
+
     // 构建面信息对象
     const faceInfo = this.raycastManager.buildFaceInfo({
       object: mesh,
       faceIndex: faceIndex,
       face: null,
       point: new THREE.Vector3(),
-      distance: 0
+      distance: 0,
     });
-    
+
     if (faceInfo) {
       this.selectFace(faceInfo, additive);
       return true;
     }
-    
+
     return false;
   }
-  
+
   /**
    * 获取指定位置的面信息（不触发选择）
    * @param {number} clientX - 屏幕X坐标
@@ -353,10 +349,10 @@ export class FacePicker {
   getFaceAtPosition(clientX, clientY) {
     const rect = this.domElement.getBoundingClientRect();
     const mousePosition = this.raycastManager.screenToNDC(clientX, clientY, rect);
-    
+
     return this.raycastManager.intersectFaces(mousePosition, this.meshes);
   }
-  
+
   /**
    * 获取所有相交面（按距离排序）
    * @param {number} clientX - 屏幕X坐标
@@ -366,10 +362,10 @@ export class FacePicker {
   getAllFacesAtPosition(clientX, clientY) {
     const rect = this.domElement.getBoundingClientRect();
     const mousePosition = this.raycastManager.screenToNDC(clientX, clientY, rect);
-    
+
     return this.raycastManager.intersectFacesWithDepthSorting(mousePosition, this.meshes);
   }
-  
+
   /**
    * 获取当前选中的面
    * @returns {Object[]} 选中的面信息数组
@@ -377,7 +373,7 @@ export class FacePicker {
   getSelectedFaces() {
     return this.selectionManager.getAll();
   }
-  
+
   /**
    * 处理点击事件
    * @param {MouseEvent} event - 鼠标事件
@@ -388,32 +384,28 @@ export class FacePicker {
       meshCount: this.meshes.length,
       eventType: event.type,
       clientX: event.clientX,
-      clientY: event.clientY
+      clientY: event.clientY,
     });
-    
+
     if (!this.enabled) {
       console.log('面拾取未启用，跳过处理');
       return;
     }
-    
+
     const startTime = performance.now();
-    
+
     try {
       // 计算鼠标位置
       const rect = this.domElement.getBoundingClientRect();
       console.log('DOM元素边界:', rect);
-      
-      const mousePosition = this.raycastManager.screenToNDC(
-        event.clientX, 
-        event.clientY, 
-        rect
-      );
+
+      const mousePosition = this.raycastManager.screenToNDC(event.clientX, event.clientY, rect);
       console.log('标准化鼠标位置:', mousePosition);
-      
+
       // 执行射线投射
       const intersection = this.raycastManager.intersectFaces(mousePosition, this.meshes);
       console.log('射线投射结果:', intersection);
-      
+
       if (intersection) {
         // 检查是否为多选模式（Ctrl键）
         const isMultiSelect = event.ctrlKey || event.metaKey;
@@ -424,23 +416,22 @@ export class FacePicker {
         console.log('未检测到面，清除选择');
         this.clearSelection();
       }
-      
+
       // 记录性能数据
       this.recordPerformance('click', performance.now() - startTime);
-      
     } catch (error) {
       console.error('handleClick 错误:', error);
       this.handleError('handleClick', error);
     }
   }
-  
+
   /**
    * 处理键盘事件
    * @param {KeyboardEvent} event - 键盘事件
    */
   handleKeyDown(event) {
     if (!this.enabled) return;
-    
+
     switch (event.key) {
       case 'Escape':
         this.clearSelection();
@@ -473,7 +464,7 @@ export class FacePicker {
         break;
     }
   }
-  
+
   /**
    * 撤销上一次选择操作
    * @returns {boolean} 是否成功撤销
@@ -486,7 +477,7 @@ export class FacePicker {
     }
     return success;
   }
-  
+
   /**
    * 重做下一次选择操作
    * @returns {boolean} 是否成功重做
@@ -499,7 +490,7 @@ export class FacePicker {
     }
     return success;
   }
-  
+
   /**
    * 选择所有可见的面（如果网格不太复杂）
    */
@@ -508,7 +499,7 @@ export class FacePicker {
     console.warn('全选功能需要根据具体需求实现');
     // 可以在后续版本中实现
   }
-  
+
   /**
    * 设置选择模式
    * @param {'single'|'multi'} mode - 选择模式
@@ -517,7 +508,7 @@ export class FacePicker {
     this.selectionManager.setSelectionMode(mode);
     this.emit('selectionModeChanged', mode);
   }
-  
+
   /**
    * 获取当前选择模式
    * @returns {'single'|'multi'} 选择模式
@@ -525,7 +516,7 @@ export class FacePicker {
   getSelectionMode() {
     return this.selectionManager.getSelectionMode();
   }
-  
+
   /**
    * 设置选择管理器事件监听
    */
@@ -533,57 +524,59 @@ export class FacePicker {
     // 监听面添加事件
     this.selectionManager.on('faceAdded', (faceInfo) => {
       this.highlightRenderer.highlightFace(faceInfo.mesh, faceInfo.faceIndex);
-      
+
       // 如果当前悬停的面被选中，清除悬停效果
-      if (this.currentHoverFace && 
-          this.currentHoverFace.mesh === faceInfo.mesh && 
-          this.currentHoverFace.faceIndex === faceInfo.faceIndex) {
+      if (
+        this.currentHoverFace &&
+        this.currentHoverFace.mesh === faceInfo.mesh &&
+        this.currentHoverFace.faceIndex === faceInfo.faceIndex
+      ) {
         this.highlightRenderer.hideHoverEffect(faceInfo.mesh, faceInfo.faceIndex);
         this.currentHoverFace = null;
       }
     });
-    
+
     // 监听面移除事件
     this.selectionManager.on('faceRemoved', (faceInfo) => {
       this.highlightRenderer.removeHighlight(faceInfo.mesh, faceInfo.faceIndex);
     });
-    
+
     // 监听选择清除事件
     this.selectionManager.on('selectionCleared', (clearedFaces) => {
-      clearedFaces.forEach(faceInfo => {
+      clearedFaces.forEach((faceInfo) => {
         this.highlightRenderer.removeHighlight(faceInfo.mesh, faceInfo.faceIndex);
       });
     });
-    
+
     // 监听批量操作事件
     this.selectionManager.on('multipleFacesAdded', (faceInfos) => {
-      faceInfos.forEach(faceInfo => {
+      faceInfos.forEach((faceInfo) => {
         this.highlightRenderer.highlightFace(faceInfo.mesh, faceInfo.faceIndex);
       });
     });
-    
+
     this.selectionManager.on('multipleFacesRemoved', (faceInfos) => {
-      faceInfos.forEach(faceInfo => {
+      faceInfos.forEach((faceInfo) => {
         this.highlightRenderer.removeHighlight(faceInfo.mesh, faceInfo.faceIndex);
       });
     });
   }
-  
+
   /**
    * 设置高亮颜色
    * @param {Object} colors - 颜色配置
    */
   setHighlightColors(colors) {
     this.highlightRenderer.updateColors(colors);
-    
+
     // 重新应用当前选择的高亮
     const selectedFaces = this.selectionManager.getAll();
-    selectedFaces.forEach(faceInfo => {
+    selectedFaces.forEach((faceInfo) => {
       this.highlightRenderer.removeHighlight(faceInfo.mesh, faceInfo.faceIndex);
       this.highlightRenderer.highlightFace(faceInfo.mesh, faceInfo.faceIndex);
     });
   }
-  
+
   /**
    * 获取高亮统计信息
    * @returns {Object} 统计信息
@@ -591,7 +584,7 @@ export class FacePicker {
   getHighlightStats() {
     return this.highlightRenderer.getHighlightStats();
   }
-  
+
   /**
    * 添加事件监听器
    * @param {string} eventName - 事件名称
@@ -603,7 +596,7 @@ export class FacePicker {
     }
     this.eventListeners.get(eventName).push(callback);
   }
-  
+
   /**
    * 移除事件监听器
    * @param {string} eventName - 事件名称
@@ -611,14 +604,14 @@ export class FacePicker {
    */
   off(eventName, callback) {
     if (!this.eventListeners.has(eventName)) return;
-    
+
     const listeners = this.eventListeners.get(eventName);
     const index = listeners.indexOf(callback);
     if (index !== -1) {
       listeners.splice(index, 1);
     }
   }
-  
+
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
@@ -626,9 +619,9 @@ export class FacePicker {
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;
-    
+
     const listeners = this.eventListeners.get(eventName);
-    listeners.forEach(callback => {
+    listeners.forEach((callback) => {
       try {
         callback(...args);
       } catch (error) {
@@ -636,7 +629,7 @@ export class FacePicker {
       }
     });
   }
-  
+
   /**
    * 获取指定位置的所有相交面（按距离排序）
    * @param {MouseEvent} event - 鼠标事件
@@ -644,17 +637,13 @@ export class FacePicker {
    */
   getAllIntersectionsAtPosition(event) {
     if (!this.enabled) return [];
-    
+
     const rect = this.domElement.getBoundingClientRect();
-    const mousePosition = this.raycastManager.screenToNDC(
-      event.clientX, 
-      event.clientY, 
-      rect
-    );
-    
+    const mousePosition = this.raycastManager.screenToNDC(event.clientX, event.clientY, rect);
+
     return this.raycastManager.intersectFacesWithDepthSorting(mousePosition, this.meshes);
   }
-  
+
   /**
    * 检查指定网格在鼠标位置是否有相交面
    * @param {MouseEvent} event - 鼠标事件
@@ -663,17 +652,13 @@ export class FacePicker {
    */
   intersectSpecificMesh(event, mesh) {
     if (!this.enabled) return null;
-    
+
     const rect = this.domElement.getBoundingClientRect();
-    const mousePosition = this.raycastManager.screenToNDC(
-      event.clientX, 
-      event.clientY, 
-      rect
-    );
-    
+    const mousePosition = this.raycastManager.screenToNDC(event.clientX, event.clientY, rect);
+
     return this.raycastManager.intersectSingleMesh(mousePosition, mesh);
   }
-  
+
   /**
    * 验证并添加网格到可拾取列表
    * @param {THREE.Mesh} mesh - 网格对象
@@ -686,7 +671,7 @@ export class FacePicker {
     }
     return false;
   }
-  
+
   /**
    * 获取几何体兼容性信息
    * @param {THREE.Mesh} mesh - 网格对象
@@ -696,10 +681,10 @@ export class FacePicker {
     if (!mesh || !mesh.geometry) {
       return { isCompatible: false, warnings: ['网格缺少几何体'] };
     }
-    
+
     return RaycastManager.checkGeometryCompatibility(mesh.geometry);
   }
-  
+
   /**
    * 获取选择统计信息
    * @returns {Object} 统计信息
@@ -707,7 +692,7 @@ export class FacePicker {
   getSelectionStats() {
     return this.selectionManager.getSelectionStats();
   }
-  
+
   /**
    * 获取事件处理器状态
    * @returns {Object} 事件处理器状态
@@ -715,7 +700,7 @@ export class FacePicker {
   getEventHandlerState() {
     return this.eventHandler.getState();
   }
-  
+
   /**
    * 获取完整的面拾取器状态
    * @returns {Object} 完整状态信息
@@ -728,13 +713,15 @@ export class FacePicker {
       selection: this.getSelectionStats(),
       highlight: this.getHighlightStats(),
       eventHandler: this.getEventHandlerState(),
-      currentHover: this.currentHoverFace ? {
-        meshName: this.currentHoverFace.mesh.name || 'Unnamed',
-        faceIndex: this.currentHoverFace.faceIndex
-      } : null
+      currentHover: this.currentHoverFace
+        ? {
+            meshName: this.currentHoverFace.mesh.name || 'Unnamed',
+            faceIndex: this.currentHoverFace.faceIndex,
+          }
+        : null,
     };
   }
-  
+
   /**
    * 记录性能数据
    * @param {string} operation - 操作类型
@@ -742,34 +729,40 @@ export class FacePicker {
    */
   recordPerformance(operation, duration) {
     if (!this.options.enablePerformanceMonitoring) return;
-    
+
     const record = {
       operation,
       duration,
       timestamp: Date.now(),
       meshCount: this.meshes.length,
-      selectedCount: this.selectionManager.getAll().length
+      selectedCount: this.selectionManager.getAll().length,
     };
-    
+
     this.performanceMonitor.recentOperations.push(record);
-    
+
     // 保持历史记录大小限制
     if (this.performanceMonitor.recentOperations.length > this.performanceMonitor.maxHistorySize) {
       this.performanceMonitor.recentOperations.shift();
     }
-    
+
     // 检查性能阈值
     if (duration > this.performanceMonitor.responseTimeThreshold) {
-      console.warn(`面拾取操作 ${operation} 响应时间过长: ${duration.toFixed(2)}ms (阈值: ${this.performanceMonitor.responseTimeThreshold}ms)`);
-      this.emit('performanceWarning', { operation, duration, threshold: this.performanceMonitor.responseTimeThreshold });
-      
+      console.warn(
+        `面拾取操作 ${operation} 响应时间过长: ${duration.toFixed(2)}ms (阈值: ${this.performanceMonitor.responseTimeThreshold}ms)`
+      );
+      this.emit('performanceWarning', {
+        operation,
+        duration,
+        threshold: this.performanceMonitor.responseTimeThreshold,
+      });
+
       // 如果启用错误恢复，尝试优化
       if (this.options.enableErrorRecovery) {
         this.optimizeForPerformance();
       }
     }
   }
-  
+
   /**
    * 处理错误
    * @param {string} context - 错误上下文
@@ -780,23 +773,23 @@ export class FacePicker {
       context,
       error: error.message,
       timestamp: Date.now(),
-      stack: error.stack
+      stack: error.stack,
     };
     this.errorHandler.errorCount++;
-    
+
     debugLogger.logError(context, error, {
       errorCount: this.errorHandler.errorCount,
-      fallbackMode: this.errorHandler.fallbackMode
+      fallbackMode: this.errorHandler.fallbackMode,
     });
-    
+
     this.emit('error', this.errorHandler.lastError);
-    
+
     // 如果启用错误恢复
     if (this.options.enableErrorRecovery) {
       this.attemptErrorRecovery(context, error);
     }
   }
-  
+
   /**
    * 尝试错误恢复
    * @param {string} context - 错误上下文
@@ -808,7 +801,7 @@ export class FacePicker {
       this.enableFallbackMode();
       return;
     }
-    
+
     switch (context) {
       case 'handleClick':
       case 'handleMouseMove':
@@ -823,54 +816,61 @@ export class FacePicker {
         console.warn(`未知错误上下文: ${context}`);
     }
   }
-  
+
   /**
    * 启用降级模式
    */
   enableFallbackMode() {
     this.errorHandler.fallbackMode = true;
-    
+
     // 禁用悬停效果以减少计算负担
     this.options.enableHover = false;
-    
+
     // 增加拖拽阈值
     this.options.dragThreshold = Math.max(this.options.dragThreshold, 10);
-    
+
     // 限制可拾取网格数量
     if (this.meshes.length > 10) {
       console.warn('降级模式：限制可拾取网格数量');
       this.meshes = this.meshes.slice(0, 10);
     }
-    
+
     this.emit('fallbackModeEnabled');
     console.warn('面拾取已启用降级模式');
   }
-  
+
   /**
    * 性能优化
    */
   optimizeForPerformance() {
     // 检查网格复杂度
-    const complexMeshes = this.meshes.filter(mesh => {
+    const complexMeshes = this.meshes.filter((mesh) => {
       const faceCount = RaycastManager.getFaceCount(mesh.geometry);
       return faceCount > this.performanceMonitor.maxFaceCount;
     });
-    
+
     if (complexMeshes.length > 0) {
-      console.warn(`发现 ${complexMeshes.length} 个复杂网格，面数超过 ${this.performanceMonitor.maxFaceCount}`);
-      
+      console.warn(
+        `发现 ${complexMeshes.length} 个复杂网格，面数超过 ${this.performanceMonitor.maxFaceCount}`
+      );
+
       // 可以选择移除复杂网格或降低精度
-      complexMeshes.forEach(mesh => {
-        console.warn(`复杂网格: ${mesh.name || 'Unnamed'}, 面数: ${RaycastManager.getFaceCount(mesh.geometry)}`);
+      complexMeshes.forEach((mesh) => {
+        console.warn(
+          `复杂网格: ${mesh.name || 'Unnamed'}, 面数: ${RaycastManager.getFaceCount(mesh.geometry)}`
+        );
       });
-      
+
       this.emit('complexMeshDetected', complexMeshes);
     }
-    
+
     // 如果悬停效果导致性能问题，暂时禁用
-    const hoverOperations = this.performanceMonitor.recentOperations.filter(op => op.operation === 'hover');
+    const hoverOperations = this.performanceMonitor.recentOperations.filter(
+      (op) => op.operation === 'hover'
+    );
     if (hoverOperations.length > 0) {
-      const avgHoverTime = hoverOperations.reduce((sum, op) => sum + op.duration, 0) / hoverOperations.length;
+      const avgHoverTime =
+        hoverOperations.reduce((sum, op) => sum + op.duration, 0) / hoverOperations.length;
       if (avgHoverTime > this.performanceMonitor.responseTimeThreshold * 0.8) {
         console.warn('悬停效果性能不佳，暂时禁用');
         this.options.enableHover = false;
@@ -878,36 +878,36 @@ export class FacePicker {
       }
     }
   }
-  
+
   /**
    * 验证并清理无效网格
    */
   validateAndCleanMeshes() {
     const validMeshes = [];
     const invalidMeshes = [];
-    
-    this.meshes.forEach(mesh => {
+
+    this.meshes.forEach((mesh) => {
       if (RaycastManager.validateMesh(mesh)) {
         validMeshes.push(mesh);
       } else {
         invalidMeshes.push(mesh);
       }
     });
-    
+
     if (invalidMeshes.length > 0) {
       console.warn(`移除 ${invalidMeshes.length} 个无效网格`);
       this.meshes = validMeshes;
       this.emit('invalidMeshesRemoved', invalidMeshes);
     }
   }
-  
+
   /**
    * 获取性能统计信息
    * @returns {Object} 性能统计
    */
   getPerformanceStats() {
     const operations = this.performanceMonitor.recentOperations;
-    
+
     if (operations.length === 0) {
       return {
         totalOperations: 0,
@@ -915,21 +915,23 @@ export class FacePicker {
         maxResponseTime: 0,
         minResponseTime: 0,
         operationsOverThreshold: 0,
-        performanceGrade: 'A'
+        performanceGrade: 'A',
       };
     }
-    
-    const durations = operations.map(op => op.duration);
+
+    const durations = operations.map((op) => op.duration);
     const totalOperations = operations.length;
     const averageResponseTime = durations.reduce((sum, d) => sum + d, 0) / totalOperations;
     const maxResponseTime = Math.max(...durations);
     const minResponseTime = Math.min(...durations);
-    const operationsOverThreshold = durations.filter(d => d > this.performanceMonitor.responseTimeThreshold).length;
-    
+    const operationsOverThreshold = durations.filter(
+      (d) => d > this.performanceMonitor.responseTimeThreshold
+    ).length;
+
     // 计算性能等级
     let performanceGrade = 'A';
     const overThresholdRatio = operationsOverThreshold / totalOperations;
-    
+
     if (overThresholdRatio > 0.5) {
       performanceGrade = 'D';
     } else if (overThresholdRatio > 0.3) {
@@ -937,7 +939,7 @@ export class FacePicker {
     } else if (overThresholdRatio > 0.1) {
       performanceGrade = 'B';
     }
-    
+
     return {
       totalOperations,
       averageResponseTime: Math.round(averageResponseTime * 100) / 100,
@@ -948,10 +950,10 @@ export class FacePicker {
       performanceGrade,
       threshold: this.performanceMonitor.responseTimeThreshold,
       fallbackMode: this.errorHandler.fallbackMode,
-      errorCount: this.errorHandler.errorCount
+      errorCount: this.errorHandler.errorCount,
     };
   }
-  
+
   /**
    * 重置性能监控数据
    */
@@ -961,7 +963,7 @@ export class FacePicker {
     this.errorHandler.lastError = null;
     this.errorHandler.fallbackMode = false;
   }
-  
+
   /**
    * 设置性能监控配置
    * @param {Object} config - 配置对象
@@ -969,7 +971,7 @@ export class FacePicker {
   setPerformanceConfig(config) {
     Object.assign(this.performanceMonitor, config);
   }
-  
+
   /**
    * 输入验证和边界检查
    * @param {THREE.Vector2} mousePosition - 鼠标位置
@@ -978,35 +980,39 @@ export class FacePicker {
    */
   validateInput(mousePosition, meshes) {
     // 检查鼠标位置是否有效
-    if (!mousePosition || 
-        typeof mousePosition.x !== 'number' || 
-        typeof mousePosition.y !== 'number' ||
-        Math.abs(mousePosition.x) > 1 || 
-        Math.abs(mousePosition.y) > 1) {
+    if (
+      !mousePosition ||
+      typeof mousePosition.x !== 'number' ||
+      typeof mousePosition.y !== 'number' ||
+      Math.abs(mousePosition.x) > 1 ||
+      Math.abs(mousePosition.y) > 1
+    ) {
       console.warn('无效的鼠标位置:', mousePosition);
       return false;
     }
-    
+
     // 检查网格数组
     if (!Array.isArray(meshes) || meshes.length === 0) {
       return false;
     }
-    
+
     // 检查网格总面数
     const totalFaces = meshes.reduce((total, mesh) => {
       return total + RaycastManager.getFaceCount(mesh.geometry);
     }, 0);
-    
+
     if (totalFaces > this.performanceMonitor.maxFaceCount) {
-      console.warn(`场景面数过多: ${totalFaces}, 最大限制: ${this.performanceMonitor.maxFaceCount}`);
+      console.warn(
+        `场景面数过多: ${totalFaces}, 最大限制: ${this.performanceMonitor.maxFaceCount}`
+      );
       if (this.options.enableErrorRecovery) {
         this.optimizeForPerformance();
       }
     }
-    
+
     return true;
   }
-  
+
   /**
    * 销毁面拾取器，清理资源
    */
@@ -1017,7 +1023,7 @@ export class FacePicker {
     this.eventListeners.clear();
     this.meshes = [];
     this.currentHoverFace = null;
-    
+
     // 清理性能监控数据
     this.resetPerformanceStats();
   }

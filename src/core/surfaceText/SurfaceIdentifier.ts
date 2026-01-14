@@ -32,21 +32,21 @@ export class SurfaceIdentifier {
     // 方法1: 基于几何体特征生成哈希
     const geometry = mesh.geometry;
     const positionArray = geometry.getAttribute('position').array;
-    
+
     // 计算几何体特征哈希
     let hash = 0;
     const samplePoints = Math.min(100, positionArray.length / 3); // 采样100个点
     const step = Math.floor(positionArray.length / (samplePoints * 3));
-    
+
     for (let i = 0; i < samplePoints * 3; i += step) {
       const value = Math.round(positionArray[i] * 1000); // 精度到毫米
       hash = ((hash << 5) - hash + value) & 0xffffffff;
     }
-    
+
     // 添加顶点数和面数作为额外特征
     const vertexCount = geometry.getAttribute('position').count;
     const faceCount = geometry.index ? geometry.index.count / 3 : vertexCount / 3;
-    
+
     return `mesh_${Math.abs(hash)}_v${vertexCount}_f${Math.floor(faceCount)}`;
   }
 
@@ -58,19 +58,19 @@ export class SurfaceIdentifier {
   generateSurfaceId(faceInfo) {
     const mesh = faceInfo.mesh;
     const faceIndex = faceInfo.faceIndex;
-    
+
     // 确保网格已注册
     let meshId = mesh.userData.surfaceId;
     if (!meshId) {
       meshId = this.registerMesh(mesh);
     }
-    
+
     // 获取面的顶点坐标（用于验证）
     const face = this.getFaceVertices(mesh.geometry, faceIndex);
     const faceHash = this.hashFaceVertices(face);
-    
+
     const surfaceId = `${meshId}_face${faceIndex}_${faceHash}`;
-    
+
     // 保存面信息
     this.faceRegistry.set(surfaceId, {
       meshId,
@@ -79,9 +79,9 @@ export class SurfaceIdentifier {
       vertices: face,
       point: faceInfo.point.clone(),
       normal: this.getFaceNormal(mesh.geometry, faceIndex),
-      uv: faceInfo.uv ? faceInfo.uv.clone() : null
+      uv: faceInfo.uv ? faceInfo.uv.clone() : null,
     });
-    
+
     return surfaceId;
   }
 
@@ -96,29 +96,29 @@ export class SurfaceIdentifier {
       console.warn('未找到表面数据:', surfaceId);
       return null;
     }
-    
+
     const mesh = this.meshRegistry.get(faceData.meshId);
     if (!mesh) {
       console.warn('未找到对应网格:', faceData.meshId);
       return null;
     }
-    
+
     // 验证面是否仍然有效
     const currentFace = this.getFaceVertices(mesh.geometry, faceData.faceIndex);
     const currentHash = this.hashFaceVertices(currentFace);
-    
+
     if (currentHash !== faceData.faceHash) {
       console.warn('面几何体已改变，尝试查找最近的面');
       return this.findNearestFace(mesh, faceData.point, faceData.normal);
     }
-    
+
     return {
       mesh,
       faceIndex: faceData.faceIndex,
       face: currentFace,
       point: faceData.point,
       normal: faceData.normal,
-      uv: faceData.uv
+      uv: faceData.uv,
     };
   }
 
@@ -131,15 +131,15 @@ export class SurfaceIdentifier {
   getFaceVertices(geometry, faceIndex) {
     const positions = geometry.getAttribute('position');
     const indices = geometry.index;
-    
+
     const vertices = [];
-    
+
     if (indices) {
       // 有索引的几何体
       const i1 = indices.getX(faceIndex * 3);
       const i2 = indices.getX(faceIndex * 3 + 1);
       const i3 = indices.getX(faceIndex * 3 + 2);
-      
+
       vertices.push(
         [positions.getX(i1), positions.getY(i1), positions.getZ(i1)],
         [positions.getX(i2), positions.getY(i2), positions.getZ(i2)],
@@ -154,7 +154,7 @@ export class SurfaceIdentifier {
         [positions.getX(i + 2), positions.getY(i + 2), positions.getZ(i + 2)]
       );
     }
-    
+
     return vertices;
   }
 
@@ -165,10 +165,10 @@ export class SurfaceIdentifier {
    */
   hashFaceVertices(vertices) {
     // 将顶点坐标转换为字符串并排序（避免顶点顺序影响）
-    const vertexStrings = vertices.map(v => 
-      v.map(coord => Math.round(coord * 1000)).join(',')
-    ).sort();
-    
+    const vertexStrings = vertices
+      .map((v) => v.map((coord) => Math.round(coord * 1000)).join(','))
+      .sort();
+
     return this.simpleHash(vertexStrings.join('|'));
   }
 
@@ -181,7 +181,7 @@ export class SurfaceIdentifier {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // 转换为32位整数
     }
     return Math.abs(hash).toString(16);
@@ -198,12 +198,12 @@ export class SurfaceIdentifier {
     const v1 = new THREE.Vector3(...vertices[0]);
     const v2 = new THREE.Vector3(...vertices[1]);
     const v3 = new THREE.Vector3(...vertices[2]);
-    
+
     const normal = new THREE.Vector3();
     const edge1 = v2.clone().sub(v1);
     const edge2 = v3.clone().sub(v1);
     normal.crossVectors(edge1, edge2).normalize();
-    
+
     return normal;
   }
 
@@ -216,11 +216,13 @@ export class SurfaceIdentifier {
    */
   findNearestFace(mesh, targetPoint, targetNormal) {
     const geometry = mesh.geometry;
-    const faceCount = geometry.index ? geometry.index.count / 3 : geometry.getAttribute('position').count / 3;
-    
+    const faceCount = geometry.index
+      ? geometry.index.count / 3
+      : geometry.getAttribute('position').count / 3;
+
     let bestFace = null;
     let bestScore = Infinity;
-    
+
     for (let i = 0; i < faceCount; i++) {
       const vertices = this.getFaceVertices(geometry, i);
       const center = new THREE.Vector3()
@@ -228,16 +230,16 @@ export class SurfaceIdentifier {
         .add(new THREE.Vector3(...vertices[1]))
         .add(new THREE.Vector3(...vertices[2]))
         .divideScalar(3);
-      
+
       const normal = this.getFaceNormal(geometry, i);
-      
+
       // 计算距离和法向量相似度
       const distance = center.distanceTo(targetPoint);
       const normalSimilarity = normal.dot(targetNormal);
-      
+
       // 综合评分（距离越小越好，法向量相似度越高越好）
       const score = distance - normalSimilarity * 2;
-      
+
       if (score < bestScore) {
         bestScore = score;
         bestFace = {
@@ -245,11 +247,11 @@ export class SurfaceIdentifier {
           faceIndex: i,
           face: vertices,
           point: center,
-          normal: normal
+          normal: normal,
         };
       }
     }
-    
+
     return bestFace;
   }
 
@@ -260,7 +262,7 @@ export class SurfaceIdentifier {
   exportConfig() {
     const meshData: Record<string, any> = {};
     const faceData: Record<string, any> = {};
-    
+
     // 导出网格数据
     this.meshRegistry.forEach((mesh, meshId) => {
       meshData[meshId] = {
@@ -268,10 +270,10 @@ export class SurfaceIdentifier {
         position: mesh.position.toArray(),
         rotation: mesh.rotation.toArray(),
         scale: mesh.scale.toArray(),
-        geometryHash: this.generateMeshId(mesh)
+        geometryHash: this.generateMeshId(mesh),
       };
     });
-    
+
     // 导出面数据
     this.faceRegistry.forEach((faceInfo, surfaceId) => {
       faceData[surfaceId] = {
@@ -280,14 +282,14 @@ export class SurfaceIdentifier {
         faceHash: faceInfo.faceHash,
         point: faceInfo.point.toArray(),
         normal: faceInfo.normal.toArray(),
-        uv: faceInfo.uv ? faceInfo.uv.toArray() : null
+        uv: faceInfo.uv ? faceInfo.uv.toArray() : null,
       };
     });
-    
+
     return {
       meshes: meshData,
       faces: faceData,
-      version: '1.0'
+      version: '1.0',
     };
   }
 
@@ -300,7 +302,7 @@ export class SurfaceIdentifier {
       console.warn('不支持的配置版本');
       return;
     }
-    
+
     // 导入面数据
     Object.entries((config.faces || {}) as Record<string, any>).forEach(([surfaceId, faceData]) => {
       this.faceRegistry.set(surfaceId, {
@@ -309,7 +311,7 @@ export class SurfaceIdentifier {
         faceHash: (faceData as any).faceHash,
         point: new THREE.Vector3(...((faceData as any).point || [])),
         normal: new THREE.Vector3(...((faceData as any).normal || [])),
-        uv: (faceData as any).uv ? new THREE.Vector2(...(faceData as any).uv) : null
+        uv: (faceData as any).uv ? new THREE.Vector2(...(faceData as any).uv) : null,
       });
     });
   }

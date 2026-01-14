@@ -4,26 +4,26 @@ import ExportManager from '../ExportManager';
 import ProjectManager from '../ProjectManager';
 
 export interface DocumentConfig {
-    [key: string]: any
+  [key: string]: any;
 }
 
-export type DocumentAssetSource = Blob | File | string
+export type DocumentAssetSource = Blob | File | string;
 
 export interface DocumentModelSource {
-    source: DocumentAssetSource
-    loaderOptions?: Record<string, any>
-    visualOptions?: Record<string, any>
+  source: DocumentAssetSource;
+  loaderOptions?: Record<string, any>;
+  visualOptions?: Record<string, any>;
 }
 
 export interface DocumentFontSource {
-    source: DocumentAssetSource
+  source: DocumentAssetSource;
 }
 
 export interface DocumentData {
-    config: DocumentConfig
-    models: Map<string, DocumentModelSource>
-    previews: Map<string, Blob>
-    fonts: Map<string, DocumentFontSource>
+  config: DocumentConfig;
+  models: Map<string, DocumentModelSource>;
+  previews: Map<string, Blob>;
+  fonts: Map<string, DocumentFontSource>;
 }
 
 export default class Document {
@@ -76,13 +76,13 @@ export default class Document {
   }
 
   /**
-     * åŠ è½½æ–‡æ¡£ zip åŒ?
-     * zip åŒ…ç»“æž?
-     * - config.json (é…ç½®æ–‡ä»¶)
-     * - model/ (æ¨¡åž‹æ–‡ä»¶å¤?
-     * - preview/ (é¢„è§ˆæ–‡ä»¶å¤?
-     * @param source - zip æ–‡ä»¶çš?URLã€File å¯¹è±¡æˆ?ArrayBuffer
-     */
+   * åŠ è½½æ–‡æ¡£ zip åŒ?
+   * zip åŒ…ç»“æž?
+   * - config.json (é…ç½®æ–‡ä»¶)
+   * - model/ (æ¨¡åž‹æ–‡ä»¶å¤?
+   * - preview/ (é¢„è§ˆæ–‡ä»¶å¤?
+   * @param source - zip æ–‡ä»¶çš?URLã€File å¯¹è±¡æˆ?ArrayBuffer
+   */
   async loadDocument(source: string | File | ArrayBuffer): Promise<DocumentData> {
     let zipData: ArrayBuffer | Blob;
     if (typeof source === 'string') {
@@ -105,20 +105,22 @@ export default class Document {
     await this._loadFolder(zip, 'font', this._fonts, true);
     await this._loadFolder(zip, 'fonts', this._fonts, true);
 
-    console.log(`[Document] æ–‡æ¡£åŠ è½½å®Œæˆ: config=${!!this._config}, models=${this._models.size}, previews=${this._previews.size}`);
+    console.log(
+      `[Document] æ–‡æ¡£åŠ è½½å®Œæˆ: config=${!!this._config}, models=${this._models.size}, previews=${this._previews.size}`
+    );
 
     this.events.emit('documentLoaded', {
       config: this._config,
       models: this._models,
       previews: this._previews,
-      fonts: this._fonts
+      fonts: this._fonts,
     });
 
     return {
       config: this._config!,
       models: this._models,
       previews: this._previews,
-      fonts: this._fonts
+      fonts: this._fonts,
     };
   }
 
@@ -145,7 +147,7 @@ export default class Document {
       const fileName = path.slice(folderPrefix.length);
       if (!fileName) continue;
 
-      const relativePath = `./${path}`;  // ./model/obj.stl æ ¼å¼
+      const relativePath = `./${path}`; // ./model/obj.stl æ ¼å¼
       const blob = await entry.async('blob');
       if (wrapSource) {
         targetMap.set(relativePath, { source: blob });
@@ -155,15 +157,11 @@ export default class Document {
     }
   }
 
-  addModelSource(
-    key: string,
-    source: DocumentAssetSource,
-    options: Record<string, any> = {}
-  ) {
+  addModelSource(key: string, source: DocumentAssetSource, options: Record<string, any> = {}) {
     const entry: DocumentModelSource = {
       source,
       loaderOptions: options.loaderOptions,
-      visualOptions: options.visualOptions
+      visualOptions: options.visualOptions,
     };
     this._models.set(key, entry);
     this.events.emit('modelSourceAdded', { key, entry });
@@ -213,9 +211,14 @@ export default class Document {
     if (!asset) return null;
     if (typeof asset === 'string') return asset;
 
-    const prefix = source === this._models
-      ? 'model'
-      : (source === this._previews ? 'preview' : (source === this._fonts ? 'font' : 'asset'));
+    const prefix =
+      source === this._models
+        ? 'model'
+        : source === this._previews
+          ? 'preview'
+          : source === this._fonts
+            ? 'font'
+            : 'asset';
     const cacheKey = `${prefix}/${fileName}`;
     if (!this._objectUrls.has(cacheKey)) {
       this._objectUrls.set(cacheKey, URL.createObjectURL(asset));
@@ -257,7 +260,7 @@ export default class Document {
       includeModels = true,
       includePreviews = true,
       includeFonts = true,
-      download = false
+      download = false,
     } = options;
 
     const zip = new JSZip();
@@ -329,14 +332,14 @@ export default class Document {
   async exportProjectPackage(filename: string, options: Record<string, any> = {}) {
     return await this.projectManager.exportProjectPackage({
       filename,
-      ...options
+      ...options,
     });
   }
 
   async exportLocalFullPackage(filename: string, options: Record<string, any> = {}) {
     return await this.projectManager.exportLocalFullPackage({
       filename,
-      ...options
+      ...options,
     });
   }
 

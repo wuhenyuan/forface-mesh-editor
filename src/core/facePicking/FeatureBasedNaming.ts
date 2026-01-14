@@ -3,7 +3,7 @@ import { VertexBasedIdentifier } from './VertexBasedIdentifier';
 
 /**
  * 基于特征的稳定命名系统
- * 
+ *
  * 核心概念：
  * - 一个 name 对应一整个几何特征（平面、圆柱面等）
  * - 每个特征包含多个三角形面
@@ -17,26 +17,26 @@ export class FeatureBasedNaming {
     this.vertexIdentifier = new VertexBasedIdentifier();
     // 特征名字到特征信息的映射
     this.nameToFeatureMap = new Map(); // featureName -> { type, triangles, geometry, mesh }
-    
+
     // 三角形面到特征名字的快速查找
     this.triangleToFeatureMap = new Map(); // `${meshId}_${triangleIndex}` -> featureName
-    
+
     // 网格的特征缓存
     this.meshFeatures = new Map(); // meshId -> { features: [], nameMap: Map }
-    
+
     // 配置参数
     this.config = {
       // 平面检测参数
-      planeAngleTolerance: 0.1,      // 法向量角度容差
-      planeDistanceTolerance: 0.01,  // 距离容差
-      minPlaneTriangles: 3,          // 最小三角形数量
-      
+      planeAngleTolerance: 0.1, // 法向量角度容差
+      planeDistanceTolerance: 0.01, // 距离容差
+      minPlaneTriangles: 3, // 最小三角形数量
+
       // 圆柱检测参数
-      cylinderAngleTolerance: 0.15,  // 轴向角度容差
-      minCylinderTriangles: 6,       // 最小三角形数量
-      
+      cylinderAngleTolerance: 0.15, // 轴向角度容差
+      minCylinderTriangles: 6, // 最小三角形数量
+
       // 几何精度
-      geometryPrecision: 1000        // 坐标精度
+      geometryPrecision: 1000, // 坐标精度
     };
   }
 
@@ -48,48 +48,48 @@ export class FeatureBasedNaming {
    */
   detectAndNameFeatures(mesh, meshId) {
     console.log(`开始检测网格 ${meshId} 的特征...`);
-    
+
     const geometry = mesh.geometry;
     const triangleCount = this.getTriangleCount(geometry);
-    
+
     // 检测所有特征
     const features = this.detectAllFeatures(mesh, meshId);
-    
+
     // 为每个特征生成稳定名字
     const namedFeatures = [];
     features.forEach((feature, index) => {
       const featureName = this.generateVertexBasedName(feature, geometry, index);
-      
+
       // 存储特征信息
       this.nameToFeatureMap.set(featureName, {
         ...feature,
         name: featureName,
         mesh: mesh,
-        meshId: meshId
+        meshId: meshId,
       });
-      
+
       // 建立三角形到特征的映射
-      feature.triangles.forEach(triangleIndex => {
+      feature.triangles.forEach((triangleIndex) => {
         const triangleKey = `${meshId}_${triangleIndex}`;
         this.triangleToFeatureMap.set(triangleKey, featureName);
       });
-      
+
       namedFeatures.push({
         name: featureName,
         type: feature.type,
         triangleCount: feature.triangles.length,
         area: feature.area,
-        center: feature.center
+        center: feature.center,
       });
     });
-    
+
     // 缓存结果
     this.meshFeatures.set(meshId, {
       features: namedFeatures,
       totalTriangles: triangleCount,
-      featureCount: namedFeatures.length
+      featureCount: namedFeatures.length,
     });
-    
+
     console.log(`网格 ${meshId} 检测到 ${namedFeatures.length} 个特征`);
     return namedFeatures;
   }
@@ -105,22 +105,22 @@ export class FeatureBasedNaming {
     const triangleCount = this.getTriangleCount(geometry);
     const processed = new Set(); // 已处理的三角形
     const features = [];
-    
+
     // 遍历所有三角形，寻找特征
     for (let i = 0; i < triangleCount; i++) {
       if (processed.has(i)) continue;
-      
+
       const triangleData = this.getTriangleData(geometry, i);
       if (!triangleData) continue;
-      
+
       // 尝试从这个三角形开始生长特征
       const feature = this.growFeature(geometry, i, triangleData, processed);
-      
+
       if (feature && feature.triangles.length >= this.getMinTrianglesForType(feature.type)) {
         features.push(feature);
       }
     }
-    
+
     return features;
   }
 
@@ -135,7 +135,7 @@ export class FeatureBasedNaming {
   growFeature(geometry, seedIndex, seedData, processed) {
     // 首先判断可能的特征类型
     const potentialType = this.classifyTriangle(seedData);
-    
+
     if (potentialType === 'plane') {
       return this.growPlaneFeature(geometry, seedIndex, seedData, processed);
     } else if (potentialType === 'cylinder') {
@@ -149,7 +149,7 @@ export class FeatureBasedNaming {
         center: seedData.center.clone(),
         normal: seedData.normal.clone(),
         area: seedData.area,
-        bounds: new THREE.Box3().expandByPoint(seedData.center)
+        bounds: new THREE.Box3().expandByPoint(seedData.center),
       };
     }
   }
@@ -169,29 +169,29 @@ export class FeatureBasedNaming {
       normal: seedData.normal.clone(),
       point: seedData.center.clone(),
       area: seedData.area,
-      bounds: new THREE.Box3()
+      bounds: new THREE.Box3(),
     };
-    
+
     processed.add(seedIndex);
     plane.bounds.expandByPoint(seedData.center);
-    
+
     // 使用队列进行区域生长
     const queue = [seedIndex];
     const triangleCount = this.getTriangleCount(geometry);
-    
+
     while (queue.length > 0) {
       const currentIndex = queue.shift();
-      
+
       // 检查相邻的三角形（简化：检查附近的三角形）
       const checkRange = Math.min(50, triangleCount - currentIndex);
-      
+
       for (let i = 1; i <= checkRange; i++) {
         const neighborIndex = currentIndex + i;
         if (neighborIndex >= triangleCount || processed.has(neighborIndex)) continue;
-        
+
         const neighborData = this.getTriangleData(geometry, neighborIndex);
         if (!neighborData) continue;
-        
+
         // 检查是否共面
         if (this.isCoplanar(plane, neighborData)) {
           processed.add(neighborIndex);
@@ -199,16 +199,16 @@ export class FeatureBasedNaming {
           plane.area += neighborData.area;
           plane.bounds.expandByPoint(neighborData.center);
           queue.push(neighborIndex);
-          
+
           // 更新平面参数
           this.updatePlaneParameters(plane, neighborData);
-          
+
           // 限制特征大小
           if (plane.triangles.length > 1000) break;
         }
       }
     }
-    
+
     return plane;
   }
 
@@ -224,28 +224,28 @@ export class FeatureBasedNaming {
     // 估算圆柱轴向和中心
     const axis = this.estimateCylinderAxis(seedData);
     const center = seedData.center.clone();
-    
+
     // 收集候选三角形
     const candidateTriangles = [seedData];
     const candidateIndices = [seedIndex];
-    
+
     // 简化的区域生长收集候选三角形
     const queue = [seedIndex];
     const triangleCount = this.getTriangleCount(geometry);
-    
+
     processed.add(seedIndex);
-    
+
     while (queue.length > 0 && candidateTriangles.length < 100) {
       const currentIndex = queue.shift();
       const checkRange = Math.min(30, triangleCount - currentIndex);
-      
+
       for (let i = 1; i <= checkRange; i++) {
         const neighborIndex = currentIndex + i;
         if (neighborIndex >= triangleCount || processed.has(neighborIndex)) continue;
-        
+
         const neighborData = this.getTriangleData(geometry, neighborIndex);
         if (!neighborData) continue;
-        
+
         // 基础圆柱检查
         if (this.isBasicCylindrical(axis, neighborData)) {
           processed.add(neighborIndex);
@@ -255,14 +255,14 @@ export class FeatureBasedNaming {
         }
       }
     }
-    
+
     // 使用精度适配器进行精确检测
     const precisionAdaptedFeature = this.cylinderAdapter.detectCylinderWithPrecisionAdaptation(
       candidateTriangles,
       axis,
       center
     );
-    
+
     if (!precisionAdaptedFeature) {
       // 回退到基础圆柱特征
       return {
@@ -272,13 +272,13 @@ export class FeatureBasedNaming {
         center: center,
         area: candidateTriangles.reduce((sum, t) => sum + t.area, 0),
         bounds: this.calculateBounds(candidateTriangles),
-        precision: { level: 'unknown', segments: candidateTriangles.length }
+        precision: { level: 'unknown', segments: candidateTriangles.length },
       };
     }
-    
+
     return {
       ...precisionAdaptedFeature,
-      triangles: candidateIndices // 使用实际的三角形索引
+      triangles: candidateIndices, // 使用实际的三角形索引
     };
   }
 
@@ -292,10 +292,10 @@ export class FeatureBasedNaming {
   generateVertexBasedName(feature, geometry, featureIndex) {
     // 1. 基于顶点索引生成稳定标识
     const vertexId = this.vertexIdentifier.generateVertexBasedId(feature.triangles, geometry);
-    
+
     // 2. 添加特征类型和索引
     const featureName = `${feature.type}_${vertexId}_idx${featureIndex}`;
-    
+
     return featureName;
   }
 
@@ -338,9 +338,9 @@ export class FeatureBasedNaming {
       version: '1.0',
       timestamp: Date.now(),
       features: {},
-      meshInfo: {}
+      meshInfo: {},
     };
-    
+
     // 导出特征信息
     this.nameToFeatureMap.forEach((feature, featureName) => {
       config.features[featureName] = {
@@ -352,15 +352,15 @@ export class FeatureBasedNaming {
         // 不存储具体的三角形列表，运行时重新生成
       };
     });
-    
+
     // 导出网格信息
     this.meshFeatures.forEach((meshInfo, meshId) => {
       config.meshInfo[meshId] = {
         featureCount: meshInfo.featureCount,
-        totalTriangles: meshInfo.totalTriangles
+        totalTriangles: meshInfo.totalTriangles,
       };
     });
-    
+
     return config;
   }
 
@@ -385,12 +385,12 @@ export class FeatureBasedNaming {
    */
   calculateBounds(triangleDataArray) {
     const bounds = new THREE.Box3();
-    triangleDataArray.forEach(triangleData => {
+    triangleDataArray.forEach((triangleData) => {
       if (triangleData.center) {
         bounds.expandByPoint(triangleData.center);
       }
       if (triangleData.vertices) {
-        triangleData.vertices.forEach(vertex => {
+        triangleData.vertices.forEach((vertex) => {
           bounds.expandByPoint(vertex);
         });
       }
@@ -407,9 +407,9 @@ export class FeatureBasedNaming {
   getTriangleData(geometry, triangleIndex) {
     const positions = geometry.getAttribute('position');
     const indices = geometry.index;
-    
+
     if (!positions) return null;
-    
+
     // 获取顶点索引
     let i1, i2, i3;
     if (indices) {
@@ -421,23 +421,23 @@ export class FeatureBasedNaming {
       i2 = triangleIndex * 3 + 1;
       i3 = triangleIndex * 3 + 2;
     }
-    
+
     // 获取顶点坐标
     const v1 = new THREE.Vector3(positions.getX(i1), positions.getY(i1), positions.getZ(i1));
     const v2 = new THREE.Vector3(positions.getX(i2), positions.getY(i2), positions.getZ(i2));
     const v3 = new THREE.Vector3(positions.getX(i3), positions.getY(i3), positions.getZ(i3));
-    
+
     // 计算法向量
     const edge1 = v2.clone().sub(v1);
     const edge2 = v3.clone().sub(v1);
     const normal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
-    
+
     // 计算中心点
     const center = new THREE.Vector3().add(v1).add(v2).add(v3).divideScalar(3);
-    
+
     // 计算面积
     const area = edge1.cross(edge2).length() * 0.5;
-    
+
     return { vertices: [v1, v2, v3], normal, center, area };
   }
 
@@ -465,11 +465,13 @@ export class FeatureBasedNaming {
   isCoplanar(plane, triangleData) {
     // 检查法向量角度
     const angleDiff = plane.normal.angleTo(triangleData.normal);
-    if (angleDiff > this.config.planeAngleTolerance && 
-        Math.PI - angleDiff > this.config.planeAngleTolerance) {
+    if (
+      angleDiff > this.config.planeAngleTolerance &&
+      Math.PI - angleDiff > this.config.planeAngleTolerance
+    ) {
       return false;
     }
-    
+
     // 检查点到平面距离
     const distance = Math.abs(plane.normal.dot(triangleData.center.clone().sub(plane.point)));
     return distance <= this.config.planeDistanceTolerance;
@@ -495,12 +497,12 @@ export class FeatureBasedNaming {
   updatePlaneParameters(plane, triangleData) {
     const totalTriangles = plane.triangles.length;
     const weight = 1 / totalTriangles;
-    
+
     // 加权平均更新法向量
     plane.normal.multiplyScalar(1 - weight);
     plane.normal.add(triangleData.normal.clone().multiplyScalar(weight));
     plane.normal.normalize();
-    
+
     // 加权平均更新参考点
     plane.point.multiplyScalar(1 - weight);
     plane.point.add(triangleData.center.clone().multiplyScalar(weight));
@@ -517,13 +519,13 @@ export class FeatureBasedNaming {
     const axes = [
       new THREE.Vector3(1, 0, 0),
       new THREE.Vector3(0, 1, 0),
-      new THREE.Vector3(0, 0, 1)
+      new THREE.Vector3(0, 0, 1),
     ];
-    
+
     // 选择与法向量最垂直的轴
     let bestAxis = axes[0];
     let minDot = Math.abs(normal.dot(axes[0]));
-    
+
     for (let i = 1; i < axes.length; i++) {
       const dot = Math.abs(normal.dot(axes[i]));
       if (dot < minDot) {
@@ -531,7 +533,7 @@ export class FeatureBasedNaming {
         bestAxis = axes[i];
       }
     }
-    
+
     return bestAxis.clone();
   }
 
@@ -542,9 +544,12 @@ export class FeatureBasedNaming {
    */
   getMinTrianglesForType(type) {
     switch (type) {
-      case 'plane': return this.config.minPlaneTriangles;
-      case 'cylinder': return this.config.minCylinderTriangles;
-      default: return 1;
+      case 'plane':
+        return this.config.minPlaneTriangles;
+      case 'cylinder':
+        return this.config.minCylinderTriangles;
+      default:
+        return 1;
     }
   }
 

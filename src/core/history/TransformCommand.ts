@@ -7,7 +7,7 @@ function snapshotTransform(object) {
     position: [object.position.x, object.position.y, object.position.z],
     rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
     rotationOrder: object.rotation.order,
-    scale: [object.scale.x, object.scale.y, object.scale.z]
+    scale: [object.scale.x, object.scale.y, object.scale.z],
   };
 }
 

@@ -9,10 +9,10 @@ export class TextInputOverlay {
     this.overlay = null;
     this.inputElement = null;
     this.isVisible = false;
-    
+
     // 事件监听器
     this.eventListeners = new Map();
-    
+
     // 配置
     this.config = {
       className: 'text-input-overlay',
@@ -25,24 +25,24 @@ export class TextInputOverlay {
       border: '2px solid #007bff',
       backgroundColor: '#ffffff',
       boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-      zIndex: 10000
+      zIndex: 10000,
     };
-    
+
     // 创建样式
     this.createStyles();
   }
-  
+
   /**
    * 创建CSS样式
    */
   createStyles() {
     const styleId = 'text-input-overlay-styles';
-    
+
     // 检查是否已经存在样式
     if (document.getElementById(styleId)) {
       return;
     }
-    
+
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
@@ -75,10 +75,10 @@ export class TextInputOverlay {
         opacity: 1;
       }
     `;
-    
+
     document.head.appendChild(style);
   }
-  
+
   /**
    * 显示输入覆盖层
    * @param {number} x - 屏幕X坐标
@@ -91,26 +91,26 @@ export class TextInputOverlay {
       if (this.isVisible) {
         this.hide();
       }
-      
+
       // 创建覆盖层元素
       this.createOverlay(x, y, initialValue);
-      
+
       // 设置事件处理器
       const handleConfirm = () => {
         const value = this.inputElement.value.trim();
         this.hide();
         resolve(value || null);
       };
-      
+
       const handleCancel = () => {
         this.hide();
         this.emit('cancel');
         resolve(null);
       };
-      
+
       const handleKeyDown = (event) => {
         event.stopPropagation(); // 防止事件冒泡到其他系统
-        
+
         switch (event.key) {
           case 'Enter':
             event.preventDefault();
@@ -122,7 +122,7 @@ export class TextInputOverlay {
             break;
         }
       };
-      
+
       const handleBlur = () => {
         // 延迟处理，允许用户点击其他地方取消
         setTimeout(() => {
@@ -131,20 +131,20 @@ export class TextInputOverlay {
           }
         }, 100);
       };
-      
+
       // 绑定事件
       this.inputElement.addEventListener('keydown', handleKeyDown);
       this.inputElement.addEventListener('blur', handleBlur);
-      
+
       // 聚焦输入框
       this.inputElement.focus();
       this.inputElement.select();
-      
+
       this.isVisible = true;
       this.emit('shown', { x, y, initialValue });
     });
   }
-  
+
   /**
    * 创建覆盖层DOM元素
    * @param {number} x - 屏幕X坐标
@@ -155,7 +155,7 @@ export class TextInputOverlay {
     // 创建覆盖层容器
     this.overlay = document.createElement('div');
     this.overlay.className = this.config.className;
-    
+
     // 创建输入框
     this.inputElement = document.createElement('input');
     this.inputElement.type = 'text';
@@ -163,19 +163,19 @@ export class TextInputOverlay {
     this.inputElement.placeholder = this.config.placeholder;
     this.inputElement.maxLength = this.config.maxLength;
     this.inputElement.value = initialValue;
-    
+
     // 添加到覆盖层
     this.overlay.appendChild(this.inputElement);
-    
+
     // 计算位置（确保不超出屏幕边界）
     const position = this.calculatePosition(x, y);
     this.overlay.style.left = position.x + 'px';
     this.overlay.style.top = position.y + 'px';
-    
+
     // 添加到DOM
     document.body.appendChild(this.overlay);
   }
-  
+
   /**
    * 计算输入框位置，确保不超出屏幕边界
    * @param {number} x - 目标X坐标
@@ -186,13 +186,13 @@ export class TextInputOverlay {
     const margin = 10; // 边距
     const inputWidth = 220; // 预估输入框宽度
     const inputHeight = 40; // 预估输入框高度
-    
+
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    
+
     let adjustedX = x;
     let adjustedY = y;
-    
+
     // 水平位置调整
     if (adjustedX + inputWidth + margin > viewportWidth) {
       adjustedX = viewportWidth - inputWidth - margin;
@@ -200,7 +200,7 @@ export class TextInputOverlay {
     if (adjustedX < margin) {
       adjustedX = margin;
     }
-    
+
     // 垂直位置调整
     if (adjustedY + inputHeight + margin > viewportHeight) {
       adjustedY = y - inputHeight - margin; // 显示在点击位置上方
@@ -208,29 +208,29 @@ export class TextInputOverlay {
     if (adjustedY < margin) {
       adjustedY = margin;
     }
-    
+
     return { x: adjustedX, y: adjustedY };
   }
-  
+
   /**
    * 隐藏输入覆盖层
    */
   hide() {
     if (!this.isVisible) return;
-    
+
     // 移除DOM元素
     if (this.overlay && this.overlay.parentNode) {
       this.overlay.parentNode.removeChild(this.overlay);
     }
-    
+
     // 清理引用
     this.overlay = null;
     this.inputElement = null;
     this.isVisible = false;
-    
+
     this.emit('hidden');
   }
-  
+
   /**
    * 检查是否可见
    * @returns {boolean} 是否可见
@@ -238,7 +238,7 @@ export class TextInputOverlay {
   isShown() {
     return this.isVisible;
   }
-  
+
   /**
    * 获取当前输入值
    * @returns {string} 当前输入值
@@ -246,7 +246,7 @@ export class TextInputOverlay {
   getCurrentValue() {
     return this.inputElement ? this.inputElement.value : '';
   }
-  
+
   /**
    * 设置输入值
    * @param {string} value - 新值
@@ -256,7 +256,7 @@ export class TextInputOverlay {
       this.inputElement.value = value || '';
     }
   }
-  
+
   /**
    * 设置占位符文本
    * @param {string} placeholder - 占位符文本
@@ -267,7 +267,7 @@ export class TextInputOverlay {
       this.inputElement.placeholder = placeholder;
     }
   }
-  
+
   /**
    * 设置最大长度
    * @param {number} maxLength - 最大长度
@@ -278,14 +278,14 @@ export class TextInputOverlay {
       this.inputElement.maxLength = maxLength;
     }
   }
-  
+
   /**
    * 更新样式配置
    * @param {Object} styleConfig - 样式配置
    */
   updateStyles(styleConfig) {
     Object.assign(this.config, styleConfig);
-    
+
     // 如果当前有输入框，应用新样式
     if (this.inputElement) {
       const input = this.inputElement;
@@ -297,7 +297,7 @@ export class TextInputOverlay {
       if (styleConfig.boxShadow) input.style.boxShadow = styleConfig.boxShadow;
     }
   }
-  
+
   /**
    * 验证输入内容
    * @param {string} value - 输入值
@@ -306,7 +306,7 @@ export class TextInputOverlay {
   validateInput(value) {
     const errors = [];
     const warnings = [];
-    
+
     if (!value || typeof value !== 'string') {
       errors.push('输入内容不能为空');
     } else {
@@ -316,22 +316,22 @@ export class TextInputOverlay {
       } else if (trimmed.length > this.config.maxLength) {
         errors.push(`输入内容不能超过${this.config.maxLength}个字符`);
       }
-      
+
       // 检查特殊字符
       const hasSpecialChars = /[<>\"'&]/.test(trimmed);
       if (hasSpecialChars) {
         warnings.push('输入内容包含特殊字符，可能影响显示效果');
       }
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors,
       warnings,
-      value: value ? value.trim() : ''
+      value: value ? value.trim() : '',
     };
   }
-  
+
   /**
    * 添加事件监听器
    * @param {string} eventName - 事件名称
@@ -343,7 +343,7 @@ export class TextInputOverlay {
     }
     this.eventListeners.get(eventName).push(callback);
   }
-  
+
   /**
    * 移除事件监听器
    * @param {string} eventName - 事件名称
@@ -351,14 +351,14 @@ export class TextInputOverlay {
    */
   off(eventName, callback) {
     if (!this.eventListeners.has(eventName)) return;
-    
+
     const listeners = this.eventListeners.get(eventName);
     const index = listeners.indexOf(callback);
     if (index !== -1) {
       listeners.splice(index, 1);
     }
   }
-  
+
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
@@ -366,9 +366,9 @@ export class TextInputOverlay {
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;
-    
+
     const listeners = this.eventListeners.get(eventName);
-    listeners.forEach(callback => {
+    listeners.forEach((callback) => {
       try {
         callback(...args);
       } catch (error) {
@@ -376,20 +376,20 @@ export class TextInputOverlay {
       }
     });
   }
-  
+
   /**
    * 销毁覆盖层，清理资源
    */
   destroy() {
     this.hide();
     this.eventListeners.clear();
-    
+
     // 移除样式
     const styleElement = document.getElementById('text-input-overlay-styles');
     if (styleElement) {
       styleElement.remove();
     }
-    
+
     console.log('文字输入覆盖层已销毁');
   }
 }

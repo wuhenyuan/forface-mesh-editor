@@ -10,12 +10,7 @@ export default class EditorCore {
   constructor(dom: HTMLElement, options: Record<string, any> = {}) {
     this.assetsManager = new AssetsManager();
     this.document = new Document();
-    this.documentVisual = new EditorDocumentVisual(
-      this.document,
-      this.assetsManager,
-      dom,
-      options
-    );
+    this.documentVisual = new EditorDocumentVisual(this.document, this.assetsManager, dom, options);
   }
 
   dispose() {

@@ -1,19 +1,17 @@
-import { defineConfig } from 'vite'
-import { createVuePlugin } from 'vite-plugin-vue2'
-import { resolve } from 'path'
+import { defineConfig } from 'vite';
+import { createVuePlugin } from 'vite-plugin-vue2';
+import { resolve } from 'path';
 
 export default defineConfig({
-  plugins: [
-    createVuePlugin()
-  ],
+  plugins: [createVuePlugin()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src')
-    }
+      '@': resolve(__dirname, 'src'),
+    },
   },
   server: {
     port: 3000,
-    open: !process.env.CI
+    open: !process.env.CI,
   },
   build: {
     outDir: 'dist',
@@ -21,7 +19,7 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/main.ts'),
       name: 'ForfaceMeshEditor',
-      fileName: (format) => `forface-mesh-editor.${format}.js`
+      fileName: (format) => `forface-mesh-editor.${format}.js`,
     },
     rollupOptions: {
       external: ['vue', 'element-ui', 'three'],
@@ -30,9 +28,9 @@ export default defineConfig({
         globals: {
           vue: 'Vue',
           'element-ui': 'ElementUI',
-          three: 'THREE'
-        }
-      }
-    }
-  }
-})
+          three: 'THREE',
+        },
+      },
+    },
+  },
+});

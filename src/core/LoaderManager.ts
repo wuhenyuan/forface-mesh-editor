@@ -1,7 +1,7 @@
 /**
  * 模型加载管理器
  * 支持多种格式：STL, OBJ, ZIP(OBJ+MTL)
- * 
+ *
  * 职责：
  * 1. 根据文件类型选择合适的 Loader
  * 2. 加载完成后触发特征检测
@@ -42,16 +42,16 @@ export class LoaderManager {
     // Loaders
     this.stlLoader = new STLLoader();
     this.objLoader = new OBJLoader();
-    
+
     // 特征检测器（由 Viewer 注入）
     this.featureDetector = null;
-    
+
     // 加载计数器（用于生成 ID）
     this.loadCounter = 0;
-    
+
     // 已加载模型缓存
     this.loadedModels = new Map(); // modelId -> LoadResult
-    
+
     // 事件回调
     this.onProgress = null;
     this.onError = null;
@@ -59,7 +59,7 @@ export class LoaderManager {
 
   /**
    * 设置特征检测器（由 Viewer 调用）
-   * @param {FeatureDetector} detector 
+   * @param {FeatureDetector} detector
    */
   setFeatureDetector(detector: any) {
     this.featureDetector = detector;
@@ -76,12 +76,12 @@ export class LoaderManager {
       modelId = this._generateModelId(),
       detectFeatures = true,
       centerModel = true,
-      material = null
+      material = null,
     } = options;
 
     // 判断文件格式
     const format = this._detectFormat(source);
-    
+
     console.log(`[LoaderManager] 加载模型: ${modelId}, 格式: ${format}`);
 
     let model;
@@ -117,7 +117,7 @@ export class LoaderManager {
       model,
       modelId,
       format,
-      metadata
+      metadata,
     };
 
     // 缓存
@@ -140,13 +140,15 @@ export class LoaderManager {
     return new Promise((resolve, reject) => {
       const onLoad = (geometry) => {
         geometry.computeVertexNormals();
-        
-        const mat = material || new THREE.MeshStandardMaterial({
-          color: 0xcccccc,
-          metalness: 0.3,
-          roughness: 0.6
-        });
-        
+
+        const mat =
+          material ||
+          new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            metalness: 0.3,
+            roughness: 0.6,
+          });
+
         const mesh = new THREE.Mesh(geometry, mat);
         resolve(mesh);
       };
@@ -204,10 +206,7 @@ export class LoaderManager {
   async _loadZipOBJ(source: any, material: any) {
     const { default: JSZip } = await import('jszip');
 
-    const zipInput =
-      typeof source === 'string'
-        ? await this._fetchArrayBuffer(source)
-        : source;
+    const zipInput = typeof source === 'string' ? await this._fetchArrayBuffer(source) : source;
 
     const zip = await JSZip.loadAsync(zipInput);
     const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
@@ -225,11 +224,13 @@ export class LoaderManager {
       const geometry = this.stlLoader.parse(buffer);
       geometry.computeVertexNormals();
 
-      const mat = material || new THREE.MeshStandardMaterial({
-        color: 0xcccccc,
-        metalness: 0.3,
-        roughness: 0.6
-      });
+      const mat =
+        material ||
+        new THREE.MeshStandardMaterial({
+          color: 0xcccccc,
+          metalness: 0.3,
+          roughness: 0.6,
+        });
       return new THREE.Mesh(geometry, mat);
     }
 
@@ -243,7 +244,7 @@ export class LoaderManager {
     }
 
     return group;
-    
+
     /*
     const zip = await JSZip.loadAsync(source)
     
@@ -290,7 +291,7 @@ export class LoaderManager {
    */
   _detectFormat(source: any) {
     let filename = '';
-    
+
     if (typeof source === 'string') {
       filename = source.toLowerCase();
     } else if (source instanceof File) {
@@ -306,7 +307,7 @@ export class LoaderManager {
     if (filename.endsWith('.stl')) return 'stl';
     if (filename.endsWith('.obj')) return 'obj';
     if (filename.endsWith('.zip')) return 'zip';
-    
+
     return 'unknown';
   }
 
@@ -317,9 +318,9 @@ export class LoaderManager {
   _centerModel(model: any) {
     const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
-    
+
     model.position.sub(center);
-    
+
     // 将模型底部放在 y=0
     const newBox = new THREE.Box3().setFromObject(model);
     model.position.y -= newBox.min.y;
@@ -351,9 +352,9 @@ export class LoaderManager {
       faceCount,
       boundingBox: {
         min: boundingBox.min.toArray(),
-        max: boundingBox.max.toArray()
+        max: boundingBox.max.toArray(),
       },
-      size: size.toArray()
+      size: size.toArray(),
     };
   }
 
@@ -367,7 +368,7 @@ export class LoaderManager {
 
   /**
    * 获取已加载的模型
-   * @param {string} modelId 
+   * @param {string} modelId
    * @returns {LoadResult|null}
    */
   getModel(modelId: string) {
@@ -376,7 +377,7 @@ export class LoaderManager {
 
   /**
    * 移除模型
-   * @param {string} modelId 
+   * @param {string} modelId
    */
   removeModel(modelId: string) {
     const result = this.loadedModels.get(modelId);

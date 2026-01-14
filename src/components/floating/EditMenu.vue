@@ -1,18 +1,29 @@
 <template>
   <transition name="slide">
-    <div 
-      v-if="visible" 
-      class="edit-menu"
-      :style="menuStyle"
-    >
+    <div v-if="visible" class="edit-menu" :style="menuStyle">
       <div class="menu-row">
-        <div class="menu-btn" title="移动" :class="{ active: mode === 'translate' }" @click="setMode('translate')">
+        <div
+          class="menu-btn"
+          title="移动"
+          :class="{ active: mode === 'translate' }"
+          @click="setMode('translate')"
+        >
           <i class="el-icon-rank"></i>
         </div>
-        <div class="menu-btn" title="旋转" :class="{ active: mode === 'rotate' }" @click="setMode('rotate')">
+        <div
+          class="menu-btn"
+          title="旋转"
+          :class="{ active: mode === 'rotate' }"
+          @click="setMode('rotate')"
+        >
           <i class="el-icon-refresh-right"></i>
         </div>
-        <div class="menu-btn" title="缩放" :class="{ active: mode === 'scale' }" @click="setMode('scale')">
+        <div
+          class="menu-btn"
+          title="缩放"
+          :class="{ active: mode === 'scale' }"
+          @click="setMode('scale')"
+        >
           <i class="el-icon-full-screen"></i>
         </div>
         <div class="menu-divider"></div>
@@ -31,59 +42,59 @@
 </template>
 
 <script>
-  import { computed, ref } from 'vue';
-  import { useEditorStore } from '../../store';
+import { computed, ref } from 'vue';
+import { useEditorStore } from '../../store';
 
-  export default {
-    name: 'EditMenu',
-    setup(props, { emit }) {
-      const store = useEditorStore();
-    
-      const visible = computed(() => store.state.editMenu.visible);
-      const target = computed(() => store.state.editMenu.target);
-    
-      const mode = ref('translate');
-    
-      const menuStyle = computed(() => ({
-        left: store.state.editMenu.x + 'px',
-        top: store.state.editMenu.y + 'px'
-      }));
-    
-      const setMode = (newMode) => {
-        mode.value = newMode;
-        emit('modeChange', { mode: newMode, target: target.value });
-      };
-    
-      const openColorPicker = () => {
-        const rect = { x: store.state.editMenu.x, y: store.state.editMenu.y + 50 };
-        store.showColorPicker({
-          x: rect.x,
-          y: rect.y,
-          target: target.value,
-          currentColor: target.value?.material?.color?.getHexString?.() || '#ffffff'
-        });
-      };
-    
-      const duplicate = () => {
-        emit('duplicate', target.value);
-      };
-    
-      const remove = () => {
-        emit('delete', target.value);
-        store.hideEditMenu();
-      };
-    
-      return {
-        visible,
-        mode,
-        menuStyle,
-        setMode,
-        openColorPicker,
-        duplicate,
-        remove
-      };
-    }
-  };
+export default {
+  name: 'EditMenu',
+  setup(props, { emit }) {
+    const store = useEditorStore();
+
+    const visible = computed(() => store.state.editMenu.visible);
+    const target = computed(() => store.state.editMenu.target);
+
+    const mode = ref('translate');
+
+    const menuStyle = computed(() => ({
+      left: store.state.editMenu.x + 'px',
+      top: store.state.editMenu.y + 'px',
+    }));
+
+    const setMode = (newMode) => {
+      mode.value = newMode;
+      emit('modeChange', { mode: newMode, target: target.value });
+    };
+
+    const openColorPicker = () => {
+      const rect = { x: store.state.editMenu.x, y: store.state.editMenu.y + 50 };
+      store.showColorPicker({
+        x: rect.x,
+        y: rect.y,
+        target: target.value,
+        currentColor: target.value?.material?.color?.getHexString?.() || '#ffffff',
+      });
+    };
+
+    const duplicate = () => {
+      emit('duplicate', target.value);
+    };
+
+    const remove = () => {
+      emit('delete', target.value);
+      store.hideEditMenu();
+    };
+
+    return {
+      visible,
+      mode,
+      menuStyle,
+      setMode,
+      openColorPicker,
+      duplicate,
+      remove,
+    };
+  },
+};
 </script>
 
 <style scoped>

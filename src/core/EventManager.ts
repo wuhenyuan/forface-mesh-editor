@@ -8,7 +8,7 @@ export class EventManager {
   constructor() {
     this._listeners = new Map();
   }
-  
+
   /**
    * 注册事件监听
    * @param {string} event 事件名
@@ -20,11 +20,11 @@ export class EventManager {
       this._listeners.set(event, new Set());
     }
     this._listeners.get(event).add(callback);
-    
+
     // 返回取消监听函数
     return () => this.off(event, callback);
   }
-  
+
   /**
    * 注册一次性事件监听
    */
@@ -35,20 +35,20 @@ export class EventManager {
     };
     return this.on(event, wrapper);
   }
-  
+
   /**
    * 取消事件监听
    */
   off(event: string, callback?: (...args: any[]) => void) {
     if (!this._listeners.has(event)) return;
-    
+
     if (callback) {
       this._listeners.get(event).delete(callback);
     } else {
       this._listeners.delete(event);
     }
   }
-  
+
   /**
    * 触发事件
    * @param {string} event 事件名
@@ -56,8 +56,8 @@ export class EventManager {
    */
   emit(event: string, data?: any) {
     if (!this._listeners.has(event)) return;
-    
-    this._listeners.get(event).forEach(callback => {
+
+    this._listeners.get(event).forEach((callback) => {
       try {
         callback(data);
       } catch (error) {
@@ -65,7 +65,7 @@ export class EventManager {
       }
     });
   }
-  
+
   /**
    * 清除所有监听
    */

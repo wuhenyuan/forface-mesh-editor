@@ -27,7 +27,7 @@ export { CSGCylinderText, csgCylinderText } from './CSGCylinderText';
  * @param {Object} facePicker - 面拾取器实例
  * @returns {SurfaceTextManager} 表面文字管理器实例
  */
-export function createSurfaceTextManager (scene, camera, renderer, domElement, facePicker) {
+export function createSurfaceTextManager(scene, camera, renderer, domElement, facePicker) {
   return new SurfaceTextManager(scene, camera, renderer, domElement, facePicker);
 }
 
@@ -40,7 +40,7 @@ export const TextUtils = {
    * @param {string} content - 文字内容
    * @returns {boolean} 是否有效
    */
-  validateTextContent (content) {
+  validateTextContent(content) {
     return typeof content === 'string' && content.trim().length > 0;
   },
 
@@ -48,7 +48,7 @@ export const TextUtils = {
    * 生成唯一文字ID
    * @returns {string} 唯一ID
    */
-  generateTextId () {
+  generateTextId() {
     return `text_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   },
 
@@ -57,7 +57,7 @@ export const TextUtils = {
    * @param {THREE.TextGeometry} geometry - 文字几何体
    * @returns {THREE.Box3} 边界框
    */
-  calculateTextBounds (geometry) {
+  calculateTextBounds(geometry) {
     geometry.computeBoundingBox();
     return geometry.boundingBox;
   },
@@ -66,7 +66,7 @@ export const TextUtils = {
    * 获取默认文字配置
    * @returns {Object} 默认配置
    */
-  getDefaultTextConfig () {
+  getDefaultTextConfig() {
     return {
       font: 'helvetiker',
       size: 1,
@@ -78,7 +78,7 @@ export const TextUtils = {
       bevelThickness: 0.02,
       bevelSize: 0.01,
       bevelOffset: 0,
-      bevelSegments: 5
+      bevelSegments: 5,
     };
-  }
+  },
 };

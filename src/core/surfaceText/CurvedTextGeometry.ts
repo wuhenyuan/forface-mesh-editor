@@ -18,8 +18,8 @@ export class CurvedTextGeometry {
       bevelOffset: 0,
       bevelSegments: 5,
       // 圆柱面文字默认配置
-      subdivisionLevel: 1,  // 细分级别，增加顶点密度以获得平滑弯曲
-      letterSpacing: 0.2    // 默认字符间距，比平面文字稍大
+      subdivisionLevel: 1, // 细分级别，增加顶点密度以获得平滑弯曲
+      letterSpacing: 0.2, // 默认字符间距，比平面文字稍大
     };
   }
 
@@ -34,33 +34,33 @@ export class CurvedTextGeometry {
    */
   generateCylinderText(text, font, cylinderInfo, startPoint, config = {}) {
     const finalConfig = { ...this.defaultConfig, ...config };
-    
+
     const fontSize = finalConfig.size || 1;
     const thickness = finalConfig.thickness || 0.1;
     const radius = cylinderInfo.radius;
-    
+
     // 计算弧长补偿系数
     // 当字符包裹到圆柱面时，外表面的弧长比内表面长
     // 外表面半径 = radius + thickness
     // 弧长比例 = (radius + thickness) / radius = 1 + thickness/radius
     const arcLengthRatio = (radius + thickness) / radius;
-    
+
     // 字符宽度（平面上）
     const charWidth = fontSize * 0.6;
-    
+
     // 字符在圆柱面外表面的实际宽度
     const charArcWidth = charWidth * arcLengthRatio;
-    
+
     // 基础间距
     const baseSpacing = finalConfig.letterSpacing !== undefined ? finalConfig.letterSpacing : 0.2;
-    
+
     // 弧长补偿间距：需要额外增加的间距 = 字符宽度 × (弧长比例 - 1)
     // 这样可以保证字符外表面不会重叠
     const arcCompensation = charWidth * (arcLengthRatio - 1);
-    
+
     // 最终间距 = 基础间距 + 弧长补偿
     const actualSpacing = baseSpacing + arcCompensation;
-    
+
     console.log('📏 圆柱面字符间距计算:', {
       fontSize,
       thickness,
@@ -70,24 +70,19 @@ export class CurvedTextGeometry {
       charArcWidth: charArcWidth.toFixed(3),
       baseSpacing,
       arcCompensation: arcCompensation.toFixed(3),
-      actualSpacing: actualSpacing.toFixed(3)
+      actualSpacing: actualSpacing.toFixed(3),
     });
-    
+
     // 生成文字路径
-    const textPath = cylinderSurfaceHelper.generateTextPath(
-      text, 
-      startPoint, 
-      cylinderInfo, 
-      {
-        fontSize: fontSize,
-        letterSpacing: actualSpacing,
-        direction: finalConfig.direction || 1
-      }
-    );
+    const textPath = cylinderSurfaceHelper.generateTextPath(text, startPoint, cylinderInfo, {
+      fontSize: fontSize,
+      letterSpacing: actualSpacing,
+      direction: finalConfig.direction || 1,
+    });
 
     // 为每个字符生成几何体
     const characterGeometries = [];
-    
+
     for (const pathPoint of textPath) {
       const charGeometry = this.createCharacterGeometry(
         pathPoint.char,
@@ -96,7 +91,7 @@ export class CurvedTextGeometry {
         cylinderInfo,
         finalConfig
       );
-      
+
       if (charGeometry) {
         characterGeometries.push(charGeometry);
       }
@@ -132,7 +127,7 @@ export class CurvedTextGeometry {
         bevelThickness: config.bevelThickness,
         bevelSize: config.bevelSize,
         bevelOffset: config.bevelOffset,
-        bevelSegments: config.bevelSegments
+        bevelSegments: config.bevelSegments,
       });
 
       // 计算字符边界框并居中
@@ -141,7 +136,7 @@ export class CurvedTextGeometry {
       const centerX = -0.5 * (bbox.max.x - bbox.min.x);
       const centerY = -0.5 * (bbox.max.y - bbox.min.y);
       const centerZ = -0.5 * (bbox.max.z - bbox.min.z);
-      
+
       charGeometry.translate(centerX, centerY, centerZ);
 
       // 细分几何体以获得更平滑的弯曲效果
@@ -154,7 +149,6 @@ export class CurvedTextGeometry {
       this.applyCylinderTransform(charGeometry, pathPoint, cylinderInfo, config);
 
       return charGeometry;
-
     } catch (error) {
       console.error(`创建字符 "${char}" 几何体失败:`, error);
       return null;
@@ -171,13 +165,13 @@ export class CurvedTextGeometry {
   subdivideGeometry(geometry, level = 1) {
     // 对于 TextGeometry，最好的方式是增加 curveSegments
     // 这里我们实现一个简单的三角形细分
-    
+
     let currentGeometry = geometry;
-    
+
     for (let i = 0; i < level; i++) {
       currentGeometry = this.subdivideOnce(currentGeometry);
     }
-    
+
     return currentGeometry;
   }
 
@@ -190,7 +184,7 @@ export class CurvedTextGeometry {
   subdivideOnce(geometry) {
     const positions = geometry.attributes.position.array;
     const indices = geometry.index ? geometry.index.array : null;
-    
+
     if (!indices) {
       // 非索引几何体，直接返回
       console.warn('非索引几何体，跳过细分');
@@ -255,7 +249,7 @@ export class CurvedTextGeometry {
     const newGeometry = new THREE.BufferGeometry();
     newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
     newGeometry.setIndex(newIndices);
-    
+
     // 重新计算法向量
     newGeometry.computeVertexNormals();
 
@@ -263,7 +257,7 @@ export class CurvedTextGeometry {
     geometry.dispose();
 
     console.log(`✅ 几何体细分完成: ${indices.length / 3} → ${newIndices.length / 3} 三角形`);
-    
+
     return newGeometry;
   }
 
@@ -298,7 +292,7 @@ export class CurvedTextGeometry {
       theta: theta,
       axis: axis,
       radius: radius,
-      center: center
+      center: center,
     });
 
     // 获取顶点数据
@@ -308,7 +302,7 @@ export class CurvedTextGeometry {
     // 计算字符在圆柱坐标系中的基准位置
     const toPosition = position.clone().sub(center);
     const baseHeight = toPosition.dot(axis); // 沿轴向的高度
-    
+
     // 获取参考方向（用于计算角度）
     const refDirection = this.getPerpendicularVector(axis);
     const tangentRef = refDirection.clone().cross(axis).normalize();
@@ -319,7 +313,7 @@ export class CurvedTextGeometry {
       // X = 字符宽度方向（沿圆周）
       // Y = 字符高度方向（沿轴向）
       // Z = 字符厚度方向（径向）
-      const localX = positionArray[i];     // 沿圆周方向的偏移
+      const localX = positionArray[i]; // 沿圆周方向的偏移
       const localY = positionArray[i + 1]; // 沿轴向的偏移
       const localZ = positionArray[i + 2]; // 径向偏移（厚度）
 
@@ -336,12 +330,14 @@ export class CurvedTextGeometry {
 
       // 4. 将圆柱坐标转换为世界坐标
       // 计算径向方向
-      const radialDirection = refDirection.clone()
+      const radialDirection = refDirection
+        .clone()
         .multiplyScalar(Math.cos(vertexTheta))
         .add(tangentRef.clone().multiplyScalar(Math.sin(vertexTheta)));
 
       // 计算最终世界坐标
-      const worldPos = center.clone()
+      const worldPos = center
+        .clone()
         .add(axis.clone().multiplyScalar(vertexHeight))
         .add(radialDirection.multiplyScalar(vertexRadius));
 
@@ -356,11 +352,11 @@ export class CurvedTextGeometry {
 
     // 重新计算法向量（因为顶点位置改变了）
     geometry.computeVertexNormals();
-    
+
     // 检查并修正三角形顶点顺序（winding order）
     // 弯曲变换可能导致某些三角形的顶点顺序翻转
     this.fixWindingOrder(geometry, center, axis);
-    
+
     // 重新计算边界框
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
@@ -378,7 +374,7 @@ export class CurvedTextGeometry {
   fixWindingOrder(geometry, cylinderCenter, cylinderAxis) {
     const positions = geometry.attributes.position.array;
     const indices = geometry.index ? geometry.index.array : null;
-    
+
     if (!indices) {
       console.warn('非索引几何体，跳过顶点顺序修正');
       return;
@@ -409,7 +405,10 @@ export class CurvedTextGeometry {
       // 计算从圆柱中心到三角形中心的径向方向
       const toTriCenter = triCenter.clone().sub(cylinderCenter);
       const axialComponent = toTriCenter.dot(cylinderAxis);
-      const radialDirection = toTriCenter.clone().sub(cylinderAxis.clone().multiplyScalar(axialComponent)).normalize();
+      const radialDirection = toTriCenter
+        .clone()
+        .sub(cylinderAxis.clone().multiplyScalar(axialComponent))
+        .normalize();
 
       // 如果法向量与径向方向相反（指向内部），则翻转顶点顺序
       if (faceNormal.dot(radialDirection) < 0) {
@@ -434,7 +433,7 @@ export class CurvedTextGeometry {
    */
   getPerpendicularVector(vector) {
     const normalized = vector.clone().normalize();
-    
+
     // 选择一个不平行的向量
     let perpendicular;
     if (Math.abs(normalized.x) < 0.9) {
@@ -442,7 +441,7 @@ export class CurvedTextGeometry {
     } else {
       perpendicular = new THREE.Vector3(0, 1, 0);
     }
-    
+
     // 计算叉积得到垂直向量
     return perpendicular.cross(normalized).normalize();
   }
@@ -455,17 +454,18 @@ export class CurvedTextGeometry {
    */
   calculateTangent(theta, cylinderInfo) {
     const { axis } = cylinderInfo;
-    
+
     // 获取垂直于轴的参考方向
     const refDirection = this.getPerpendicularVector(axis);
     const tangentRef = refDirection.clone().cross(axis).normalize();
-    
+
     // 计算该角度处的切线方向
     // 切线 = -sin(theta) * refDirection + cos(theta) * tangentRef
-    const tangent = refDirection.clone()
+    const tangent = refDirection
+      .clone()
       .multiplyScalar(-Math.sin(theta))
       .add(tangentRef.clone().multiplyScalar(Math.cos(theta)));
-    
+
     return tangent.normalize();
   }
 
@@ -486,21 +486,20 @@ export class CurvedTextGeometry {
     try {
       // 使用Three.js的BufferGeometryUtils合并几何体
       const mergedGeometry = BufferGeometryUtils.mergeGeometries(geometries);
-      
+
       if (!mergedGeometry) {
         console.warn('几何体合并失败，返回第一个几何体');
         return geometries[0];
       }
 
       // 清理原始几何体
-      geometries.forEach(geo => {
+      geometries.forEach((geo) => {
         if (geo !== mergedGeometry) {
           geo.dispose();
         }
       });
 
       return mergedGeometry;
-
     } catch (error) {
       console.error('合并几何体时出错:', error);
       return geometries[0];
@@ -527,7 +526,7 @@ export class CurvedTextGeometry {
         bevelThickness: finalConfig.bevelThickness,
         bevelSize: finalConfig.bevelSize,
         bevelOffset: finalConfig.bevelOffset,
-        bevelSegments: finalConfig.bevelSegments
+        bevelSegments: finalConfig.bevelSegments,
       });
 
       // 计算边界框并居中
@@ -536,11 +535,10 @@ export class CurvedTextGeometry {
       const centerX = -0.5 * (bbox.max.x - bbox.min.x);
       const centerY = -0.5 * (bbox.max.y - bbox.min.y);
       const centerZ = -0.5 * (bbox.max.z - bbox.min.z);
-      
+
       geometry.translate(centerX, centerY, centerZ);
 
       return geometry;
-
     } catch (error) {
       console.error('生成平面文字几何体失败:', error);
       return new THREE.BufferGeometry();

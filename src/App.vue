@@ -5,20 +5,24 @@
 </template>
 
 <script>
-  import EditorLayout from './components/EditorLayout.vue';
-  export default {
-    name: 'App',
-    components: { EditorLayout }
-  };
+import EditorLayout from './components/EditorLayout.vue';
+export default {
+  name: 'App',
+  components: { EditorLayout },
+};
 </script>
 
 <style>
-html, body, #app {
+html,
+body,
+#app {
   height: 100%;
   overflow: hidden;
 }
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans',
+    'Droid Sans', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
 }
 </style>

@@ -1,35 +1,31 @@
 <template>
   <transition name="fade">
-    <div 
-      v-if="visible" 
-      class="floating-tooltip"
-      :style="tooltipStyle"
-    >
+    <div v-if="visible" class="floating-tooltip" :style="tooltipStyle">
       {{ content }}
     </div>
   </transition>
 </template>
 
 <script>
-  import { computed } from 'vue';
-  import { useEditorStore } from '../../store';
+import { computed } from 'vue';
+import { useEditorStore } from '../../store';
 
-  export default {
-    name: 'FloatingTooltip',
-    setup() {
-      const store = useEditorStore();
-    
-      const visible = computed(() => store.state.tooltip.visible);
-      const content = computed(() => store.state.tooltip.content);
-    
-      const tooltipStyle = computed(() => ({
-        left: store.state.tooltip.x + 'px',
-        top: store.state.tooltip.y + 'px'
-      }));
-    
-      return { visible, content, tooltipStyle };
-    }
-  };
+export default {
+  name: 'FloatingTooltip',
+  setup() {
+    const store = useEditorStore();
+
+    const visible = computed(() => store.state.tooltip.visible);
+    const content = computed(() => store.state.tooltip.content);
+
+    const tooltipStyle = computed(() => ({
+      left: store.state.tooltip.x + 'px',
+      top: store.state.tooltip.y + 'px',
+    }));
+
+    return { visible, content, tooltipStyle };
+  },
+};
 </script>
 
 <style scoped>

@@ -32,7 +32,7 @@ export class HistoryManager {
       isBusy: this.isBusy,
       isApplying: this.isApplying,
       transactionName: this._transaction?.description || null,
-      lastError: null
+      lastError: null,
     };
   }
 

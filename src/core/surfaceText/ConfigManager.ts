@@ -28,10 +28,10 @@ export class ConfigManager {
       status: 'editable',
       // 版本标识
       propIdentifier: this.generatePropIdentifier(),
-      
+
       // 导出的模型的属性
       finalModelConfig: this.exportModelConfig(),
-      
+
       // 底座模型配置
       baseModelConfig: {
         position: [0, 0, 0],
@@ -40,31 +40,31 @@ export class ConfigManager {
         surface: 100,
         volume: 1000,
         boundingBox: [10, 10, 10],
-        obb: [10, 10, 10]
+        obb: [10, 10, 10],
       },
-      
+
       // 装饰配置
       decorations: [{}],
-      
+
       // 文字配置
       texts: this.surfaceTextManager.exportTextConfig(),
-      
+
       // 表面标识查找表
       lookupTable: surfaceIdentifier.exportConfig(),
-      
+
       // 破面修补
       faceRepare: '0',
       // 模型优化操作
       modelOptimization: '0',
-      
+
       // 元数据
       metadata: {
         version: '1.0',
         created: new Date().toISOString(),
-        editor: 'forface-mesh-editor'
-      }
+        editor: 'forface-mesh-editor',
+      },
     };
-    
+
     return serializeConfig(config);
   }
 
@@ -76,31 +76,31 @@ export class ConfigManager {
     const source = config && typeof config === 'object' ? config : null;
     if (!source) return false;
 
-    const configSource = source.config && typeof source.config === 'object' ? source.config : source;
+    const configSource =
+      source.config && typeof source.config === 'object' ? source.config : source;
     const normalized = normalizeConfig(configSource);
 
     if (!normalized?.metadata || normalized.metadata.version !== '1.0') {
       console.warn('不支持的配置版本');
       return false;
     }
-    
+
     try {
       // 1. 导入表面标识配置
       if (normalized.lookupTable) {
         surfaceIdentifier.importConfig(normalized.lookupTable);
       }
-      
+
       // 2. 清除现有文字
       await this.clearAllTexts();
-      
+
       // 3. 导入文字配置
       if (Array.isArray(normalized.texts)) {
         await this.surfaceTextManager.importTextConfig(normalized.texts);
       }
-      
+
       console.log('配置导入成功');
       return true;
-      
     } catch (error) {
       console.error('配置导入失败:', error);
       return false;
@@ -113,16 +113,16 @@ export class ConfigManager {
    */
   generatePropIdentifier() {
     const texts = this.surfaceTextManager.exportTextConfig();
-    const textInfo = texts.map(t => `${t.text}_${t.size}_${t.position.join(',')}`).join('|');
-    
+    const textInfo = texts.map((t) => `${t.text}_${t.size}_${t.position.join(',')}`).join('|');
+
     // 简单哈希
     let hash = 0;
     for (let i = 0; i < textInfo.length; i++) {
       const char = textInfo.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
-    
+
     return `prop_${Math.abs(hash).toString(16)}_${Date.now()}`;
   }
 
@@ -140,24 +140,24 @@ export class ConfigManager {
         rotation: [0, 0, 0],
         surface: 100,
         volume: 1000,
-        boundingBox: [10, 10, 10]
+        boundingBox: [10, 10, 10],
       };
     }
-    
+
     const mainMesh = targetMeshes[0]; // 假设第一个是主模型
-    
+
     // 计算包围盒
     mainMesh.geometry.computeBoundingBox();
     const boundingBox = mainMesh.geometry.boundingBox;
     const size = boundingBox.getSize(new THREE.Vector3());
-    
+
     return {
       position: mainMesh.position.toArray(),
       scale: mainMesh.scale.toArray(),
       rotation: mainMesh.rotation.toArray(),
       surface: this.calculateSurfaceArea(mainMesh.geometry),
       volume: this.calculateVolume(mainMesh.geometry),
-      boundingBox: [size.x, size.y, size.z]
+      boundingBox: [size.x, size.y, size.z],
     };
   }
 
@@ -222,7 +222,7 @@ export class ConfigManager {
         console.log('本地存储中没有找到配置');
         return false;
       }
-      
+
       const config = JSON.parse(configStr);
       return await this.importConfig(config);
     } catch (error) {
@@ -239,7 +239,7 @@ export class ConfigManager {
     const config = this.exportConfig();
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
@@ -247,7 +247,7 @@ export class ConfigManager {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     console.log('配置文件已下载:', filename);
   }
 
@@ -258,7 +258,7 @@ export class ConfigManager {
   async uploadConfig(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      
+
       reader.onload = async (e) => {
         try {
           const result = e.target?.result;
@@ -272,7 +272,7 @@ export class ConfigManager {
           reject(error);
         }
       };
-      
+
       reader.onerror = () => reject(new Error('文件读取失败'));
       reader.readAsText(file);
     });

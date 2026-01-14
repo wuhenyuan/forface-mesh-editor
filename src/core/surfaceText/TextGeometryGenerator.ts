@@ -17,10 +17,10 @@ export class TextGeometryGenerator {
 
     // 旧的圆柱面文字生成器（坐标映射方法）
     this.cylinderTextGenerator = new CylinderTextGeometry();
-    
+
     // 新的 CSG 圆柱面文字生成器（布尔操作方法）
     this.csgCylinderText = new CSGCylinderText();
-    
+
     // 圆柱面文字生成方法：'csg' | 'mapping'
     // 'csg' - 使用 CSG 布尔操作（更精确，但较慢）
     // 'mapping' - 使用坐标映射（较快，但可能有变形）
@@ -33,10 +33,12 @@ export class TextGeometryGenerator {
   /**
    * 加载默认字体
    */
-  async loadDefaultFont () {
+  async loadDefaultFont() {
     try {
       // 使用Three.js内置的helvetiker字体
-      const font = await this.loadFont('/node_modules/three/examples/fonts/helvetiker_regular.typeface.json');
+      const font = await this.loadFont(
+        '/node_modules/three/examples/fonts/helvetiker_regular.typeface.json'
+      );
       this.defaultFont = font;
       this.loadedFonts.set('helvetiker', font);
       console.log('默认字体加载成功');
@@ -50,7 +52,7 @@ export class TextGeometryGenerator {
   /**
    * 创建备用字体
    */
-  createFallbackFont () {
+  createFallbackFont() {
     // 这里可以创建一个简单的几何体作为备用
     // 暂时使用null，在generate方法中处理
     this.defaultFont = null;
@@ -61,7 +63,7 @@ export class TextGeometryGenerator {
    * @param {string} fontPath - 字体文件路径
    * @returns {Promise<THREE.Font>} 字体对象
    */
-  loadFont (fontPath) {
+  loadFont(fontPath) {
     return new Promise((resolve, reject) => {
       this.fontLoader.load(
         fontPath,
@@ -77,7 +79,7 @@ export class TextGeometryGenerator {
    * @param {string} fontName - 字体名称
    * @returns {Promise<THREE.Font>} 字体对象
    */
-  async getFont (fontName = 'helvetiker') {
+  async getFont(fontName = 'helvetiker') {
     // 检查缓存
     if (this.loadedFonts.has(fontName)) {
       return this.loadedFonts.get(fontName);
@@ -105,17 +107,17 @@ export class TextGeometryGenerator {
    * @param {string} fontName - 字体名称
    * @returns {string} 字体文件路径
    */
-  getFontPath (fontName) {
+  getFontPath(fontName) {
     const fontPaths = {
-      'helvetiker': '/node_modules/three/examples/fonts/helvetiker_regular.typeface.json',
-      'helvetiker_bold': '/node_modules/three/examples/fonts/helvetiker_bold.typeface.json',
-      'optimer': '/node_modules/three/examples/fonts/optimer_regular.typeface.json',
-      'optimer_bold': '/node_modules/three/examples/fonts/optimer_bold.typeface.json',
-      'gentilis': '/node_modules/three/examples/fonts/gentilis_regular.typeface.json',
-      'gentilis_bold': '/node_modules/three/examples/fonts/gentilis_bold.typeface.json',
+      helvetiker: '/node_modules/three/examples/fonts/helvetiker_regular.typeface.json',
+      helvetiker_bold: '/node_modules/three/examples/fonts/helvetiker_bold.typeface.json',
+      optimer: '/node_modules/three/examples/fonts/optimer_regular.typeface.json',
+      optimer_bold: '/node_modules/three/examples/fonts/optimer_bold.typeface.json',
+      gentilis: '/node_modules/three/examples/fonts/gentilis_regular.typeface.json',
+      gentilis_bold: '/node_modules/three/examples/fonts/gentilis_bold.typeface.json',
       // 中文字体 - 使用本地字体文件
-      'chinese': '/fonts/chinese_regular.typeface.json',
-      'noto_sans_sc': '/fonts/NotoSansSC_Regular.typeface.json'
+      chinese: '/fonts/chinese_regular.typeface.json',
+      noto_sans_sc: '/fonts/NotoSansSC_Regular.typeface.json',
     };
 
     return fontPaths[fontName] || fontPaths['helvetiker'];
@@ -126,7 +128,7 @@ export class TextGeometryGenerator {
    * @param {string} text - 文本内容
    * @returns {boolean} 是否包含中文
    */
-  containsChinese (text) {
+  containsChinese(text) {
     return /[\u4e00-\u9fa5]/.test(text);
   }
 
@@ -137,7 +139,7 @@ export class TextGeometryGenerator {
    * @param {Object} surfaceInfo - 表面信息（可选，用于圆柱面拟合）
    * @returns {Promise<THREE.BufferGeometry>} 文字几何体
    */
-  async generate (text, config = {}, surfaceInfo = null) {
+  async generate(text, config = {}, surfaceInfo = null) {
     if (!text || typeof text !== 'string') {
       throw new Error('无效的文字内容');
     }
@@ -153,14 +155,14 @@ export class TextGeometryGenerator {
       bevelSize: 0.01,
       bevelOffset: 0,
       bevelSegments: 5,
-      ...config
+      ...config,
     };
 
     // 检查表面信息
     if (surfaceInfo) {
       console.log('🎯 检测到表面信息:', {
         surfaceType: surfaceInfo.surfaceType,
-        hasCylinderInfo: !!surfaceInfo.cylinderInfo
+        hasCylinderInfo: !!surfaceInfo.cylinderInfo,
       });
     }
 
@@ -195,7 +197,6 @@ export class TextGeometryGenerator {
         console.log('📝 生成平面文字');
         return this.generateFlatText(text, font, finalConfig);
       }
-
     } catch (error) {
       console.error('生成文字几何体失败:', error);
 
@@ -218,17 +219,17 @@ export class TextGeometryGenerator {
    * @param {Object} config - 配置
    * @returns {THREE.BufferGeometry} 圆柱面文字几何体
    */
-  generateCylinderText (text, font, surfaceInfo, config) {
+  generateCylinderText(text, font, surfaceInfo, config) {
     const { cylinderInfo, attachPoint } = surfaceInfo;
 
     console.log(`🔧 生成圆柱面文字: "${text}" (方法: ${this.cylinderTextMethod})`, {
       cylinderInfo: {
         center: cylinderInfo.center,
         axis: cylinderInfo.axis,
-        radius: cylinderInfo.radius
+        radius: cylinderInfo.radius,
       },
       attachPoint,
-      config
+      config,
     });
 
     let geometry;
@@ -236,34 +237,32 @@ export class TextGeometryGenerator {
     if (this.cylinderTextMethod === 'csg') {
       // 使用 CSG 布尔操作方法（更精确）
       console.log('🔄 使用 CSG 布尔操作生成圆柱面文字');
-      
+
       try {
-        geometry = this.csgCylinderText.generateSimple(
+        geometry = this.csgCylinderText.generateSimple(text, font, cylinderInfo, attachPoint, {
+          size: config.size || 1,
+          thickness: config.thickness || 0.5,
+          textHeight: 30, // 切割用的文字厚度
+          cylinderSegments: 64,
+          curveSegments: config.curveSegments || 12,
+          bevelEnabled: config.bevelEnabled || false,
+        });
+
+        console.log(`✅ CSG 圆柱面文字生成成功: "${text}"`, {
+          vertices: geometry.attributes.position?.count || 0,
+          generatorType: 'CSGCylinderText',
+        });
+      } catch (error) {
+        console.warn('⚠️ CSG 方法失败，回退到坐标映射方法:', error.message);
+        // 回退到坐标映射方法
+        geometry = this.generateCylinderTextByMapping(
           text,
           font,
           cylinderInfo,
           attachPoint,
-          {
-            size: config.size || 1,
-            thickness: config.thickness || 0.5,
-            textHeight: 30,  // 切割用的文字厚度
-            cylinderSegments: 64,
-            curveSegments: config.curveSegments || 12,
-            bevelEnabled: config.bevelEnabled || false
-          }
+          config
         );
-        
-        console.log(`✅ CSG 圆柱面文字生成成功: "${text}"`, {
-          vertices: geometry.attributes.position?.count || 0,
-          generatorType: 'CSGCylinderText'
-        });
-        
-      } catch (error) {
-        console.warn('⚠️ CSG 方法失败，回退到坐标映射方法:', error.message);
-        // 回退到坐标映射方法
-        geometry = this.generateCylinderTextByMapping(text, font, cylinderInfo, attachPoint, config);
       }
-      
     } else {
       // 使用坐标映射方法（较快）
       geometry = this.generateCylinderTextByMapping(text, font, cylinderInfo, attachPoint, config);
@@ -281,9 +280,9 @@ export class TextGeometryGenerator {
    * @param {Object} config - 配置
    * @returns {THREE.BufferGeometry} 圆柱面文字几何体
    */
-  generateCylinderTextByMapping (text, font, cylinderInfo, attachPoint, config) {
+  generateCylinderTextByMapping(text, font, cylinderInfo, attachPoint, config) {
     console.log('🔄 使用坐标映射生成圆柱面文字');
-    
+
     const geometry = this.cylinderTextGenerator.generate(
       text,
       font,
@@ -295,7 +294,7 @@ export class TextGeometryGenerator {
     console.log(`✅ 坐标映射圆柱面文字生成成功: "${text}"`, {
       vertices: geometry.attributes.position?.count || 0,
       isManifold: geometry.userData?.isManifold || false,
-      generatorType: geometry.userData?.generatorType || 'CylinderTextGeometry'
+      generatorType: geometry.userData?.generatorType || 'CylinderTextGeometry',
     });
 
     return geometry;
@@ -305,7 +304,7 @@ export class TextGeometryGenerator {
    * 设置圆柱面文字生成方法
    * @param {string} method - 'csg' | 'mapping'
    */
-  setCylinderTextMethod (method) {
+  setCylinderTextMethod(method) {
     if (method === 'csg' || method === 'mapping') {
       this.cylinderTextMethod = method;
       console.log(`圆柱面文字生成方法已设置为: ${method}`);
@@ -318,7 +317,7 @@ export class TextGeometryGenerator {
    * 获取当前圆柱面文字生成方法
    * @returns {string} 'csg' | 'mapping'
    */
-  getCylinderTextMethod () {
+  getCylinderTextMethod() {
     return this.cylinderTextMethod;
   }
 
@@ -329,7 +328,7 @@ export class TextGeometryGenerator {
    * @param {Object} config - 配置
    * @returns {THREE.BufferGeometry} 平面文字几何体
    */
-  generateFlatText (text, font, config) {
+  generateFlatText(text, font, config) {
     // 创建文字几何体参数
     const geometryParams = {
       font: font,
@@ -340,7 +339,7 @@ export class TextGeometryGenerator {
       bevelThickness: config.bevelThickness,
       bevelSize: config.bevelSize,
       bevelOffset: config.bevelOffset,
-      bevelSegments: config.bevelSegments
+      bevelSegments: config.bevelSegments,
     };
 
     // 生成文字几何体
@@ -359,7 +358,7 @@ export class TextGeometryGenerator {
     console.log(`平面文字几何体生成成功: "${text}"`, {
       config: config,
       boundingBox: boundingBox,
-      vertices: geometry.attributes.position.count
+      vertices: geometry.attributes.position.count,
     });
 
     return geometry;
@@ -371,7 +370,7 @@ export class TextGeometryGenerator {
    * @param {Object} config - 配置参数
    * @returns {THREE.BoxGeometry} 备用几何体
    */
-  createFallbackGeometry (text = '', config: Record<string, any> = {}) {
+  createFallbackGeometry(text = '', config: Record<string, any> = {}) {
     console.warn(`使用备用几何体替代文字: "${text}"`);
 
     // 创建一个简单的盒子几何体作为占位符
@@ -386,7 +385,7 @@ export class TextGeometryGenerator {
     geometry.userData = {
       isFallback: true,
       originalText: text,
-      config: config
+      config: config,
     };
 
     return geometry;
@@ -397,7 +396,7 @@ export class TextGeometryGenerator {
    * @param {string[]} fontNames - 字体名称数组
    * @returns {Promise<void>}
    */
-  async preloadFonts (fontNames = ['helvetiker', 'helvetiker_bold', 'optimer']) {
+  async preloadFonts(fontNames = ['helvetiker', 'helvetiker_bold', 'optimer']) {
     const loadPromises = fontNames.map(async (fontName) => {
       try {
         await this.getFont(fontName);
@@ -415,14 +414,14 @@ export class TextGeometryGenerator {
    * 获取可用字体列表
    * @returns {string[]} 字体名称数组
    */
-  getAvailableFonts () {
+  getAvailableFonts() {
     return [
       'helvetiker',
       'helvetiker_bold',
       'optimer',
       'optimer_bold',
       'gentilis',
-      'gentilis_bold'
+      'gentilis_bold',
     ];
   }
 
@@ -431,7 +430,7 @@ export class TextGeometryGenerator {
    * @param {string} fontName - 字体名称
    * @returns {boolean} 是否已加载
    */
-  isFontLoaded (fontName) {
+  isFontLoaded(fontName) {
     return this.loadedFonts.has(fontName);
   }
 
@@ -439,7 +438,7 @@ export class TextGeometryGenerator {
    * 清理字体缓存
    * @param {string} fontName - 字体名称（可选，不提供则清理所有）
    */
-  clearFontCache (fontName?: string) {
+  clearFontCache(fontName?: string) {
     if (fontName) {
       this.loadedFonts.delete(fontName);
       console.log(`字体缓存已清理: ${fontName}`);
@@ -454,7 +453,7 @@ export class TextGeometryGenerator {
    * @param {THREE.TextGeometry} geometry - 文字几何体
    * @returns {Object} 几何体信息
    */
-  getGeometryInfo (geometry) {
+  getGeometryInfo(geometry) {
     if (!geometry) return null;
 
     geometry.computeBoundingBox();
@@ -466,10 +465,10 @@ export class TextGeometryGenerator {
       boundingBox: {
         width: boundingBox.max.x - boundingBox.min.x,
         height: boundingBox.max.y - boundingBox.min.y,
-        depth: boundingBox.max.z - boundingBox.min.z
+        depth: boundingBox.max.z - boundingBox.min.z,
       },
       isFallback: geometry.userData?.isFallback || false,
-      originalText: geometry.userData?.originalText
+      originalText: geometry.userData?.originalText,
     };
   }
 
@@ -478,7 +477,7 @@ export class TextGeometryGenerator {
    * @param {Object} config - 配置参数
    * @returns {Object} 验证结果
    */
-  validateConfig (config) {
+  validateConfig(config) {
     const errors = [];
     const warnings = [];
 
@@ -507,14 +506,14 @@ export class TextGeometryGenerator {
     return {
       isValid: errors.length === 0,
       errors,
-      warnings
+      warnings,
     };
   }
 
   /**
    * 销毁生成器，清理资源
    */
-  destroy () {
+  destroy() {
     this.clearFontCache();
     this.defaultFont = null;
     console.log('文字几何体生成器已销毁');
