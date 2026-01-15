@@ -6,7 +6,8 @@ const config: Record<string, any> = {
   feature: [
     {
       type: 'model',
-      url: '/src/assets/model/model/model.obj',
+      // url: '/src/assets/model/model/model.obj',
+      url: '/src/assets/model/shiba.glb',
       position: [0, 0, 0],
       scale: [10, 10, 10],
       rotation: [0, 0, 0],
@@ -16,18 +17,18 @@ const config: Record<string, any> = {
         type: 'origin',
       },
     },
-    {
-      type: 'model',
-      url: '/src/assets/model/model.stl',
-      position: [0, 0, 0],
-      scale: [10, 10, 10],
-      rotation: [0, 0, 0],
-      boolean: 'union',
-      // 编辑器业务信息，业务强相关
-      meta: {
-        type: 'base',
-      },
-    },
+    // {
+    //   type: 'model',
+    //   url: '/src/assets/model/model.stl',
+    //   position: [0, 0, 0],
+    //   scale: [10, 10, 10],
+    //   rotation: [0, 0, 0],
+    //   boolean: 'union',
+    //   // 编辑器业务信息，业务强相关
+    //   meta: {
+    //     type: 'base',
+    //   },
+    // },
     {
       id: '文字1',
       type: 'text',

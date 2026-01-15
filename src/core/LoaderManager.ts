@@ -1,40 +1,34 @@
 /**
- * 模型加载管理器
- * 支持多种格式：STL, OBJ, ZIP(OBJ+MTL)
+ * 模型加载管理�? * 支持多种格式：STL, OBJ, ZIP(OBJ+MTL)
  *
- * 职责：
- * 1. 根据文件类型选择合适的 Loader
- * 2. 加载完成后触发特征检测
- * 3. 返回标准化的模型数据
+ * 职责�? * 1. 根据文件类型选择合适的 Loader
+ * 2. 加载完成后触发特征检�? * 3. 返回标准化的模型数据
  */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 // import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader'
-// import JSZip from 'jszip'  // 需要时再引入
-
+// import JSZip from 'jszip'  // 需要时再引�?
 /**
  * @typedef {Object} LoadResult
- * @property {THREE.Mesh|THREE.Group} model - 加载的模型
- * @property {string} modelId - 模型唯一标识
+ * @property {THREE.Mesh|THREE.Group} model - 加载的模�? * @property {string} modelId - 模型唯一标识
  * @property {string} format - 文件格式
- * @property {Object} metadata - 元数据（顶点数、面数等）
- */
+ * @property {Object} metadata - 元数据（顶点数、面数等�? */
 
 /**
  * @typedef {Object} LoadOptions
  * @property {string} [modelId] - 自定义模型ID，不传则自动生成
- * @property {boolean} [detectFeatures=true] - 是否自动检测特征
- * @property {boolean} [centerModel=true] - 是否居中模型
- * @property {THREE.Material} [material] - 自定义材质
- */
+ * @property {boolean} [detectFeatures=true] - 是否自动检测特�? * @property {boolean} [centerModel=true] - 是否居中模型
+ * @property {THREE.Material} [material] - 自定义材�? */
 
 export class LoaderManager {
   stlLoader: any;
   objLoader: any;
+  gltfLoader: any;
   featureDetector: any;
   loadCounter: number;
-  loadedModels: Map<string, any>;
+  loadedModels: Map<string, any> = new Map();
   onProgress: ((...args: any[]) => void) | null;
   onError: ((error: any) => void) | null;
 
@@ -42,15 +36,13 @@ export class LoaderManager {
     // Loaders
     this.stlLoader = new STLLoader();
     this.objLoader = new OBJLoader();
+    this.gltfLoader = new GLTFLoader();
 
-    // 特征检测器（由 Viewer 注入）
-    this.featureDetector = null;
+    // 特征检测器（由 Viewer 注入�?    this.featureDetector = null;
 
-    // 加载计数器（用于生成 ID）
-    this.loadCounter = 0;
+    // 加载计数器（用于生成 ID�?    this.loadCounter = 0;
 
-    // 已加载模型缓存
-    this.loadedModels = new Map(); // modelId -> LoadResult
+    // 已加载模型缓�?    this.loadedModels = new Map(); // modelId -> LoadResult
 
     // 事件回调
     this.onProgress = null;
@@ -58,16 +50,14 @@ export class LoaderManager {
   }
 
   /**
-   * 设置特征检测器（由 Viewer 调用）
-   * @param {FeatureDetector} detector
+   * 设置特征检测器（由 Viewer 调用�?   * @param {FeatureDetector} detector
    */
   setFeatureDetector(detector: any) {
     this.featureDetector = detector;
   }
 
   /**
-   * 加载模型（统一入口）
-   * @param {string|File|Blob} source - 文件路径、File 对象或 Blob
+   * 加载模型（统一入口�?   * @param {string|File|Blob} source - 文件路径、File 对象�?Blob
    * @param {LoadOptions} options - 加载选项
    * @returns {Promise<LoadResult>}
    */
@@ -93,6 +83,10 @@ export class LoaderManager {
         case 'obj':
           model = await this._loadOBJ(source, material);
           break;
+        case 'glb':
+        case 'gltf':
+          model = await this._loadGLTF(source, material);
+          break;
         case 'zip':
           model = await this._loadZipOBJ(source, material);
           break;
@@ -109,7 +103,7 @@ export class LoaderManager {
       this._centerModel(model);
     }
 
-    // 生成元数据
+    // 生成元数�?
     const metadata = this._extractMetadata(model);
 
     // 构建结果
@@ -123,9 +117,9 @@ export class LoaderManager {
     // 缓存
     this.loadedModels.set(modelId, result);
 
-    // 特征检测
+    // 特征检�?
     if (detectFeatures && this.featureDetector) {
-      console.log(`[LoaderManager] 开始特征检测: ${modelId}`);
+      console.log(`[LoaderManager] 开始特征检�? ${modelId}`);
       const detector: any = this.featureDetector;
       if (typeof detector.detect === 'function') {
         await detector.detect(model, modelId);
@@ -205,7 +199,55 @@ export class LoaderManager {
   }
 
   /**
-   * 加载 ZIP 格式的 OBJ（包含 MTL 和贴图）
+   * Load GLTF/GLB files
+   * @private
+   */
+  async _loadGLTF(source: any, material: any) {
+    return new Promise((resolve, reject) => {
+      const onLoad = (gltf: any) => {
+        const model = gltf?.scene || (Array.isArray(gltf?.scenes) ? gltf.scenes[0] : null);
+        const root = model || new THREE.Group();
+
+        if (material) {
+          root.traverse((child) => {
+            if (child.isMesh) {
+              child.material = material;
+            }
+          });
+        }
+
+        resolve(root);
+      };
+
+      if (source instanceof Blob || source instanceof File) {
+        const isGltf =
+          source instanceof File
+            ? source.name.toLowerCase().endsWith('.gltf')
+            : (source.type || '').toLowerCase().includes('gltf+json');
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+          const result = (e as any)?.target?.result;
+          if (isGltf && typeof result === 'string') {
+            this.gltfLoader.parse(result, '', onLoad, reject);
+          } else {
+            this.gltfLoader.parse(result as ArrayBuffer, '', onLoad, reject);
+          }
+        };
+        reader.onerror = reject;
+
+        if (isGltf) {
+          reader.readAsText(source);
+        } else {
+          reader.readAsArrayBuffer(source);
+        }
+      } else {
+        this.gltfLoader.load(source, onLoad, this.onProgress, reject);
+      }
+    });
+  }
+  /**
+   * 加载 ZIP 格式�?OBJ（包�?MTL 和贴图）
    * @private
    */
   async _loadZipOBJ(source: any, material: any) {
@@ -221,7 +263,7 @@ export class LoaderManager {
     const targetName = objName || stlName;
 
     if (!targetName) {
-      throw new Error('ZIP 中未找到 .obj 或 .stl 文件');
+      throw new Error('ZIP 中未找到 .obj �?.stl 文件');
     }
 
     if (targetName.toLowerCase().endsWith('.stl')) {
@@ -291,8 +333,7 @@ export class LoaderManager {
   }
 
   /**
-   * 检测文件格式
-   * @private
+   * 检测文件格�?   * @private
    */
   _detectFormat(source: any) {
     let filename = '';
@@ -306,11 +347,16 @@ export class LoaderManager {
       if (type.includes('zip')) return 'zip';
       if (type.includes('stl')) return 'stl';
       if (type.includes('obj')) return 'obj';
+      if (type.includes('gltf')) {
+        return type.includes('json') ? 'gltf' : 'glb';
+      }
       return 'unknown';
     }
 
     if (filename.endsWith('.stl')) return 'stl';
     if (filename.endsWith('.obj')) return 'obj';
+    if (filename.endsWith('.glb')) return 'glb';
+    if (filename.endsWith('.gltf')) return 'gltf';
     if (filename.endsWith('.zip')) return 'zip';
 
     return 'unknown';
@@ -326,14 +372,13 @@ export class LoaderManager {
 
     model.position.sub(center);
 
-    // 将模型底部放在 y=0
+    // 将模型底部放�?y=0
     const newBox = new THREE.Box3().setFromObject(model);
     model.position.y -= newBox.min.y;
   }
 
   /**
-   * 提取模型元数据
-   * @private
+   * 提取模型元数�?   * @private
    */
   _extractMetadata(model: any) {
     let vertexCount = 0;
@@ -399,8 +444,7 @@ export class LoaderManager {
   }
 
   /**
-   * 清理所有
-   */
+   * 清理所�?   */
   dispose() {
     this.loadedModels.clear();
     this.featureDetector = null;

@@ -241,11 +241,7 @@ export class EditorDocumentVisual extends EditorViewer {
       const color = this._getTextColor(textObject, newColor);
       if (color === undefined) return;
       this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityUpdate(
-          textId,
-          { color },
-          { description: '更新文字颜色' }
-        );
+        const result = this._emitEntityUpdate(textId, { color }, { description: '更新文字颜色' });
         this._trackTextEntitySync(result);
       });
     });

@@ -404,7 +404,8 @@ export default class Document {
     if (feature.color !== undefined) payload.color = feature.color;
     if (feature.wrap !== undefined) payload.wrap = feature.wrap;
     if (feature.boolean !== undefined) payload.boolean = feature.boolean;
-    if (feature.attachmentSurface !== undefined) payload.attachmentSurface = feature.attachmentSurface;
+    if (feature.attachmentSurface !== undefined)
+      payload.attachmentSurface = feature.attachmentSurface;
 
     return {
       kind: 'text',
@@ -421,9 +422,10 @@ export default class Document {
       const path = typeof (model as any)?.path === 'string' ? (model as any).path : '';
       if (!path) continue;
 
-      const modelConfig = (model as any)?.config && typeof (model as any).config === 'object'
-        ? (model as any).config
-        : {};
+      const modelConfig =
+        (model as any)?.config && typeof (model as any).config === 'object'
+          ? (model as any).config
+          : {};
 
       const position = Array.isArray(modelConfig.position) ? modelConfig.position : undefined;
       const rotation = Array.isArray(modelConfig.rotation) ? modelConfig.rotation : undefined;

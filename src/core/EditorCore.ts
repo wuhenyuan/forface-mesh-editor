@@ -175,11 +175,7 @@ export default class EditorCore {
     return this.documentVisual?.exportScene?.(format, filename, options);
   }
 
-  exportSelected(
-    format: string,
-    filename: string = 'selected',
-    options: Record<string, any> = {}
-  ) {
+  exportSelected(format: string, filename: string = 'selected', options: Record<string, any> = {}) {
     return this.documentVisual?.exportSelected?.(format, filename, options);
   }
 
