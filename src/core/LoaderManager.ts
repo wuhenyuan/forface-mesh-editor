@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-// import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader'
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 // import JSZip from 'jszip'  // 需要时再引�?
 /**
  * @typedef {Object} LoadResult
@@ -20,12 +20,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  * @typedef {Object} LoadOptions
  * @property {string} [modelId] - 自定义模型ID，不传则自动生成
  * @property {boolean} [detectFeatures=true] - 是否自动检测特�? * @property {boolean} [centerModel=true] - 是否居中模型
- * @property {THREE.Material} [material] - 自定义材�? */
+ * @property {THREE.Material} [material] - optional material override
+ * @property {string} [mtlUrl] - optional MTL file URL for OBJ
+ */
 
 export class LoaderManager {
   stlLoader: any;
   objLoader: any;
   gltfLoader: any;
+  mtlLoader: any;
   featureDetector: any;
   loadCounter: number;
   loadedModels: Map<string, any> = new Map();
@@ -37,6 +40,7 @@ export class LoaderManager {
     this.stlLoader = new STLLoader();
     this.objLoader = new OBJLoader();
     this.gltfLoader = new GLTFLoader();
+    this.mtlLoader = new MTLLoader();
 
     // 特征检测器（由 Viewer 注入�?    this.featureDetector = null;
 
@@ -81,14 +85,14 @@ export class LoaderManager {
           model = await this._loadSTL(source, material);
           break;
         case 'obj':
-          model = await this._loadOBJ(source, material);
+          model = await this._loadOBJ(source, material, options);
           break;
         case 'glb':
         case 'gltf':
           model = await this._loadGLTF(source, material);
           break;
         case 'zip':
-          model = await this._loadZipOBJ(source, material);
+          model = await this._loadZipOBJ(source);
           break;
         default:
           throw new Error(`不支持的文件格式: ${format}`);
@@ -170,32 +174,101 @@ export class LoaderManager {
    * 加载 OBJ 文件
    * @private
    */
-  async _loadOBJ(source: any, material: any) {
-    return new Promise((resolve, reject) => {
-      const onLoad = (group) => {
-        // 如果有自定义材质，应用到所有子网格
-        if (material) {
-          group.traverse((child) => {
-            if (child.isMesh) {
-              child.material = material;
-            }
-          });
+  async _loadOBJ(source: any, material: any, options: Record<string, any> = {}) {
+    const applyMaterialOverride = (group: any) => {
+      if (!material) return;
+      group.traverse((child: any) => {
+        if (child.isMesh) {
+          child.material = material;
         }
-        resolve(group);
-      };
+      });
+    };
 
-      if (source instanceof Blob || source instanceof File) {
+    const loadFromText = (objText: string) => {
+      const group = this.objLoader.parse(objText);
+      applyMaterialOverride(group);
+      return group;
+    };
+
+    const loadFromUrl = () => {
+      return new Promise((resolve, reject) => {
+        const onLoad = (group: any) => {
+          applyMaterialOverride(group);
+          resolve(group);
+        };
+        this.objLoader.load(source, onLoad, this.onProgress, reject);
+      });
+    };
+
+    const splitUrl = (value: string) => {
+      const match = value.match(/^[^?#]+/);
+      const base = match ? match[0] : value;
+      const suffix = value.slice(base.length);
+      return { base, suffix };
+    };
+
+    const getBasePath = (url: string) => {
+      const clean = splitUrl(url).base;
+      const idx = clean.lastIndexOf('/');
+      return idx >= 0 ? clean.slice(0, idx + 1) : '';
+    };
+
+    const inferMtlUrl = (objUrl: string) => {
+      const parts = splitUrl(objUrl);
+      const base = parts.base;
+      const suffix = parts.suffix;
+      if (!base.toLowerCase().endsWith('.obj')) return null;
+      return base.slice(0, -4) + '.mtl' + suffix;
+    };
+
+    const loadMtl = (mtlUrl: string) => {
+      return new Promise((resolve, reject) => {
+        const basePath = getBasePath(mtlUrl);
+        this.mtlLoader.setPath(basePath);
+        this.mtlLoader.setResourcePath(basePath);
+        this.mtlLoader.load(
+          mtlUrl,
+          (materials: any) => {
+            materials.preload();
+            resolve(materials);
+          },
+          this.onProgress,
+          reject
+        );
+      });
+    };
+
+    let resolvedMtlUrl = options?.mtlUrl || null;
+
+    if (!resolvedMtlUrl && typeof source === 'string') {
+      resolvedMtlUrl = inferMtlUrl(source);
+    }
+
+    if (resolvedMtlUrl && !material) {
+      try {
+        const materials = await loadMtl(resolvedMtlUrl);
+        this.objLoader.setMaterials(materials as any);
+      } catch (error) {
+        this.objLoader.setMaterials(null as any);
+      }
+    } else {
+      this.objLoader.setMaterials(null as any);
+    }
+
+    if (source instanceof Blob || source instanceof File) {
+      return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const group = this.objLoader.parse((e as any)?.target?.result);
-          onLoad(group);
+          applyMaterialOverride(group);
+          resolve(group);
         };
         reader.onerror = reject;
         reader.readAsText(source);
-      } else {
-        this.objLoader.load(source, onLoad, this.onProgress, reject);
-      }
-    });
+      });
+    }
+
+    return await loadFromUrl();
   }
 
   /**
@@ -250,78 +323,169 @@ export class LoaderManager {
    * 加载 ZIP 格式�?OBJ（包�?MTL 和贴图）
    * @private
    */
-  async _loadZipOBJ(source: any, material: any) {
+  async _loadZipOBJ(source: string) {
     const { default: JSZip } = await import('jszip');
 
-    const zipInput = typeof source === 'string' ? await this._fetchArrayBuffer(source) : source;
+    const zipInput = await this._fetchArrayBuffer(source);
 
     const zip = await JSZip.loadAsync(zipInput);
     const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
 
-    const objName = fileNames.find((n) => n.toLowerCase().endsWith('.obj'));
-    const stlName = fileNames.find((n) => n.toLowerCase().endsWith('.stl'));
-    const targetName = objName || stlName;
-
-    if (!targetName) {
-      throw new Error('ZIP 中未找到 .obj �?.stl 文件');
-    }
-
-    if (targetName.toLowerCase().endsWith('.stl')) {
-      const buffer = await zip.file(targetName).async('arraybuffer');
-      const geometry = this.stlLoader.parse(buffer);
-      geometry.computeVertexNormals();
-
-      const mat =
-        material ||
-        new THREE.MeshStandardMaterial({
-          color: 0xcccccc,
-          metalness: 0.3,
-          roughness: 0.6,
-        });
-      return new THREE.Mesh(geometry, mat);
-    }
-
-    const objText = await zip.file(targetName).async('text');
-    const group = this.objLoader.parse(objText);
-
-    if (material) {
-      group.traverse((child) => {
-        if (child.isMesh) child.material = material;
+    const normalizeZipPath = (value: string) => {
+      const cleaned = value.replace(/\\/g, '/').replace(/^\.?\//, '');
+      const parts: string[] = [];
+      cleaned.split('/').forEach((part) => {
+        if (!part || part === '.') return;
+        if (part === '..') {
+          parts.pop();
+          return;
+        }
+        parts.push(part);
       });
-    }
+      return parts.join('/');
+    };
 
-    return group;
+    const stripQuery = (value: string) => value.split('?')[0].split('#')[0];
 
-    /*
-    const zip = await JSZip.loadAsync(source)
-    
-    // 查找文件
-    let objFile = null
-    let mtlFile = null
-    const textures = {}
-    
-    zip.forEach((path, file) => {
-      if (path.endsWith('.obj')) objFile = file
-      if (path.endsWith('.mtl')) mtlFile = file
-      if (/\.(jpg|jpeg|png)$/i.test(path)) {
-        textures[path] = file
+    const findEntryByExact = (name: string) => {
+      const target = normalizeZipPath(name).toLowerCase();
+      return fileNames.find((entry) => normalizeZipPath(entry).toLowerCase() === target) || null;
+    };
+
+    const findEntryByBaseName = (name: string) => {
+      const base = normalizeZipPath(name).split('/').pop();
+      if (!base) return null;
+      const lowerBase = base.toLowerCase();
+      return (
+        fileNames.find((entry) => {
+          const normalized = normalizeZipPath(entry).toLowerCase();
+          return normalized === lowerBase || normalized.endsWith(`/${lowerBase}`);
+        }) || null
+      );
+    };
+
+    const getBasePath = (value: string) => {
+      const clean = normalizeZipPath(stripQuery(value));
+      const idx = clean.lastIndexOf('/');
+      return idx >= 0 ? clean.slice(0, idx + 1) : '';
+    };
+
+    const extractMtlLibraries = (objText: string) => {
+      const libs: string[] = [];
+      const regex = /^mtllib\s+(.+)$/gim;
+      let match = null;
+      while ((match = regex.exec(objText))) {
+        const names = match[1].trim().split(/\s+/).filter(Boolean);
+        libs.push(...names);
       }
-    })
-    
-    if (!objFile) throw new Error('ZIP 中未找到 OBJ 文件')
-    
-    // 加载 MTL
-    if (mtlFile) {
-      const mtlContent = await mtlFile.async('text')
-      // ... 解析 MTL
+      return libs;
+    };
+
+    const textureExtensions = new Set([
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.bmp',
+      '.gif',
+      '.webp',
+      '.tga',
+      '.dds',
+      '.ktx',
+      '.ktx2',
+      '.hdr',
+      '.exr',
+      '.tif',
+      '.tiff',
+    ]);
+
+    const isTextureFile = (name: string) => {
+      const clean = stripQuery(name).toLowerCase();
+      const idx = clean.lastIndexOf('.');
+      if (idx < 0) return false;
+      return textureExtensions.has(clean.slice(idx));
+    };
+
+    const buildTextureUrlMap = async () => {
+      const map = new Map<string, string>();
+      const targets = fileNames.filter((name) => isTextureFile(name));
+      await Promise.all(
+        targets.map(async (name) => {
+          const file = zip.file(name);
+          if (!file) return;
+          const blob = await file.async('blob');
+          const url = URL.createObjectURL(blob);
+          const normalized = normalizeZipPath(name);
+          map.set(normalized, url);
+          map.set(normalized.toLowerCase(), url);
+        })
+      );
+      return map;
+    };
+
+    const resolveTextureUrl = (url: string, map: Map<string, string>) => {
+      if (/^(blob:|data:|https?:)/i.test(url)) return url;
+      const normalized = normalizeZipPath(stripQuery(url));
+      const direct = map.get(normalized) || map.get(normalized.toLowerCase());
+      if (direct) return direct;
+      const match = Array.from(map.keys()).find(
+        (key) => key.endsWith(`/${normalized}`) || key.endsWith(normalized)
+      );
+      if (match) {
+        return map.get(match) || map.get(match.toLowerCase()) || url;
+      }
+      return url;
+    };
+
+    const objName = fileNames.find((name) => name.toLowerCase().endsWith('.obj'));
+
+    if (!objName) {
+      throw new Error('ZIP does not contain .obj file');
     }
-    
-    // 加载 OBJ
-    const objContent = await objFile.async('text')
-    const group = this.objLoader.parse(objContent)
-    
-    return group
-    */
+
+    const objText = await zip.file(objName).async('text');
+
+    let mtlEntryName: string | null = null;
+
+    if (!mtlEntryName) {
+      const libs = extractMtlLibraries(objText);
+      for (const lib of libs) {
+        const entry = findEntryByExact(lib) || findEntryByBaseName(lib);
+        if (entry) {
+          mtlEntryName = entry;
+          break;
+        }
+      }
+    }
+
+    if (!mtlEntryName) {
+      const fallback = fileNames.find((name) => name.toLowerCase().endsWith('.mtl'));
+      mtlEntryName = fallback || null;
+    }
+
+    if (mtlEntryName) {
+      const mtlText = await zip.file(mtlEntryName).async('text');
+      const textureUrlMap = await buildTextureUrlMap();
+      const manager = new THREE.LoadingManager();
+      manager.setURLModifier((url) => resolveTextureUrl(url, textureUrlMap));
+      const mtlLoader = new MTLLoader(manager);
+      const basePath = getBasePath(mtlEntryName);
+      const materials = mtlLoader.parse(mtlText, basePath);
+      materials.preload();
+      this.objLoader.setMaterials(materials as any);
+    } else {
+      this.objLoader.setMaterials(null as any);
+    }
+
+    const group = this.objLoader.parse(objText);
+    return group;
+  }
+
+  async _fetchText(url: string) {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    }
+    return await res.text();
   }
 
   async _fetchArrayBuffer(url: string) {
