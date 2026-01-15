@@ -728,10 +728,21 @@ export class EditorViewer extends Viewer {
     });
 
     // 拖动时禁用相机控制
-    if (this._surfaceTextManager.transformControls) {
-      this._surfaceTextManager.transformControls.addEventListener('dragging-changed', (event) => {
-        this.setControlsEnabled(!event.value);
-      });
+    const transformControls = this._surfaceTextManager.transformControls;
+    if (transformControls) {
+      if (typeof transformControls.on === 'function') {
+        transformControls.on('dragging-changed', (isDragging) => {
+          this.setControlsEnabled(!isDragging);
+        });
+      } else if (typeof transformControls.addEventListener === 'function') {
+        transformControls.addEventListener('dragging-changed', (event) => {
+          this.setControlsEnabled(!event.value);
+        });
+      } else if (typeof transformControls.controls?.addEventListener === 'function') {
+        transformControls.controls.addEventListener('dragging-changed', (event) => {
+          this.setControlsEnabled(!event.value);
+        });
+      }
     }
   }
 

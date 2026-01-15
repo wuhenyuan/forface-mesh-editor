@@ -33,17 +33,34 @@ export class TransformCommand extends BaseCommand {
 
     this.object = object || null;
     this.objectUuid = object?.uuid || null;
+    this.document = options.document || null;
+    this.entityId = options.entityId || options.entityKey || object?.userData?.entityKey || null;
 
     this.beforeState = beforeState || snapshotTransform(object);
     this.afterState = afterState || snapshotTransform(object);
   }
 
   async execute() {
-    applyTransform(this.object, this.afterState);
+    this._applyState(this.afterState);
   }
 
   async undo() {
-    applyTransform(this.object, this.beforeState);
+    this._applyState(this.beforeState);
+  }
+
+  _applyState(state) {
+    if (!state) return;
+
+    if (this.document?.entityManager && this.entityId) {
+      const updated = this.document.entityManager.updateEntity(this.entityId, {
+        position: state.position,
+        rotation: state.rotation,
+        scale: state.scale,
+      });
+      if (updated) return;
+    }
+
+    applyTransform(this.object, state);
   }
 }
 

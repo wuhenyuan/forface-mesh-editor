@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { TextObject, TextListItem } from './text';
+import type { TextObject } from './text';
 import type { CommandSnapshot } from './history';
 
 export type FeatureType = 'base' | 'ornament' | 'text' | 'adjust';
@@ -35,7 +35,7 @@ export interface ColorPickerState {
   visible: boolean;
   x: number;
   y: number;
-  color: string;
+  currentColor: string;
   target: THREE.Object3D | null;
 }
 
@@ -54,8 +54,7 @@ export interface TooltipState {
 }
 
 export interface WorkspaceViewport {
-  viewer: unknown;
-  getViewer(): unknown;
+  getCore(): unknown;
 }
 
 export interface EditorState {
@@ -67,10 +66,8 @@ export interface EditorState {
   menuLoading: boolean;
   menuKeyword: string;
   selectedTextObject: TextObject | null;
-  selectedBaseObject: THREE.Object3D | null;
   selectedObject: THREE.Object3D | null;
-  textList: TextListItem[];
-  textCounter: number;
+  entityMap: Record<string, any>;
   history: CommandSnapshot;
   workspaceRef: { value: WorkspaceViewport } | null;
   contextMenu: ContextMenuState;

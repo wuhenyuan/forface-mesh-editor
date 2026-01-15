@@ -1,7 +1,14 @@
 import JSZip from 'jszip';
+import * as THREE from 'three';
 import EventManager from '../EventManager';
 import ExportManager from '../ExportManager';
 import ProjectManager from '../ProjectManager';
+import EntityManager from './EntityManager';
+import { DocumentEventBus } from './EventBus';
+import { EntityPatch, EntityProps, ModelEntity } from './Entity';
+import { normalizeConfig } from '../../../config/config';
+
+export type { DocumentEventBus } from './EventBus';
 
 export interface DocumentConfig {
   [key: string]: any;
@@ -31,15 +38,17 @@ export interface DocumentEntityPatch {
   loaderOptions?: Record<string, any>;
   visualOptions?: Record<string, any>;
   transform?: DocumentTransform;
-}
-
-export interface DocumentEventBus {
-  on: (event: string, callback: (...args: any[]) => void) => () => void;
-  once: (event: string, callback: (...args: any[]) => void) => () => void;
-  off: (event: string, callback?: (...args: any[]) => void) => void;
-  emit: (event: string, data?: any) => void;
-  onAny: (callback: (event: string, data?: any) => void) => () => void;
-  clear: () => void;
+  resource?: DocumentAssetSource;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
+  color?: string | number;
+  textType?: string;
+  content?: string;
+  size?: number;
+  depth?: number;
+  meta?: Record<string, any>;
+  boolean?: string;
 }
 
 export interface DocumentData {
@@ -51,6 +60,7 @@ export interface DocumentData {
 
 export default class Document {
   events: DocumentEventBus;
+  entityManager: EntityManager;
   exportManager: ExportManager;
   projectManager: ProjectManager;
   private _config: DocumentConfig | null = null;
@@ -58,11 +68,15 @@ export default class Document {
   private _previews: Map<string, Blob> = new Map();
   private _fonts: Map<string, DocumentFontSource> = new Map();
   private _objectUrls: Map<string, string> = new Map();
+  private _entitySubscriptions: Array<() => void> = [];
 
   constructor(options: { events?: DocumentEventBus } = {}) {
     this.events = options.events || new EventManager();
+    this.entityManager = new EntityManager({ events: this.events });
     this.exportManager = new ExportManager();
     this.projectManager = new ProjectManager();
+
+    this._bindEntityManagerEvents();
 
     this.exportManager.onProgress = (progress) => {
       this.events.emit('exportProgress', progress);
@@ -80,6 +94,46 @@ export default class Document {
     this.projectManager.onLoad = (event) => {
       this.events.emit('projectLoaded', event);
     };
+  }
+
+  private _bindEntityManagerEvents() {
+    this._entitySubscriptions.push(
+      this.entityManager.on('entityAdded', ({ entity, id, key }) => {
+        if (!entity || entity.type !== 'model') return;
+        const entry = this._modelSourceFromEntity(entity as ModelEntity);
+        const modelKey = id || key || entity.id;
+        this._models.set(modelKey, entry);
+        this.events.emit('modelSourceAdded', { key: modelKey, entry });
+      })
+    );
+
+    this._entitySubscriptions.push(
+      this.entityManager.on('entityUpdated', ({ entity, id, key, patch, reload }) => {
+        if (!entity || entity.type !== 'model') return;
+        const entry = this._modelSourceFromEntity(entity as ModelEntity);
+        const modelKey = id || key || entity.id;
+        this._models.set(modelKey, entry);
+
+        const modelPatch = this._modelPatchFromEntityPatch(patch);
+        this.events.emit('modelSourceUpdated', {
+          key: modelKey,
+          entry,
+          patch: modelPatch,
+          reload,
+        });
+      })
+    );
+
+    this._entitySubscriptions.push(
+      this.entityManager.on('entityRemoved', ({ entity, id, key }) => {
+        if (!entity || entity.type !== 'model') return;
+        const modelKey = id || key || entity.id;
+        const entry = this._models.get(modelKey);
+        this._models.delete(modelKey);
+        this._revokeObjectUrlForKey('model', modelKey);
+        this.events.emit('modelSourceRemoved', { key: modelKey, entry });
+      })
+    );
   }
 
   get config(): DocumentConfig | null {
@@ -127,6 +181,7 @@ export default class Document {
     await this._loadFolder(zip, 'preview', this._previews, false);
     await this._loadFolder(zip, 'font', this._fonts, true);
     await this._loadFolder(zip, 'fonts', this._fonts, true);
+    this._syncEntitiesFromModels();
 
     console.log(
       `[Document] æ–‡æ¡£åŠ è½½å®Œæˆ: config=${!!this._config}, models=${this._models.size}, previews=${this._previews.size}`
@@ -138,6 +193,42 @@ export default class Document {
       previews: this._previews,
       fonts: this._fonts,
     });
+
+    this._emitEntityAddedEvents();
+
+    return {
+      config: this._config!,
+      models: this._models,
+      previews: this._previews,
+      fonts: this._fonts,
+    };
+  }
+
+  load(config: Record<string, any> = {}): DocumentData {
+    this.clear();
+
+    const normalized = this._normalizeConfigForEntities(config);
+    this._config = normalized;
+
+    const entities = this._buildEntitiesFromNormalized(normalized);
+
+    this._models.clear();
+    for (const entity of entities) {
+      if (entity.type !== 'model') continue;
+      const entry = this._modelSourceFromEntity(entity as ModelEntity);
+      this._models.set(entity.id, entry);
+    }
+
+    this.entityManager.replaceAll(entities, { silent: true });
+
+    this.events.emit('documentLoaded', {
+      config: this._config,
+      models: this._models,
+      previews: this._previews,
+      fonts: this._fonts,
+    });
+
+    this._emitEntityAddedEvents();
 
     return {
       config: this._config!,
@@ -180,57 +271,404 @@ export default class Document {
     }
   }
 
+  private _syncEntitiesFromModels() {
+    const entities: ModelEntity[] = [];
+    for (const [key, entry] of this._models.entries()) {
+      entities.push(this._entityFromModelSource(key, entry));
+    }
+    this.entityManager.replaceAll(entities, { silent: true });
+  }
+
+  private _emitEntityAddedEvents() {
+    for (const [id, entity] of this.entityManager.entities.entries()) {
+      this.entityManager.events.emit('entityAdded', {
+        id,
+        key: id,
+        entity,
+        type: entity.type,
+      });
+      this.entityManager.events.emit('addEntity', {
+        id,
+        key: id,
+        entity,
+        type: entity.type,
+      });
+    }
+  }
+
+  private _normalizeConfigForEntities(config: Record<string, any>) {
+    const source: Record<string, any> = config && typeof config === 'object' ? { ...config } : {};
+
+    if (!Array.isArray(source.features) && Array.isArray(source.feature)) {
+      source.features = source.feature;
+    }
+
+    if (Array.isArray(source.features)) {
+      source.features = this._normalizeFeatureList(source.features);
+    }
+
+    return normalizeConfig(source);
+  }
+
+  private _normalizeFeatureList(features: any[]) {
+    return features.map((feature, index) => {
+      if (!feature || typeof feature !== 'object') return feature;
+      if (feature.payload && typeof feature.payload === 'object') return feature;
+
+      const kind = feature.kind || feature.type;
+      if (kind === 'model') {
+        return this._normalizeModelFeature(feature, index);
+      }
+      if (kind === 'text') {
+        return this._normalizeTextFeature(feature, index);
+      }
+      return feature;
+    });
+  }
+
+  private _decomposeMatrix(matrix: any) {
+    if (!Array.isArray(matrix) || matrix.length !== 16) return null;
+    const mat = new THREE.Matrix4().fromArray(matrix);
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    mat.decompose(position, quaternion, scale);
+    const rotation = new THREE.Euler().setFromQuaternion(quaternion, 'XYZ');
+    return {
+      position: [position.x, position.y, position.z] as [number, number, number],
+      rotation: [rotation.x, rotation.y, rotation.z] as [number, number, number],
+      scale: [scale.x, scale.y, scale.z] as [number, number, number],
+    };
+  }
+
+  private _normalizeModelFeature(feature: Record<string, any>, index: number) {
+    const key =
+      (typeof feature.key === 'string' && feature.key) ||
+      (typeof feature.id === 'string' && feature.id) ||
+      (typeof feature.meta?.type === 'string' && feature.meta.type) ||
+      `model_${index + 1}`;
+    const path =
+      (typeof feature.url === 'string' && feature.url) ||
+      (typeof feature.path === 'string' && feature.path) ||
+      '';
+
+    const transform = this._decomposeMatrix(feature.matrix);
+
+    const config: Record<string, any> = {};
+    if (transform?.position || Array.isArray(feature.position)) {
+      config.position = transform?.position || feature.position;
+    }
+    if (transform?.scale || Array.isArray(feature.scale)) {
+      config.scale = transform?.scale || feature.scale;
+    }
+    if (transform?.rotation || Array.isArray(feature.rotation)) {
+      config.rotation = transform?.rotation || feature.rotation;
+    }
+    if (feature.meta !== undefined) config.meta = feature.meta;
+    if (feature.boolean !== undefined) config.boolean = feature.boolean;
+
+    return {
+      kind: 'model',
+      id: key,
+      payload: {
+        key,
+        path,
+        config,
+      },
+    };
+  }
+
+  private _normalizeTextFeature(feature: Record<string, any>, index: number) {
+    const id =
+      (typeof feature.id === 'string' && feature.id) ||
+      (typeof feature.key === 'string' && feature.key) ||
+      `text_${index + 1}`;
+
+    const payload: Record<string, any> = {};
+    const transform = this._decomposeMatrix(feature.matrix);
+    if (typeof feature.text === 'string') payload.text = feature.text;
+    if (typeof feature.content === 'string') payload.text = feature.content;
+    if (typeof feature.textType === 'string') payload.type = feature.textType;
+    if (typeof feature.effect === 'string') payload.effect = feature.effect;
+    if (transform?.position || Array.isArray(feature.position)) {
+      payload.position = transform?.position || feature.position;
+    }
+    if (transform?.rotation || Array.isArray(feature.rotate) || Array.isArray(feature.rotation)) {
+      payload.rotate = transform?.rotation || feature.rotate || feature.rotation;
+    }
+    if (transform?.scale || Array.isArray(feature.scale)) {
+      payload.scale = transform?.scale || feature.scale;
+    }
+    if (feature.size !== undefined) payload.size = feature.size;
+    if (feature.depth !== undefined) payload.depth = feature.depth;
+    if (feature.color !== undefined) payload.color = feature.color;
+    if (feature.wrap !== undefined) payload.wrap = feature.wrap;
+    if (feature.boolean !== undefined) payload.boolean = feature.boolean;
+    if (feature.attachmentSurface !== undefined) payload.attachmentSurface = feature.attachmentSurface;
+
+    return {
+      kind: 'text',
+      id,
+      payload,
+    };
+  }
+
+  private _buildEntitiesFromNormalized(config: Record<string, any>) {
+    const entities: EntityProps[] = [];
+
+    const models = config?.models && typeof config.models === 'object' ? config.models : {};
+    for (const [key, model] of Object.entries(models)) {
+      const path = typeof (model as any)?.path === 'string' ? (model as any).path : '';
+      if (!path) continue;
+
+      const modelConfig = (model as any)?.config && typeof (model as any).config === 'object'
+        ? (model as any).config
+        : {};
+
+      const position = Array.isArray(modelConfig.position) ? modelConfig.position : undefined;
+      const rotation = Array.isArray(modelConfig.rotation) ? modelConfig.rotation : undefined;
+      const scale = Array.isArray(modelConfig.scale) ? modelConfig.scale : undefined;
+
+      entities.push({
+        id: key,
+        type: 'model',
+        resource: path,
+        position,
+        rotation,
+        scale,
+        meta: modelConfig.meta,
+        boolean: modelConfig.boolean,
+      });
+    }
+
+    const texts = Array.isArray(config?.texts) ? config.texts : [];
+    for (const entry of texts) {
+      if (!entry || typeof entry !== 'object') continue;
+
+      const id =
+        (typeof (entry as any).id === 'string' && (entry as any).id) ||
+        (typeof (entry as any).index === 'string' && (entry as any).index);
+      if (!id) continue;
+
+      const textMode = this._resolveTextMode(entry);
+      const font = this._resolveTextFont(entry, textMode);
+      const content =
+        typeof (entry as any).text === 'string'
+          ? (entry as any).text
+          : typeof (entry as any).content === 'string'
+            ? (entry as any).content
+            : '';
+
+      const position = Array.isArray((entry as any).position) ? (entry as any).position : undefined;
+      const rotation = this._resolveTextRotation(entry);
+      const scale = Array.isArray((entry as any).scale) ? (entry as any).scale : undefined;
+      const meta: Record<string, any> = {};
+      if ((entry as any).wrap !== undefined) meta.wrap = (entry as any).wrap;
+      if ((entry as any).attachmentSurface !== undefined) {
+        meta.attachmentSurface = (entry as any).attachmentSurface;
+      }
+      if ((entry as any).effect !== undefined) meta.effect = (entry as any).effect;
+
+      entities.push({
+        id,
+        type: 'text',
+        resource: font,
+        textType: textMode,
+        content,
+        size: (entry as any).size,
+        depth: (entry as any).depth,
+        color: (entry as any).color,
+        position,
+        rotation,
+        scale,
+        boolean: (entry as any).boolean,
+        meta: Object.keys(meta).length > 0 ? meta : undefined,
+      });
+    }
+
+    return entities;
+  }
+
+  private _resolveTextMode(entry: Record<string, any>) {
+    const raw =
+      (typeof entry.effect === 'string' && entry.effect) ||
+      (typeof entry.mode === 'string' && entry.mode) ||
+      (typeof entry.textMode === 'string' && entry.textMode) ||
+      (typeof entry.textType === 'string' && entry.textType) ||
+      '';
+
+    if (!raw) return undefined;
+    const normalized = raw.toLowerCase();
+    if (normalized === 'engraved' || normalized === 'engrave' || normalized === 'engravedtext') {
+      return 'engraved';
+    }
+    if (normalized === 'embossed' || normalized === 'raised' || normalized === 'emboss') {
+      return 'raised';
+    }
+    return undefined;
+  }
+
+  private _resolveTextFont(entry: Record<string, any>, textMode?: string) {
+    if (typeof entry.type === 'string' && entry.type) return entry.type;
+    if (typeof entry.font === 'string' && entry.font) return entry.font;
+
+    if (typeof entry.textType === 'string' && entry.textType) {
+      const candidate = entry.textType;
+      if (!textMode || candidate.toLowerCase() !== textMode) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  private _resolveTextRotation(entry: Record<string, any>) {
+    if (Array.isArray(entry.rotate)) return entry.rotate;
+    if (Array.isArray(entry.rotation)) return entry.rotation;
+    return undefined;
+  }
+
+  private _entityFromModelSource(key: string, entry: DocumentModelSource) {
+    return new ModelEntity({
+      id: key,
+      type: 'model',
+      resource: entry.source,
+      loaderOptions: entry.loaderOptions,
+      visualOptions: entry.visualOptions,
+      position: entry.transform?.position,
+      rotation: entry.transform?.rotation,
+      scale: entry.transform?.scale,
+    });
+  }
+
+  private _modelSourceFromEntity(entity: ModelEntity): DocumentModelSource {
+    return {
+      source: entity.resource,
+      loaderOptions: entity.loaderOptions,
+      visualOptions: entity.visualOptions,
+      transform: {
+        position: entity.position,
+        rotation: entity.rotation,
+        scale: entity.scale,
+      },
+    };
+  }
+
+  private _entityPatchFromDocumentPatch(patch: DocumentEntityPatch | EntityPatch) {
+    const nextPatch: EntityPatch = {};
+    if (!patch) return nextPatch;
+
+    if ((patch as EntityPatch).resource !== undefined) {
+      nextPatch.resource = (patch as EntityPatch).resource;
+    }
+    if ((patch as DocumentEntityPatch).source !== undefined) {
+      nextPatch.resource = (patch as DocumentEntityPatch).source;
+    }
+    if ((patch as DocumentEntityPatch).loaderOptions) {
+      nextPatch.loaderOptions = (patch as DocumentEntityPatch).loaderOptions;
+    }
+    if ((patch as DocumentEntityPatch).visualOptions) {
+      nextPatch.visualOptions = (patch as DocumentEntityPatch).visualOptions;
+    }
+
+    const transform = (patch as DocumentEntityPatch).transform;
+    if (transform?.position) nextPatch.position = transform.position;
+    if (transform?.rotation) nextPatch.rotation = transform.rotation;
+    if (transform?.scale) nextPatch.scale = transform.scale;
+
+    if ((patch as DocumentEntityPatch).position) {
+      nextPatch.position = (patch as DocumentEntityPatch).position;
+    }
+    if ((patch as DocumentEntityPatch).rotation) {
+      nextPatch.rotation = (patch as DocumentEntityPatch).rotation;
+    }
+    if ((patch as DocumentEntityPatch).scale) {
+      nextPatch.scale = (patch as DocumentEntityPatch).scale;
+    }
+
+    if ((patch as DocumentEntityPatch).color !== undefined) {
+      nextPatch.color = (patch as DocumentEntityPatch).color;
+    }
+    if ((patch as DocumentEntityPatch).textType !== undefined) {
+      nextPatch.textType = (patch as DocumentEntityPatch).textType;
+    }
+    if ((patch as DocumentEntityPatch).content !== undefined) {
+      nextPatch.content = (patch as DocumentEntityPatch).content;
+    }
+    if ((patch as DocumentEntityPatch).size !== undefined) {
+      nextPatch.size = (patch as DocumentEntityPatch).size;
+    }
+    if ((patch as DocumentEntityPatch).depth !== undefined) {
+      nextPatch.depth = (patch as DocumentEntityPatch).depth;
+    }
+    if ((patch as DocumentEntityPatch).meta !== undefined) {
+      nextPatch.meta = (patch as DocumentEntityPatch).meta;
+    }
+    if ((patch as DocumentEntityPatch).boolean !== undefined) {
+      nextPatch.boolean = (patch as DocumentEntityPatch).boolean;
+    }
+
+    return nextPatch;
+  }
+
+  private _modelPatchFromEntityPatch(patch: EntityPatch = {}): DocumentEntityPatch {
+    const modelPatch: DocumentEntityPatch = {};
+    if (patch.resource !== undefined) {
+      modelPatch.source = patch.resource;
+    }
+    if ((patch as ModelEntity).loaderOptions) {
+      modelPatch.loaderOptions = (patch as ModelEntity).loaderOptions;
+    }
+    if ((patch as ModelEntity).visualOptions) {
+      modelPatch.visualOptions = (patch as ModelEntity).visualOptions;
+    }
+
+    if (patch.position || patch.rotation || patch.scale) {
+      modelPatch.transform = {};
+      if (patch.position) modelPatch.transform.position = patch.position;
+      if (patch.rotation) modelPatch.transform.rotation = patch.rotation;
+      if (patch.scale) modelPatch.transform.scale = patch.scale;
+    }
+
+    return modelPatch;
+  }
+
   addModelSource(key: string, source: DocumentAssetSource, options: Record<string, any> = {}) {
-    const entry: DocumentModelSource = {
-      source,
+    const entity = new ModelEntity({
+      id: key,
+      type: 'model',
+      resource: source,
       loaderOptions: options.loaderOptions,
       visualOptions: options.visualOptions,
-      transform: options.transform,
-    };
-    this._models.set(key, entry);
-    this.events.emit('modelSourceAdded', { key, entry });
-    this.events.emit('entityAdded', { key, entry, type: 'model' });
+      position: options.transform?.position,
+      rotation: options.transform?.rotation,
+      scale: options.transform?.scale,
+    });
+    this.entityManager.addEntity(entity);
   }
 
-  addEntity(key: string, source: DocumentAssetSource, options: Record<string, any> = {}) {
-    return this.addModelSource(key, source, options);
+  addEntity(
+    keyOrEntity: string | EntityProps,
+    source?: DocumentAssetSource,
+    options: Record<string, any> = {}
+  ) {
+    if (typeof keyOrEntity === 'string') {
+      return this.addModelSource(keyOrEntity, source as DocumentAssetSource, options);
+    }
+    return this.entityManager.addEntity(keyOrEntity);
   }
 
-  updateEntity(key: string, patch: DocumentEntityPatch = {}) {
-    const entry = this._models.get(key);
-    if (!entry) return false;
-
-    if (patch.source !== undefined) entry.source = patch.source;
-    if (patch.loaderOptions) {
-      entry.loaderOptions = { ...(entry.loaderOptions || {}), ...patch.loaderOptions };
-    }
-    if (patch.visualOptions) {
-      entry.visualOptions = { ...(entry.visualOptions || {}), ...patch.visualOptions };
-    }
-    if (patch.transform) {
-      entry.transform = { ...(entry.transform || {}), ...patch.transform };
-    }
-
-    const reload = patch.source !== undefined || !!patch.loaderOptions;
-
-    this.events.emit('modelSourceUpdated', { key, entry, patch, reload });
-    this.events.emit('entityUpdated', { key, entry, patch, reload, type: 'model' });
-
-    return true;
+  updateEntity(key: string, patch: DocumentEntityPatch | EntityPatch = {}) {
+    const entityPatch = this._entityPatchFromDocumentPatch(patch);
+    return this.entityManager.updateEntity(key, entityPatch);
   }
 
   removeModelSource(key: string) {
-    const entry = this._models.get(key);
-    if (!entry) return false;
-    this._models.delete(key);
-    this._revokeObjectUrlForKey('model', key);
-    this.events.emit('modelSourceRemoved', { key, entry });
-    this.events.emit('entityRemoved', { key, entry, type: 'model' });
-    return true;
+    return this.entityManager.removeEntity(key);
   }
 
   removeEntity(key: string) {
-    return this.removeModelSource(key);
+    return this.entityManager.removeEntity(key);
   }
 
   addFontSource(key: string, source: DocumentAssetSource) {
@@ -293,6 +731,7 @@ export default class Document {
       URL.revokeObjectURL(url);
     }
     this._objectUrls.clear();
+    this.entityManager.clear({ silent: true });
     this._models.clear();
     this._previews.clear();
     this._fonts.clear();
@@ -469,6 +908,8 @@ export default class Document {
 
   dispose(): void {
     this.clear();
+    this._entitySubscriptions.forEach((off) => off());
+    this._entitySubscriptions = [];
     this.events.clear();
     this.exportManager.dispose();
     this.projectManager.dispose();

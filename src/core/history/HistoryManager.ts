@@ -23,6 +23,11 @@ export class HistoryManager {
     this._onChange(this.getSnapshot());
   }
 
+  setOnChange(handler: ((snapshot: Record<string, any>) => void) | null) {
+    this._onChange = typeof handler === 'function' ? handler : null;
+    this._notify();
+  }
+
   getSnapshot() {
     return {
       undoCount: this.undoStack.length,

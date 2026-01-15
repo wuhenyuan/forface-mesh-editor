@@ -68,8 +68,8 @@ export default {
     };
 
     const handleResetView = () => {
-      const workspace = store.state.workspaceRef?.value;
-      workspace?.resetView();
+      const core = store.getCore?.();
+      core?.resetView?.();
     };
 
     const handleToggleViewMode = async () => {
@@ -82,17 +82,16 @@ export default {
 
     // 导出 OBJ (ZIP 包含 OBJ + MTL + 贴图)
     const handleExportOBJ = async () => {
-      const workspace = store.state.workspaceRef?.value;
-      const viewer = workspace?.getViewer?.();
-      if (!viewer) {
+      const core = store.getCore?.();
+      if (!core) {
         console.error('编辑器未就绪');
         return;
       }
 
       exportingOBJ.value = true;
       try {
-        await viewer.exportScene('obj-zip', 'model');
-        console.log('✅ OBJ 导出成功');
+        await core.exportScene?.('obj-zip', 'model');
+        console.log('OBJ 导出成功');
       } catch (error) {
         console.error('导出 OBJ 失败:', error);
       } finally {
@@ -102,17 +101,16 @@ export default {
 
     // 导出 STL
     const handleExportSTL = async () => {
-      const workspace = store.state.workspaceRef?.value;
-      const viewer = workspace?.getViewer?.();
-      if (!viewer) {
+      const core = store.getCore?.();
+      if (!core) {
         console.error('编辑器未就绪');
         return;
       }
 
       exportingSTL.value = true;
       try {
-        await viewer.exportScene('stl', 'model');
-        console.log('✅ STL 导出成功');
+        await core.exportScene?.('stl', 'model');
+        console.log('STL 导出成功');
       } catch (error) {
         console.error('导出 STL 失败:', error);
       } finally {

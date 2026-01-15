@@ -3,33 +3,22 @@
  * 兼容 Vue 2.6+ 的轻量级状态管理
  */
 import Vue from 'vue';
-import { HistoryManager, TextCommand } from '../core';
 
-// ==================== 1. 核心状态 ====================
 const state = Vue.observable({
-  // 功能区状态
-  currentFeature: 'base', // 'base' | 'ornament' | 'text' | 'adjust'
-
-  // 视图模式（结果态/构造态）
+  currentFeature: 'base',
   viewMode: 'result', // 'result' | 'construct'
   viewModeBusy: false,
 
-  // 功能菜单状态
   menuVisible: true,
   menuItems: [],
   menuLoading: false,
   menuKeyword: '',
 
-  // 选中状态
   selectedTextObject: null,
-  selectedBaseObject: null,
-  selectedObject: null, // 通用选中对象
+  selectedObject: null,
 
-  // 文字列表
-  textList: [],
-  textCounter: 0,
+  entityMap: {},
 
-  // 撤销重做（命令历史）
   history: {
     undoCount: 0,
     redoCount: 0,
@@ -41,30 +30,25 @@ const state = Vue.observable({
     lastError: null,
   },
 
-  // 工作区引用（用于调用 3D 操作）
   workspaceRef: null,
 
-  // ========== 浮动 UI 状态 ==========
-  // 右键菜单
   contextMenu: {
     visible: false,
     x: 0,
     y: 0,
-    target: null, // 右键点击的目标对象
+    target: null,
     targetType: null, // 'text' | 'object' | 'surface' | 'empty'
-    items: [], // 菜单项
+    items: [],
   },
 
-  // 颜色选择器
   colorPicker: {
     visible: false,
     x: 0,
     y: 0,
-    target: null, // 要修改颜色的对象
+    target: null,
     currentColor: '#ffffff',
   },
 
-  // 编辑菜单（选中物体时显示）
   editMenu: {
     visible: false,
     x: 0,
@@ -72,7 +56,6 @@ const state = Vue.observable({
     target: null,
   },
 
-  // 工具提示
   tooltip: {
     visible: false,
     x: 0,
@@ -81,239 +64,88 @@ const state = Vue.observable({
   },
 });
 
-// ==================== 1.5 HistoryManager ====================
-const historyManager = new HistoryManager({
-  maxSize: 50,
-  onChange: (snapshot) => {
-    Object.assign(state.history, snapshot);
-  },
-});
+const normalizeEntityForStore = (entity: any) => {
+  if (!entity || !entity.id) return null;
+  return { ...entity };
+};
 
-// ==================== 2. Getters ====================
+const buildTextList = () => {
+  const texts = Object.values(state.entityMap).filter((entity) => entity?.type === 'text');
+  return texts.map((entity: any, index) => {
+    const content = typeof entity.content === 'string' ? entity.content : '';
+    const displayName = entity.displayName || entity.meta?.displayName || `文字${index + 1}`;
+    return { id: entity.id, content, displayName };
+  });
+};
+
+// ==================== Getters ====================
 const getters = {
-  // 功能菜单是否显示
   shouldShowMenu: () => state.currentFeature === 'base' && state.menuVisible,
-
-  // 视图模式
-  isResultMode: () => state.viewMode === 'result',
-  isConstructMode: () => state.viewMode === 'construct',
-
-  // 是否可撤销/重做
   canUndo: () => state.history.canUndo,
   canRedo: () => state.history.canRedo,
   isHistoryBusy: () => state.history.isBusy,
   isHistoryApplying: () => state.history.isApplying,
-
-  // 是否有选中文字
-  hasSelectedText: () => !!state.selectedTextObject,
-
-  // 当前选中文字的显示名
   selectedTextName: () => {
     if (!state.selectedTextObject) return '';
-    const item = state.textList.find((t) => t.id === state.selectedTextObject.id);
+    const item = buildTextList().find((t) => t.id === state.selectedTextObject.id);
     return item?.displayName || '';
   },
-
-  // 选中文字是否在圆柱面上
   isSelectedTextOnCylinder: () => {
     return state.selectedTextObject?.mesh?.userData?.surfaceType === 'cylinder';
   },
+  getTextList: () => buildTextList(),
 };
 
-// ==================== 3. Actions ====================
+// ==================== Actions ====================
 const actions = {
-  // --- ViewMode helpers ---
-  async setViewMode(mode: any, options: Record<string, any> = {}) {
-    const { force = false } = options;
-    if (mode !== 'result' && mode !== 'construct') return;
-    if (state.viewModeBusy) return;
-    if (!force && state.viewMode === mode) return;
-
-    const viewer = this.getViewer();
-    state.viewModeBusy = true;
-    try {
-      await viewer?.setViewMode?.(mode);
-      state.viewMode = mode;
-    } finally {
-      state.viewModeBusy = false;
-    }
+  getCore() {
+    return state.workspaceRef?.value?.getCore?.() || null;
   },
 
-  async toggleViewMode() {
-    const next = state.viewMode === 'result' ? 'construct' : 'result';
-    return await this.setViewMode(next);
+  setWorkspaceRef(ref: any) {
+    state.workspaceRef = ref || null;
   },
 
-  async ensureConstructMode() {
-    if (state.viewMode !== 'construct') {
-      await this.setViewMode('construct');
-    }
+  setHistorySnapshot(snapshot: Record<string, any> | null) {
+    if (!snapshot) return;
+    Object.assign(state.history, snapshot);
   },
 
-  // --- History helpers ---
-  getHistoryManager() {
-    return historyManager;
+  setFeature(key: string) {
+    state.currentFeature = key;
   },
 
-  getViewer() {
-    return state.workspaceRef?.value?.getViewer?.() || null;
+  setMenuItems(items: any[]) {
+    state.menuItems = Array.isArray(items) ? items : [];
   },
 
-  async executeCommand(command) {
-    try {
-      state.history.lastError = null;
-      await this.ensureConstructMode();
-      await historyManager.execute(command);
-    } catch (error) {
-      state.history.lastError = error;
-      throw error;
-    }
+  setMenuLoading(loading: boolean) {
+    state.menuLoading = !!loading;
   },
 
-  captureCommand(command) {
-    historyManager.capture(command);
+  setMenuKeyword(keyword: string) {
+    state.menuKeyword = keyword || '';
   },
 
-  async undo() {
-    try {
-      state.history.lastError = null;
-      await this.ensureConstructMode();
-      return await historyManager.undo();
-    } catch (error) {
-      state.history.lastError = error;
-      throw error;
-    }
+  selectObject(object: any) {
+    state.selectedObject = object || null;
   },
 
-  async redo() {
-    try {
-      state.history.lastError = null;
-      await this.ensureConstructMode();
-      return await historyManager.redo();
-    } catch (error) {
-      state.history.lastError = error;
-      throw error;
-    }
+  deselectObject() {
+    state.selectedObject = null;
   },
 
-  beginTransaction(name) {
-    historyManager.beginTransaction(name);
-  },
-
-  commitTransaction() {
-    historyManager.commitTransaction();
-  },
-
-  async rollbackTransaction() {
-    return await historyManager.rollbackTransaction();
-  },
-
-  // --- 初始化 ---
-  setWorkspaceRef(ref) {
-    state.workspaceRef = ref;
-  },
-
-  // --- 功能区 ---
-  setFeature(feature) {
-    console.log('🔥 store.setFeature:', feature);
-    state.currentFeature = feature;
-    // 只有底座显示菜单
-    state.menuVisible = feature === 'base';
-  },
-
-  // --- 功能菜单 ---
-  setMenuVisible(visible) {
-    state.menuVisible = visible;
-  },
-
-  setMenuItems(items) {
-    state.menuItems = items;
-  },
-
-  setMenuLoading(loading) {
-    state.menuLoading = loading;
-  },
-
-  setMenuKeyword(keyword) {
-    state.menuKeyword = keyword;
-  },
-
-  // --- 文字管理（被动接收，由 StateManager 调用） ---
-
-  /**
-   * 接收文字列表（由 StateManager 同步）
-   */
-  receiveTexts(textList) {
-    state.textList = textList;
-  },
-
-  /**
-   * 接收选中状态（由 StateManager 同步）
-   */
-  receiveSelection(selection) {
-    if (selection.textId) {
-      // 从 textList 找到对应的文字对象
-      const textItem = state.textList.find((t) => t.id === selection.textId);
-      state.selectedTextObject = textItem || null;
-    } else {
-      state.selectedTextObject = null;
-    }
-  },
-
-  /**
-   * 接收文字计数器（由 StateManager 同步）
-   */
-  receiveTextCounter(counter) {
-    state.textCounter = counter;
-  },
-
-  // --- 兼容旧 API（逐步废弃） ---
-  addText(textObject) {
-    state.textCounter++;
-    const displayName = `文字${state.textCounter}`;
-    state.textList.push({
-      id: textObject.id,
-      content: textObject.content,
-      displayName,
-    });
-  },
-
-  removeText(textId) {
-    const index = state.textList.findIndex((t) => t.id === textId);
-    if (index !== -1) {
-      state.textList.splice(index, 1);
-    }
-
-    if (state.selectedTextObject?.id === textId) {
-      state.selectedTextObject = null;
-    }
-  },
-
-  selectText(textObject) {
-    state.selectedTextObject = textObject;
+  selectText(textObject: any) {
+    state.selectedTextObject = textObject || null;
   },
 
   deselectText() {
     state.selectedTextObject = null;
   },
 
-  updateTextInList(textId, content) {
-    const item = state.textList.find((t) => t.id === textId);
-    if (item) {
-      item.content = content;
-    }
-  },
-
-  // ========== 浮动 UI 操作 ==========
-
-  // --- 右键菜单 ---
-  showContextMenu({ x, y, target, targetType }) {
-    // 先关闭其他浮动 UI
+  showContextMenu({ x, y, target, targetType }: Record<string, any>) {
     this.hideAllFloatingUI();
-
-    // 根据目标类型生成菜单项
     const items = this._getContextMenuItems(targetType, target);
-
     state.contextMenu = {
       visible: true,
       x,
@@ -329,7 +161,7 @@ const actions = {
     state.contextMenu.target = null;
   },
 
-  _getContextMenuItems(targetType, target) {
+  _getContextMenuItems(targetType: string, target: any) {
     const baseItems = [{ key: 'resetView', label: '重置视图', icon: 'el-icon-refresh' }];
 
     switch (targetType) {
@@ -357,13 +189,12 @@ const actions = {
           { divider: true },
           ...baseItems,
         ];
-      default: // empty
+      default:
         return baseItems;
     }
   },
 
-  // --- 颜色选择器 ---
-  showColorPicker({ x, y, target, currentColor }) {
+  showColorPicker({ x, y, target, currentColor }: Record<string, any>) {
     this.hideAllFloatingUI();
     state.colorPicker = {
       visible: true,
@@ -379,12 +210,11 @@ const actions = {
     state.colorPicker.target = null;
   },
 
-  setPickerColor(color) {
+  setPickerColor(color: string) {
     state.colorPicker.currentColor = color;
   },
 
-  // --- 编辑菜单 ---
-  showEditMenu({ x, y, target }) {
+  showEditMenu({ x, y, target }: Record<string, any>) {
     this.hideAllFloatingUI();
     state.editMenu = {
       visible: true,
@@ -399,8 +229,7 @@ const actions = {
     state.editMenu.target = null;
   },
 
-  // --- 工具提示 ---
-  showTooltip({ x, y, content }) {
+  showTooltip({ x, y, content }: Record<string, any>) {
     state.tooltip = { visible: true, x, y, content };
   },
 
@@ -408,7 +237,6 @@ const actions = {
     state.tooltip.visible = false;
   },
 
-  // --- 关闭所有浮动 UI ---
   hideAllFloatingUI() {
     state.contextMenu.visible = false;
     state.colorPicker.visible = false;
@@ -416,64 +244,118 @@ const actions = {
     state.tooltip.visible = false;
   },
 
-  // ========== 历史集成：文字相关 ==========
-  async deleteText(textId) {
-    await this.ensureConstructMode();
-    const viewer = this.getViewer();
-    if (!viewer || !textId) return;
-    await this.executeCommand(new TextCommand('delete', viewer, { textId }));
+  async setViewMode(mode: 'construct' | 'result', options: Record<string, any> = {}) {
+    if (!mode) return;
+    if (state.viewModeBusy) return;
+    if (state.viewMode === mode && !options.force) return;
+
+    state.viewModeBusy = true;
+    try {
+      const core = this.getCore();
+      if (core?.setViewMode) {
+        await core.setViewMode(mode);
+      }
+      state.viewMode = mode;
+    } finally {
+      state.viewModeBusy = false;
+    }
   },
 
-  async updateTextContent(textId, content) {
-    await this.ensureConstructMode();
-    const viewer = this.getViewer();
-    if (!viewer || !textId) return;
-    await this.executeCommand(new TextCommand('updateContent', viewer, { textId, to: content }));
+  async toggleViewMode() {
+    const next = state.viewMode === 'result' ? 'construct' : 'result';
+    await this.setViewMode(next);
   },
 
-  async updateTextColor(textId, color) {
-    await this.ensureConstructMode();
-    const viewer = this.getViewer();
-    if (!viewer || !textId) return;
-    await this.executeCommand(new TextCommand('updateColor', viewer, { textId, to: color }));
+  async executeCommand(command: any) {
+    const core = this.getCore();
+    if (core?.executeCommand) {
+      return await core.executeCommand(command);
+    }
+    return await command?.execute?.();
   },
 
-  async updateTextConfigWithHistory(textId, patch) {
-    await this.ensureConstructMode();
-    const viewer = this.getViewer();
-    if (!viewer || !textId) return;
-    await this.executeCommand(new TextCommand('updateConfig', viewer, { textId, patch }));
+  async undo() {
+    const core = this.getCore();
+    return await core?.undo?.();
   },
 
-  async switchTextModeWithHistory(textId, mode) {
-    await this.ensureConstructMode();
-    const viewer = this.getViewer();
-    if (!viewer || !textId) return;
-    await this.executeCommand(new TextCommand('setMode', viewer, { textId, toMode: mode }));
+  async redo() {
+    const core = this.getCore();
+    return await core?.redo?.();
   },
 
-  // --- 重置 ---
-  reset() {
-    state.currentFeature = 'base';
-    state.viewMode = 'result';
-    state.viewModeBusy = false;
-    state.menuVisible = true;
-    state.menuItems = [];
-    state.selectedTextObject = null;
-    state.textList = [];
-    state.textCounter = 0;
-    historyManager.clear();
+  async addEntity(entity: any, options: Record<string, any> = {}) {
+    const core = this.getCore();
+    if (!core?.addEntity) throw new Error('EditorCore not ready');
+    return await core.addEntity(entity, options);
+  },
+
+  async updateEntity(
+    id: string,
+    patch: Record<string, any> = {},
+    options: Record<string, any> = {}
+  ) {
+    const core = this.getCore();
+    if (!core?.updateEntity) throw new Error('EditorCore not ready');
+    return await core.updateEntity(id, patch, options);
+  },
+
+  async delEntity(id: string, options: Record<string, any> = {}) {
+    const core = this.getCore();
+    if (!core?.delEntity) throw new Error('EditorCore not ready');
+    return await core.delEntity(id, options);
+  },
+
+  resetEntities() {
+    state.entityMap = {};
+  },
+
+  syncEntityAdded(payload: Record<string, any> = {}) {
+    const entity = payload.entity;
+    if (!entity) return;
+    this._upsertEntity(entity);
+  },
+
+  syncEntityUpdated(payload: Record<string, any> = {}) {
+    const entity = payload.entity;
+    const id = payload.id || payload.key || entity?.id;
+    if (entity) {
+      this._upsertEntity(entity);
+      return;
+    }
+    if (!id) return;
+    const current = state.entityMap[id] || { id };
+    const next = { ...current, ...(payload.patch || {}) };
+    this._upsertEntity(next);
+  },
+
+  syncEntityRemoved(payload: Record<string, any> = {}) {
+    const id = payload.id || payload.key || payload.entity?.id;
+    if (!id) return;
+    this._removeEntityById(id);
+  },
+
+  _upsertEntity(entity: any) {
+    const normalized = normalizeEntityForStore(entity);
+    if (!normalized) return;
+    Vue.set(state.entityMap, normalized.id, normalized);
+  },
+
+  _removeEntityById(id: string) {
+    Vue.delete(state.entityMap, id);
+    if (state.selectedTextObject?.id === id) {
+      state.selectedTextObject = null;
+    }
   },
 };
 
-// ==================== 4. 导出 ====================
+// ==================== 导出 ====================
 export const useEditorStore = () => ({
   state,
   ...getters,
   ...actions,
 });
 
-// 直接导出 state 和 actions，方便在 Options API 中使用
 export { state, getters, actions };
 
 export default { state, getters, actions, useEditorStore };

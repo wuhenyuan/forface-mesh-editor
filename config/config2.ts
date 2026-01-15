@@ -6,9 +6,9 @@ const config: Record<string, any> = {
   feature: [
     {
       type: 'model',
-      url: './model/1.obj',
+      url: '/src/assets/model/model/model.obj',
       position: [0, 0, 0],
-      scale: [0, 0, 0],
+      scale: [10, 10, 10],
       rotation: [0, 0, 0],
       boolean: 'union',
       // 编辑器业务信息，业务强相关
@@ -18,9 +18,9 @@ const config: Record<string, any> = {
     },
     {
       type: 'model',
-      url: './model/2.stl',
+      url: '/src/assets/model/model.stl',
       position: [0, 0, 0],
-      scale: [0, 0, 0],
+      scale: [10, 10, 10],
       rotation: [0, 0, 0],
       boolean: 'union',
       // 编辑器业务信息，业务强相关
@@ -39,6 +39,7 @@ const config: Record<string, any> = {
       color: '#ff00ff',
       position: [0, 0, 0],
       rotate: [0, 0, 0],
+      scale: [1, 1, 1],
       wrap: 'surface Project',
     },
   ],

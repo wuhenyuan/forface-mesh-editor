@@ -158,10 +158,11 @@ export default {
     // 保存
     const handleSave = async () => {
       try {
-        const editor = workspaceRef.value?.getViewer?.();
-        if (!editor) return;
+        const core = workspaceRef.value?.getCore?.();
+        if (!core) return;
 
-        const config = editor.projectManager?.exportConfig?.() || {};
+        const project = core.getProjectData?.();
+        const config = project?.config || core.getConfig?.() || {};
 
         // 如果有业务桥接，调用保存接口
         if (props.businessBridge?.saveProject) {
@@ -177,10 +178,10 @@ export default {
     // 导出
     const handleExport = async (format = 'glb') => {
       try {
-        const editor = workspaceRef.value?.getViewer?.();
-        if (!editor) return;
+        const core = workspaceRef.value?.getCore?.();
+        if (!core) return;
 
-        const blob = await editor.exportScene?.(format);
+        const blob = await core.exportScene?.(format);
         emit('export', blob, format);
       } catch (error) {
         emit('error', error);
@@ -207,7 +208,7 @@ export default {
 
     // 监听文字列表变化
     watch(
-      () => store.state.textList,
+      () => store.getTextList(),
       (texts) => {
         emit('text-change', texts);
       },
@@ -247,23 +248,24 @@ export default {
      * 获取编辑器实例
      */
     const getEditor = () => {
-      return workspaceRef.value?.getViewer?.();
+      return workspaceRef.value?.getCore?.();
     };
 
     /**
      * 获取当前配置
      */
     const getConfig = () => {
-      const editor = getEditor();
-      return editor?.projectManager?.exportConfig?.() || null;
+      const core = getEditor();
+      const project = core?.getProjectData?.();
+      return project?.config || core?.getConfig?.() || null;
     };
 
     /**
      * 检查是否需要更新
      */
     const checkNeedsUpdate = (savedIdentifier) => {
-      const editor = getEditor();
-      return editor?.checkNeedsUpdate?.(savedIdentifier) || { needsUpdate: false };
+      const core = getEditor();
+      return core?.checkNeedsUpdate?.(savedIdentifier) || { needsUpdate: false };
     };
 
     onMounted(() => {

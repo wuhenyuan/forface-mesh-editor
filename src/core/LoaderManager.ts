@@ -126,7 +126,12 @@ export class LoaderManager {
     // 特征检测
     if (detectFeatures && this.featureDetector) {
       console.log(`[LoaderManager] 开始特征检测: ${modelId}`);
-      await this.featureDetector.detect(model, modelId);
+      const detector: any = this.featureDetector;
+      if (typeof detector.detect === 'function') {
+        await detector.detect(model, modelId);
+      } else if (typeof detector.preprocessMesh === 'function') {
+        await detector.preprocessMesh(model);
+      }
     }
 
     return result;
@@ -383,7 +388,12 @@ export class LoaderManager {
     const result = this.loadedModels.get(modelId);
     if (result) {
       // 清理特征数据
-      this.featureDetector?.clearFeatures(modelId);
+      const detector: any = this.featureDetector;
+      if (detector?.clearFeatures) {
+        detector.clearFeatures(modelId);
+      } else if (detector?.clearCache) {
+        detector.clearCache(modelId);
+      }
       this.loadedModels.delete(modelId);
     }
   }

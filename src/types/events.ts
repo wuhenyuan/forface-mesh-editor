@@ -45,3 +45,9 @@ export interface TransformEvent {
   rotation?: THREE.Euler;
   scale?: THREE.Vector3;
 }
+
+export enum EntityEvent {
+  addEntity = 'addEntity',
+  updateEntity = 'updateEntity',
+  delEntity = 'delEntity',
+}
