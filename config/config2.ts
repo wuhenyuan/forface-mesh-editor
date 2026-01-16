@@ -5,13 +5,17 @@ const config: Record<string, any> = {
   outputUrl: '',
   feature: [
     {
+      id: 'originModel',
       type: 'model',
-      url: '/src/assets/model/3dDog.zip',
+      // url: '/src/assets/model/cat.zip',
+      url: '/src/assets/model/dag.zip',
+      // url: '/src/assets/model/3dDog.zip',
       // url: '/src/assets/model/model/model.obj',
       // url: 'src/assets/model/model.zip',
       // url: '/src/assets/model/shiba.glb',
       position: [0, 0, 0],
-      scale: [10, 10, 10],
+      // scale: [10, 10, 10],
+      scale: [1, 1, 1],
       rotation: [0, 0, 0],
       boolean: 'union',
       // 编辑器业务信息，业务强相关

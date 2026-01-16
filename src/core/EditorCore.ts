@@ -167,12 +167,17 @@ export default class EditorCore {
     return this.documentVisual?.removeMesh?.(target);
   }
 
+  getModelById(modelId: string) {
+    return this.documentVisual?.getModelById?.(modelId) || null;
+  }
+
   setTransformMode(mode: 'translate' | 'rotate' | 'scale') {
     return this.documentVisual?.setTransformMode?.(mode);
   }
 
   exportScene(format: string, filename: string = 'scene', options: Record<string, any> = {}) {
-    return this.documentVisual?.exportScene?.(format, filename, options);
+    const model = this.getModelById('originModel');
+    return this.documentVisual?.exportScene?.(format, filename, model, options);
   }
 
   exportSelected(format: string, filename: string = 'selected', options: Record<string, any> = {}) {

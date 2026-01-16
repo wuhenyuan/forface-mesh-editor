@@ -13,8 +13,6 @@ import { ProjectManager } from './ProjectManager';
 import { FeatureDetector } from './facePicking/FeatureDetector';
 
 export class EditorViewer extends Viewer {
-  [key: string]: any;
-
   constructor(container: HTMLElement, options: Record<string, any> = {}) {
     super(container, options);
 
@@ -185,8 +183,14 @@ export class EditorViewer extends Viewer {
    * @param {string} filename - 文件名
    * @param {Object} options - 导出选项
    */
-  async exportScene(format: string, filename: string = 'scene', options: Record<string, any> = {}) {
-    const blob = await this._exportManager.exportScene(this.scene, format, {
+  async exportScene(
+    format: string,
+    filename: string = 'scene',
+    model = undefined,
+    options: Record<string, any> = {}
+  ) {
+    model = model ?? this.scene;
+    const blob = await this._exportManager.exportScene(model, format, {
       ...options,
       filename,
     });

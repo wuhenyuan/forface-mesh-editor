@@ -801,6 +801,10 @@ export class EditorDocumentVisual extends EditorViewer {
     this._loadTokens.clear();
   }
 
+  getModelById(modelId: string) {
+    return this._loadedModels.get(modelId) || null;
+  }
+
   initTextSystem() {
     const manager = super.initTextSystem();
     if (manager && !this._textEntityBound) {

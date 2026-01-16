@@ -3,17 +3,53 @@
  * 支持 STL、OBJ、GLTF 等格式的导出
  */
 import * as THREE from 'three';
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { STLExporter, type STLExporterOptions } from 'three/examples/jsm/exporters/STLExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import {
+  GLTFExporter,
+  type GLTFExporterOptions,
+} from 'three/examples/jsm/exporters/GLTFExporter.js';
+
+type ExportFormat = 'stl' | 'obj' | 'obj-zip' | 'gltf' | 'glb';
+
+type ExportOptions = GLTFExporterOptions & {
+  filename?: string;
+  includeHelpers?: boolean;
+};
+
+type ExportConfig = {
+  stl: {
+    binary: boolean;
+  };
+  gltf: {
+    binary: boolean;
+    includeCustomExtensions: boolean;
+    trs: boolean;
+    onlyVisible: boolean;
+    truncateDrawRange: boolean;
+    maxTextureSize: number;
+  };
+};
+
+type ExportMaterial = THREE.Material & {
+  color?: THREE.Color;
+  roughness?: number;
+  opacity?: number;
+  map?: THREE.Texture;
+  normalMap?: THREE.Texture;
+  roughnessMap?: THREE.Texture;
+  metalnessMap?: THREE.Texture;
+  aoMap?: THREE.Texture;
+  emissiveMap?: THREE.Texture;
+};
 
 export class ExportManager {
-  stlExporter: any;
-  objExporter: any;
-  gltfExporter: any;
-  config: any;
-  onProgress: ((...args: any[]) => void) | null;
-  onError: ((error: any) => void) | null;
+  stlExporter: STLExporter;
+  objExporter: OBJExporter;
+  gltfExporter: GLTFExporter;
+  config: ExportConfig;
+  onProgress: ((...args: unknown[]) => void) | null;
+  onError: ((error: unknown) => void) | null;
 
   constructor() {
     // 导出器实例
@@ -46,11 +82,15 @@ export class ExportManager {
   /**
    * 导出模型（统一入口）
    * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
-   * @param {string} format - 导出格式: 'stl' | 'obj' | 'gltf' | 'glb'
+   * @param {string} format - 导出格式: 'stl' | 'obj' | 'obj-zip' | 'gltf' | 'glb'
    * @param {Object} options - 导出选项
-   * @returns {Promise<Blob|string>} 导出结果
+   * @returns {Promise<Blob>} 导出结果
    */
-  async export(objects: any, format: string, options: Record<string, any> = {}) {
+  public async export(
+    objects: THREE.Object3D | THREE.Object3D[],
+    format: ExportFormat | string,
+    options: ExportOptions = {}
+  ): Promise<Blob> {
     const objectsArray = Array.isArray(objects) ? objects : [objects];
 
     if (objectsArray.length === 0) {
@@ -60,7 +100,7 @@ export class ExportManager {
     console.log(`[ExportManager] 开始导出 ${objectsArray.length} 个对象，格式: ${format}`);
 
     try {
-      let result;
+      let result: Blob;
 
       switch (format.toLowerCase()) {
         case 'stl':
@@ -70,7 +110,7 @@ export class ExportManager {
           result = await this.exportOBJ(objectsArray, options);
           break;
         case 'obj-zip':
-          result = await this.exportOBJWithMaterials(objectsArray, options?.filename || 'model');
+          result = await this.exportOBJWithMaterials(objectsArray, options.filename || 'model');
           break;
         case 'gltf':
           result = await this.exportGLTF(objectsArray, { ...options, binary: false });
@@ -84,7 +124,7 @@ export class ExportManager {
 
       console.log(`[ExportManager] 导出完成`);
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[ExportManager] 导出失败:', error);
       this.onError?.(error);
       throw error;
@@ -97,22 +137,21 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} STL Blob
    */
-  async exportSTL(objects: any[], options: Record<string, any> = {}) {
+  private async exportSTL(objects: THREE.Object3D[], options: ExportOptions = {}): Promise<Blob> {
     const { binary = this.config.stl.binary } = options;
 
     // 创建临时场景包含所有对象
     const exportScene = this._createExportScene(objects);
 
     try {
-      const result = this.stlExporter.parse(exportScene, { binary });
+      const result = this.stlExporter.parse(exportScene, { binary } as STLExporterOptions);
 
       if (binary) {
-        // 二进制格式返回 ArrayBuffer
-        return new Blob([result], { type: 'application/octet-stream' });
-      } else {
-        // ASCII 格式返回字符串
-        return new Blob([result], { type: 'text/plain' });
+        // 二进制格式返回 DataView
+        return new Blob([result as DataView], { type: 'application/octet-stream' });
       }
+      // ASCII 格式返回字符串
+      return new Blob([result as string], { type: 'text/plain' });
     } finally {
       this._disposeExportScene(exportScene);
     }
@@ -124,7 +163,7 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} OBJ Blob
    */
-  async exportOBJ(objects: any[], options: Record<string, any> = {}) {
+  private async exportOBJ(objects: THREE.Object3D[], options: ExportOptions = {}): Promise<Blob> {
     const exportScene = this._createExportScene(objects);
 
     try {
@@ -136,9 +175,12 @@ export class ExportManager {
   }
 
   /**
-   * å¯¼å‡º OBJ + MTL + è´´å›¾ ZIP åŒ?
+   * 导出 OBJ + MTL + 贴图 ZIP 包
    */
-  async exportOBJWithMaterials(objects: any[], filename: string = 'model') {
+  private async exportOBJWithMaterials(
+    objects: THREE.Object3D[],
+    filename: string = 'model'
+  ): Promise<Blob> {
     const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
@@ -164,29 +206,25 @@ export class ExportManager {
     }
   }
 
-  _collectMaterialsAndTextures(scene: any) {
-    const materials = new Map();
-    const textures = new Map();
+  _collectMaterialsAndTextures(scene: THREE.Object3D) {
+    const materials = new Map<string, ExportMaterial>();
+    const textures = new Map<string, Blob>();
 
     scene.traverse((object) => {
-      if (!object?.isMesh) return;
-      const mesh = object;
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
       const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const normalizedMaterials = meshMaterials as ExportMaterial[];
 
-      for (const material of meshMaterials) {
+      for (const material of normalizedMaterials) {
         if (!material) continue;
 
         const matName = material.name || `material_${material.uuid.substring(0, 8)}`;
         materials.set(matName, material);
 
-        const textureProps = [
-          'map',
-          'normalMap',
-          'roughnessMap',
-          'metalnessMap',
-          'aoMap',
-          'emissiveMap',
-        ];
+        const textureProps: Array<
+          'map' | 'normalMap' | 'roughnessMap' | 'metalnessMap' | 'aoMap' | 'emissiveMap'
+        > = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
         for (const prop of textureProps) {
           const texture = material[prop];
           if (texture?.image) {
@@ -203,7 +241,7 @@ export class ExportManager {
     return { materials, textures };
   }
 
-  _generateMTL(materials: Map<string, any>) {
+  _generateMTL(materials: Map<string, ExportMaterial>) {
     const lines = ['# MTL file exported by ExportManager'];
 
     for (const [name, material] of materials) {
@@ -241,26 +279,34 @@ export class ExportManager {
     return lines.join('\n');
   }
 
-  _getTextureName(texture: any, propName: string) {
+  _getTextureName(texture: THREE.Texture, propName: string) {
     if (texture.name) {
       return texture.name.includes('.') ? texture.name : `${texture.name}.png`;
     }
     return `${propName}_${texture.uuid.substring(0, 8)}.png`;
   }
 
-  _textureToBlob(texture: any) {
-    const image = texture?.image;
+  _textureToBlob(texture: THREE.Texture): Blob | null {
+    const image = texture.image;
     if (!image) return null;
 
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = image.width || 256;
-      canvas.height = image.height || 256;
+      const width =
+        typeof image === 'object' && image && 'width' in image && typeof image.width === 'number'
+          ? image.width
+          : 256;
+      const height =
+        typeof image === 'object' && image && 'height' in image && typeof image.height === 'number'
+          ? image.height
+          : 256;
+      canvas.width = width;
+      canvas.height = height;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
-      ctx.drawImage(image, 0, 0);
+      ctx.drawImage(image as CanvasImageSource, 0, 0);
 
       const dataUrl = canvas.toDataURL('image/png');
       const base64 = dataUrl.split(',')[1];
@@ -271,8 +317,8 @@ export class ExportManager {
       }
 
       return new Blob([array], { type: 'image/png' });
-    } catch (e) {
-      console.warn('Texture export failed:', e);
+    } catch (error) {
+      console.warn('Texture export failed:', error);
       return null;
     }
   }
@@ -283,10 +329,11 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} GLTF/GLB Blob
    */
-  async exportGLTF(objects: any[], options: Record<string, any> = {}) {
-    const exportOptions = {
+  async exportGLTF(objects: THREE.Object3D[], options: ExportOptions = {}): Promise<Blob> {
+    const { filename: _filename, includeHelpers: _includeHelpers, ...gltfOptions } = options;
+    const exportOptions: GLTFExporterOptions = {
       ...this.config.gltf,
-      ...options,
+      ...gltfOptions,
     };
 
     const exportScene = this._createExportScene(objects);
@@ -299,7 +346,7 @@ export class ExportManager {
 
           if (exportOptions.binary) {
             // GLB 格式
-            resolve(new Blob([result], { type: 'application/octet-stream' }));
+            resolve(new Blob([result as ArrayBuffer], { type: 'application/octet-stream' }));
           } else {
             // GLTF 格式（JSON）
             const json = JSON.stringify(result, null, 2);
@@ -323,11 +370,11 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    */
   async exportAndDownload(
-    objects: any,
-    format: string,
+    objects: THREE.Object3D | THREE.Object3D[],
+    format: ExportFormat | string,
     filename: string = 'model',
-    options: Record<string, any> = {}
-  ) {
+    options: ExportOptions = {}
+  ): Promise<void> {
     const blob = await this.export(objects, format, options);
 
     const extension = this._getExtension(format);
@@ -345,17 +392,22 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} 导出结果
    */
-  async exportScene(scene: any, format: string, options: Record<string, any> = {}) {
+  async exportScene(
+    scene: THREE.Scene,
+    format: ExportFormat | string,
+    options: ExportOptions = {}
+  ): Promise<Blob> {
     const { includeHelpers = false } = options;
 
-    const meshes = [];
+    const meshes: THREE.Mesh[] = [];
     scene.traverse((object) => {
-      if (object.isMesh) {
+      const mesh = object as THREE.Mesh;
+      if (mesh.isMesh) {
         // 过滤辅助对象
-        if (!includeHelpers && object.userData.isHelper) {
+        if (!includeHelpers && mesh.userData.isHelper) {
           return;
         }
-        meshes.push(object);
+        meshes.push(mesh);
       }
     });
 
@@ -373,7 +425,11 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} 导出结果
    */
-  async exportSelected(selectedObject: any, format: string, options: Record<string, any> = {}) {
+  async exportSelected(
+    selectedObject: THREE.Object3D | null | undefined,
+    format: ExportFormat | string,
+    options: ExportOptions = {}
+  ): Promise<Blob> {
     if (!selectedObject) {
       throw new Error('没有选中的对象');
     }
@@ -388,7 +444,11 @@ export class ExportManager {
    * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} 导出结果
    */
-  async exportMerged(meshes: any[], format: string, options: Record<string, any> = {}) {
+  async exportMerged(
+    meshes: THREE.Mesh[],
+    format: ExportFormat | string,
+    options: ExportOptions = {}
+  ): Promise<Blob> {
     if (meshes.length === 0) {
       throw new Error('没有可合并的网格');
     }
@@ -404,16 +464,55 @@ export class ExportManager {
     }
   }
 
+  _resolveMaterialName(material: THREE.Material, nameMap: Map<string, string>) {
+    if (material.name) return material.name;
+    const cached = nameMap.get(material.uuid);
+    if (cached) return cached;
+    const name = `material_${material.uuid.substring(0, 8)}`;
+    nameMap.set(material.uuid, name);
+    return name;
+  }
+
   /**
    * 创建导出用的临时场景
    * @private
    */
-  _createExportScene(objects: any[]) {
+  _createExportScene(objects: THREE.Object3D[]): THREE.Scene {
     const scene = new THREE.Scene();
+    const materialCache = new Map<string, THREE.Material>();
+    const materialNames = new Map<string, string>();
 
     objects.forEach((obj) => {
       // 克隆对象以避免修改原始对象
       const clone = obj.clone();
+      // 为导出对象克隆材质并补齐名称，确保 OBJ/MTL 匹配
+      clone.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.material) return;
+        if (Array.isArray(mesh.material)) {
+          mesh.material = mesh.material.map((material) => {
+            const name = this._resolveMaterialName(material, materialNames);
+            const cached = materialCache.get(material.uuid);
+            if (cached) return cached;
+            const cloned = material.clone();
+            cloned.name = name;
+            materialCache.set(material.uuid, cloned);
+            return cloned;
+          });
+        } else {
+          const material = mesh.material as THREE.Material;
+          const name = this._resolveMaterialName(material, materialNames);
+          const cached = materialCache.get(material.uuid);
+          if (cached) {
+            mesh.material = cached;
+            return;
+          }
+          const cloned = material.clone();
+          cloned.name = name;
+          materialCache.set(material.uuid, cloned);
+          mesh.material = cloned;
+        }
+      });
       scene.add(clone);
     });
 
@@ -424,7 +523,7 @@ export class ExportManager {
    * 清理导出场景
    * @private
    */
-  _disposeExportScene(scene: any) {
+  _disposeExportScene(scene: THREE.Scene) {
     scene.traverse((object) => {
       if (object.geometry) {
         // 不要 dispose 克隆的几何体，因为它们共享原始数据
@@ -440,8 +539,8 @@ export class ExportManager {
    * 合并多个网格
    * @private
    */
-  _mergeMeshes(meshes: any[]) {
-    const geometries = [];
+  _mergeMeshes(meshes: THREE.Mesh[]): THREE.Mesh {
+    const geometries: THREE.BufferGeometry[] = [];
 
     meshes.forEach((mesh) => {
       if (!mesh.isMesh || !mesh.geometry) return;
@@ -461,7 +560,12 @@ export class ExportManager {
     // 完整实现需要 import { mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
     const mergedGeometry = geometries[0];
-    const material = meshes[0].material.clone();
+    const baseMaterial = meshes[0].material;
+    const material = Array.isArray(baseMaterial)
+      ? baseMaterial[0]
+        ? baseMaterial[0].clone()
+        : new THREE.MeshStandardMaterial()
+      : baseMaterial.clone();
 
     return new THREE.Mesh(mergedGeometry, material);
   }
@@ -471,7 +575,7 @@ export class ExportManager {
    * @private
    */
   _getExtension(format: string) {
-    const extensions = {
+    const extensions: Record<string, string> = {
       stl: 'stl',
       obj: 'obj',
       'obj-zip': 'zip',
@@ -543,7 +647,7 @@ export class ExportManager {
    * @param {string} format - 导出格式
    * @returns {Object} 估算信息
    */
-  estimateExportSize(objects: any, format: string) {
+  estimateExportSize(objects: THREE.Object3D | THREE.Object3D[], format: ExportFormat | string) {
     let vertexCount = 0;
     let faceCount = 0;
 
@@ -602,7 +706,7 @@ export class ExportManager {
    * 更新配置
    * @param {Object} config - 配置更新
    */
-  updateConfig(config: Record<string, any>) {
+  updateConfig(config: Partial<ExportConfig>) {
     if (config.stl) {
       Object.assign(this.config.stl, config.stl);
     }
