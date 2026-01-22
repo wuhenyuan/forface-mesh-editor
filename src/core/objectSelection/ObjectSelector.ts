@@ -111,6 +111,10 @@ export class ObjectSelector {
    */
   handleClick(event) {
     if (!this.enabled) return;
+    if ((event as any)?.__surfaceTextHandled) {
+      this.clearSelection();
+      return;
+    }
 
     // 更新鼠标位置
     this.updateMousePosition(event);

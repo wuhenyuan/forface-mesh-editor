@@ -823,7 +823,7 @@ export class EditorDocumentVisual extends EditorViewer {
     try {
       if (mode === 'result') {
         this.disableTextMode();
-        this.disableObjectSelection();
+        this.enableObjectSelection();
         await this._surfaceTextManager?.setViewMode?.('result');
       } else {
         await this._surfaceTextManager?.setViewMode?.('construct');

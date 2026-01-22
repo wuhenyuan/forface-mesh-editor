@@ -123,7 +123,7 @@ export class SurfaceTextManager {
    */
   enableClickListener() {
     const canvas = this.renderer.domElement;
-    canvas.addEventListener('click', this._boundOnClick);
+    canvas.addEventListener('click', this._boundOnClick, true);
     console.log('点击监听已启用');
   }
 
@@ -132,7 +132,7 @@ export class SurfaceTextManager {
    */
   disableClickListener() {
     const canvas = this.renderer.domElement;
-    canvas.removeEventListener('click', this._boundOnClick);
+    canvas.removeEventListener('click', this._boundOnClick, true);
     console.log('点击监听已禁用');
   }
 
@@ -196,6 +196,7 @@ export class SurfaceTextManager {
       // 1. 检查是否点击了凸起模式的文字对象
       if (faceInfo.mesh.userData && faceInfo.mesh.userData.isTextObject) {
         const textId = faceInfo.mesh.userData.textId;
+        if (event) (event as any).__surfaceTextHandled = true;
         this.selectText(textId);
         return;
       }
@@ -208,6 +209,7 @@ export class SurfaceTextManager {
         faceInfo.faceIndex
       );
       if (textIdFromEngraved) {
+        if (event) (event as any).__surfaceTextHandled = true;
         // 点击的是内嵌文字区域，进入编辑模式
         this.enterEditMode(textIdFromEngraved);
         return;
@@ -223,6 +225,8 @@ export class SurfaceTextManager {
       }
 
       // 4. 文字模式下，点击普通表面创建新文字
+      if (event) (event as any).__surfaceTextHandled = true;
+
       const screenPosition = {
         x: event.clientX,
         y: event.clientY,
