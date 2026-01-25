@@ -1,5 +1,6 @@
 import { ObjectSelector } from './ObjectSelector';
 import { ObjectTransformControls } from './ObjectTransformControls';
+import { ObjectBoundsHelper } from './ObjectBoundsHelper';
 
 /**
  * 物体选择管理器
@@ -16,6 +17,7 @@ export class ObjectSelectionManager {
     // 创建子系统
     this.objectSelector = new ObjectSelector(scene, camera, renderer, domElement);
     this.transformControls = new ObjectTransformControls(scene, camera, renderer, domElement);
+    this.boundsHelper = new ObjectBoundsHelper(scene, { labelBackground: false });
 
     // 状态
     this.enabled = false;
@@ -53,6 +55,8 @@ export class ObjectSelectionManager {
         this.transformControls.attach(object);
       }
 
+      this.boundsHelper?.attach?.(object);
+
       console.log('物体选择管理器：物体已选中', object.name || object.uuid);
       this.emit('objectSelected', object);
     });
@@ -62,6 +66,7 @@ export class ObjectSelectionManager {
 
       // 分离变换控制器
       this.transformControls.detach();
+      this.boundsHelper?.detach?.();
 
       console.log('物体选择管理器：物体已取消选择');
       this.emit('objectDeselected', object);
@@ -70,6 +75,7 @@ export class ObjectSelectionManager {
     this.objectSelector.on('selectionCleared', () => {
       this.selectedObject = null;
       this.transformControls.detach();
+      this.boundsHelper?.detach?.();
 
       console.log('物体选择管理器：选择已清除');
       this.emit('selectionCleared');
@@ -82,6 +88,7 @@ export class ObjectSelectionManager {
     });
 
     this.transformControls.on('objectTransformed', (data) => {
+      this.boundsHelper?.update?.(data?.object);
       this.emit('objectTransformed', data);
     });
 
@@ -138,6 +145,7 @@ export class ObjectSelectionManager {
 
     // 清除状态
     this.selectedObject = null;
+    this.boundsHelper?.detach?.();
 
     console.log('物体选择管理器已禁用');
     this.emit('disabled');
@@ -337,6 +345,7 @@ export class ObjectSelectionManager {
     this.disable();
     this.objectSelector.destroy();
     this.transformControls.destroy();
+    this.boundsHelper?.dispose?.();
     this.eventListeners.clear();
     this.selectedObject = null;
   }
