@@ -4,24 +4,28 @@
   "description": "Vue 2 + Vite 项目",
   "main": "dist/forface-mesh-editor.umd.js",
   "module": "dist/forface-mesh-editor.es.js",
+  "style": "dist/style.css",
   "exports": {
     ".": {
       "import": "./dist/forface-mesh-editor.es.js",
       "require": "./dist/forface-mesh-editor.umd.js"
-    }
+    },
+    "./style.css": "./dist/style.css"
   },
   "files": [
     "dist",
-    "src/components",
-    "src/utils"
+    "src/components"
   ],
   "dependencies": {
-    "element-ui": "^2.15.14",
     "jszip": "^3.10.1",
     "mitt": "^3.0.1",
     "three": "^0.160.0",
     "three-bvh-csg": "^0.0.17",
-    "three-mesh-bvh": "^0.9.4",
+    "three-mesh-bvh": "^0.9.4"
+  },
+  "peerDependencies": {
+    "element-ui": "^2.15.14",
+    "lodash": "^4.17.21",
     "vue": "^2.7.16"
   },
   "devDependencies": {
@@ -29,14 +33,17 @@
     "@typescript-eslint/parser": "^8.26.0",
     "@types/node": "^25.0.3",
     "@types/three": "^0.182.0",
+    "element-ui": "^2.15.14",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
     "eslint-plugin-vue": "^9.23.0",
+    "lodash": "^4.17.21",
     "prettier": "^3.2.5",
     "typescript": "^5.9.3",
     "vite": "^4.5.3",
     "vite-plugin-vue2": "^2.0.3",
+    "vue": "^2.7.16",
     "vue-eslint-parser": "^9.4.2",
     "vue-template-compiler": "^2.7.16",
     "vue-tsc": "^3.2.1"

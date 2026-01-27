@@ -16,7 +16,6 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { EditorCore, TransformCommand } from '../core';
 import { EntityEvent } from '../types/events';
-import config2 from '../../config/config2';
 import { useEditorStore } from '../store';
 import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating';
 
@@ -32,6 +31,14 @@ export default {
     currentTool: {
       type: String,
       default: 'base',
+    },
+    config: {
+      type: Object,
+      default: null,
+    },
+    originPath: {
+      type: String,
+      default: '',
     },
   },
   emits: [
@@ -72,13 +79,43 @@ export default {
       );
     };
 
+    const buildConfigFromOriginPath = (path) => ({
+      feature: [
+        {
+          id: 'originModel',
+          type: 'model',
+          url: path,
+          position: [0, 0, 0],
+          scale: [1, 1, 1],
+          rotation: [0, 0, 0],
+          boolean: 'union',
+          meta: {
+            type: 'origin',
+          },
+        },
+      ],
+    });
+
+    const getLoadConfig = (config, originPath) => {
+      if (config && typeof config === 'object') return config;
+      if (typeof originPath === 'string' && originPath) return buildConfigFromOriginPath(originPath);
+      return null;
+    };
+
+    const loadFromProps = (config, originPath) => {
+      if (!core) return;
+      const next = getLoadConfig(config, originPath);
+      if (!next) return;
+      core.load?.(next);
+      store.setHistorySnapshot?.(core.getHistorySnapshot?.());
+    };
+
     // 初始化
     const initCore = async () => {
       core = new EditorCore(container.value);
 
       bindViewerEvents();
-      core.load?.(config2);
-      store.setHistorySnapshot?.(core.getHistorySnapshot?.());
+      loadFromProps(props.config, props.originPath);
 
       core.initTextSystem?.();
       core.initObjectSelection?.();
@@ -405,6 +442,13 @@ export default {
     );
 
     // 暴露方法
+    watch(
+      () => [props.config, props.originPath],
+      ([nextConfig, nextOriginPath]) => {
+        loadFromProps(nextConfig, nextOriginPath);
+      }
+    );
+
     const getExposedMethods = () => ({
       getCore: () => core,
     });

@@ -1,18 +1,19 @@
 <template>
   <div id="app">
-    <editor-layout :config="config" />
+    <EditorLayout :config="config" />
   </div>
 </template>
 
 <script>
-import EditorLayout from './components/EditorLayout.vue';
-import config2 from '../config/config2';
+import EditorLayout from 'forface-mesh-editor';
+import demoConfig from './demo-config';
+
 export default {
   name: 'App',
   components: { EditorLayout },
   data() {
     return {
-      config: config2,
+      config: demoConfig,
     };
   },
 };
@@ -32,3 +33,4 @@ body {
     'Droid Sans', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
 }
 </style>
+

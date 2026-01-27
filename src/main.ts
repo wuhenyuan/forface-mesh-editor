@@ -1,27 +1,26 @@
 /**
- * 组件库打包导出入口
- * 单一入口设计 - 只暴露 EditorLayout
+ * 组件库打包入口
+ * - 默认导出：EditorLayout
+ * - 兼容插件方式：ForfaceMeshEditor / install
  */
 import EditorLayout from './components/EditorLayout.vue';
 
-// install 方法
-const install = function (Vue: any, _options: Record<string, any> = {}) {
+export { EditorLayout };
+
+export const install = function (Vue: any) {
   if ((install as any).installed) return;
   (install as any).installed = true;
-
   Vue.component((EditorLayout as any).name, EditorLayout);
 };
 
-// 自动安装（浏览器环境且存在 Vue）
-if (typeof window !== 'undefined' && (window as any).Vue) {
-  install((window as any).Vue);
-}
-
-// 默认导出
-export default {
+export const ForfaceMeshEditor = {
   install,
   EditorLayout,
 };
 
-// 具名导出
-export { EditorLayout };
+// 自动安装（script 标签引入场景）
+if (typeof window !== 'undefined' && (window as any).Vue) {
+  install((window as any).Vue);
+}
+
+export default EditorLayout;

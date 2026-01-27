@@ -22,13 +22,18 @@ export default defineConfig({
       fileName: (format) => `forface-mesh-editor.${format}.js`,
     },
     rollupOptions: {
-      external: ['vue', 'element-ui', 'three'],
+      external: (id) => {
+        const core = ['vue', 'element-ui', 'three', 'lodash', 'lodash-es'];
+        return core.includes(id) || id.startsWith('lodash/') || id.startsWith('lodash-es/');
+      },
       output: {
         exports: 'named',
         globals: {
           vue: 'Vue',
-          'element-ui': 'ElementUI',
+          'element-ui': 'ELEMENT',
           three: 'THREE',
+          lodash: '_',
+          'lodash-es': '_',
         },
       },
     },
