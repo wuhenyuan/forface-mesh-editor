@@ -5,7 +5,7 @@
 </template>
 
 <script>
-import EditorLayout from 'forface-mesh-editor';
+import EditorLayout from '../../../src/main.ts';
 import demoConfig from './demo-config';
 
 export default {

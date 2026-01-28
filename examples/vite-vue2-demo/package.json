@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "element-ui": "^2.15.14",
-    "forface-mesh-editor": "file:../..",
     "vue": "^2.7.16"
   },
   "devDependencies": {

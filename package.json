@@ -5,25 +5,26 @@
   "main": "dist/forface-mesh-editor.umd.js",
   "module": "dist/forface-mesh-editor.es.js",
   "style": "dist/style.css",
+  "types": "dist/main.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/main.d.ts",
       "import": "./dist/forface-mesh-editor.es.js",
       "require": "./dist/forface-mesh-editor.umd.js"
     },
     "./style.css": "./dist/style.css"
   },
   "files": [
-    "dist",
-    "src/components"
+    "dist"
   ],
   "dependencies": {
     "jszip": "^3.10.1",
     "mitt": "^3.0.1",
-    "three": "^0.160.0",
     "three-bvh-csg": "^0.0.17",
     "three-mesh-bvh": "^0.9.4"
   },
   "peerDependencies": {
+    "three": "^0.160.0",
     "element-ui": "^2.15.14",
     "lodash": "^4.17.21",
     "vue": "^2.7.16"
@@ -51,10 +52,14 @@
   "scripts": {
     "dev": "vite --config vite.dev.config.ts",
     "build": "vite build --config vite.config.ts",
-    "build:lib": "vite build --mode lib --config vite.config.ts",
+    "build:lib": "vite build --mode lib --config vite.config.ts && npm run build:types",
+    "build:types": "vue-tsc --project tsconfig.build.json",
+    "build:examples": "",
     "eslint:fix": "eslint \"src/**/*.{js,ts,vue}\" \"config/**/*.{js,ts}\" --fix",
     "lint": "eslint \"src/**/*.{js,ts,vue}\" \"config/**/*.{js,ts}\"",
     "format": "prettier --write \"src/**/*.{js,ts,vue}\" \"config/**/*.{js,ts}\"",
+    "dev:demo": "npm run build && cd examples/vite-vue2-demo && npm run dev",
+    "prod:demo": "npm run build && cd examples/vite-vue2-demo && npm run build && npm run preview",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
