@@ -107,7 +107,7 @@ export class EditorViewer extends Viewer {
    * @returns {Promise<Object>} 加载结果
    */
   async loadModel(source: any, options: Record<string, any> = {}) {
-    const { addToScene = true, detectFeatures = true, ...loaderOptions } = options;
+    const { addToScene = true, detectFeatures = false, ...loaderOptions } = options;
 
     try {
       // 使用 LoaderManager 加载
@@ -130,7 +130,7 @@ export class EditorViewer extends Viewer {
         modelId: result.modelId,
         format: result.format,
         metadata: result.metadata,
-        features: this._featureDetector.getModelFeatures(result.modelId),
+        features: this._featureDetector?.getModelFeatures?.(result.modelId) ?? null,
       });
 
       return result;
@@ -533,7 +533,7 @@ export class EditorViewer extends Viewer {
    * @param {THREE.Intersection} intersection - 射线交点
    */
   getFeatureAtIntersection(modelId, intersection) {
-    return this._featureDetector.getFeatureAtIntersection(modelId, intersection);
+    return this._featureDetector?.getFeatureAtIntersection?.(modelId, intersection) ?? null;
   }
 
   /**
@@ -541,7 +541,7 @@ export class EditorViewer extends Viewer {
    * @param {string} modelId - 模型ID
    */
   getModelFeatures(modelId) {
-    return this._featureDetector.getModelFeatures(modelId);
+    return this._featureDetector?.getModelFeatures?.(modelId) ?? null;
   }
 
   /**
@@ -550,7 +550,7 @@ export class EditorViewer extends Viewer {
    * @param {Object} options - 筛选选项
    */
   getTextableSurfaces(modelId: string, options: Record<string, any> = {}) {
-    return this._featureDetector.getTextableSurfaces(modelId, options);
+    return this._featureDetector?.getTextableSurfaces?.(modelId, options) ?? [];
   }
 
   /**

@@ -46,9 +46,9 @@ export class OptimizedFacePicker {
 
     // 性能配置
     this.config = {
-      enableFeatureDetection: true,
+      enableFeatureDetection: false,
       enableBVHAcceleration: true,
-      enablePreprocessing: true,
+      enablePreprocessing: false,
       maxPreprocessingTime: 5000, // 5秒预处理时间限制
       batchSize: 3, // 批处理大小
       enableAsyncProcessing: true,

@@ -36,7 +36,7 @@ export class FeaturePool {
 
     // 配置
     this.config = {
-      enableAutoPreprocessing: true, // 自动预处理新网格
+      enableAutoPreprocessing: false, // 自动预处理新网格
       maxCacheSize: 100, // 最大缓存网格数量
       enableLRU: true, // 启用LRU缓存策略
       preprocessingBatchSize: 5, // 批处理大小

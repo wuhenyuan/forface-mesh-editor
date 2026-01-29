@@ -611,14 +611,18 @@ export class EditorDocumentVisual extends EditorViewer {
         this._trackTextEntitySync(promise);
       }
 
-      if (patch.position || patch.rotation || patch.scale) {
+      if (patch.position || patch.rotation || patch.rotate || patch.scale) {
         const mesh = textObject.mesh;
         if (mesh && patch.position) {
           const [x = 0, y = 0, z = 0] = patch.position;
           mesh.position.set(x, y, z);
         }
-        if (mesh && patch.rotation) {
-          const [x = 0, y = 0, z = 0] = patch.rotation;
+        const nextRotation = patch.rotation ?? patch.rotate;
+        if (mesh && Array.isArray(nextRotation)) {
+          const [x = 0, y = 0, z = 0, order] = nextRotation;
+          if (typeof order === 'string') {
+            mesh.rotation.order = order;
+          }
           mesh.rotation.set(x, y, z);
         }
         if (mesh && patch.scale) {
@@ -700,6 +704,13 @@ export class EditorDocumentVisual extends EditorViewer {
     const options: Record<string, any> = { id: entity.id };
     if (Object.keys(config).length > 0) {
       options.config = config;
+    }
+    const transform: Record<string, any> = {};
+    if (entity.position) transform.position = entity.position;
+    if (entity.rotation) transform.rotation = entity.rotation;
+    if (entity.scale) transform.scale = entity.scale;
+    if (Object.keys(transform).length > 0) {
+      options.transform = transform;
     }
 
     const faceInfo = this._buildTextAnchorFaceInfo();

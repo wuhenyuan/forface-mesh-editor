@@ -68,7 +68,7 @@ export class LoaderManager {
   async load(source: any, options: Record<string, any> = {}) {
     const {
       modelId = this._generateModelId(),
-      detectFeatures = true,
+      detectFeatures = false,
       centerModel = true,
       material = null,
     } = options;

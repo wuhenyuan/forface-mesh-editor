@@ -605,7 +605,33 @@ export class SurfaceTextManager {
       };
 
       // 计算文字位置和方向（根据表面类型）
-      if (surfaceInfo?.surfaceType === 'cylinder') {
+      const transform =
+        options?.transform && typeof options.transform === 'object' ? options.transform : null;
+      const transformRotation = transform?.rotation ?? transform?.rotate;
+      const hasExplicitTransform =
+        !!transform &&
+        (Array.isArray(transform?.position) ||
+          Array.isArray(transformRotation) ||
+          Array.isArray(transform?.scale));
+
+      if (hasExplicitTransform) {
+        if (Array.isArray(transform?.position)) {
+          const [x = 0, y = 0, z = 0] = transform.position;
+          mesh.position.set(x, y, z);
+        }
+        if (Array.isArray(transformRotation)) {
+          const [x = 0, y = 0, z = 0, order] = transformRotation;
+          if (typeof order === 'string') {
+            mesh.rotation.order = order;
+          }
+          mesh.rotation.set(x, y, z);
+        }
+        if (Array.isArray(transform?.scale)) {
+          const [x = 1, y = 1, z = 1] = transform.scale;
+          mesh.scale.set(x, y, z);
+        }
+        mesh.updateMatrixWorld(true);
+      } else if (surfaceInfo?.surfaceType === 'cylinder') {
         this.positionTextOnCylinder(mesh, faceInfo, surfaceInfo);
       } else {
         this.positionTextOnSurface(mesh, faceInfo);
@@ -1110,6 +1136,7 @@ export class SurfaceTextManager {
       up.set(1, 0, 0); // 如果法向量接近垂直，使用不同的up向量
     }
 
+    textMesh.up.copy(up);
     textMesh.lookAt(textMesh.position.clone().add(normal));
 
     // 稍微偏移以避免z-fighting
