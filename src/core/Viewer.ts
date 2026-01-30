@@ -29,6 +29,8 @@ export class Viewer {
     this.camera = null;
     this.renderer = null;
     this.controls = null;
+    this.entityGroup = null;
+    this.csgGroup = null;
 
     // 事件管理器
     this.events = events || new EventManager();
@@ -83,6 +85,15 @@ export class Viewer {
     // 场景
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(this.options.backgroundColor);
+
+    // 实体与布尔结果分组（都挂到 scene）
+    this.entityGroup = new THREE.Group();
+    this.entityGroup.name = 'entityGroup';
+    this.scene.add(this.entityGroup);
+
+    this.csgGroup = new THREE.Group();
+    this.csgGroup.name = 'csgGroup';
+    this.scene.add(this.csgGroup);
 
     // 相机
     this.camera = new THREE.PerspectiveCamera(60, rect.width / rect.height, 0.1, 1000);
@@ -383,12 +394,19 @@ export class Viewer {
    * 添加网格到场景
    */
   addMesh(mesh: any, options: Record<string, any> = {}) {
-    const { selectable = true, castShadow = true, receiveShadow = true } = options;
+    const { selectable = true, castShadow = true, receiveShadow = true, group = 'entity' } = options;
 
     mesh.castShadow = castShadow;
     mesh.receiveShadow = receiveShadow;
 
-    this.scene.add(mesh);
+    const targetGroup =
+      group === 'scene'
+        ? this.scene
+        : group === 'csg'
+          ? (this.csgGroup || this.scene)
+          : (this.entityGroup || this.scene);
+
+    targetGroup.add(mesh);
     this._meshes.push(mesh);
 
     if (selectable && !mesh.userData.isHelper) {
@@ -403,7 +421,7 @@ export class Viewer {
    * 移除网格
    */
   removeMesh(mesh) {
-    this.scene.remove(mesh);
+    mesh?.parent?.remove?.(mesh);
 
     const meshIndex = this._meshes.indexOf(mesh);
     if (meshIndex > -1) this._meshes.splice(meshIndex, 1);

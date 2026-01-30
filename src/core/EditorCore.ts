@@ -176,8 +176,13 @@ export default class EditorCore {
   }
 
   exportScene(format: string, filename: string = 'scene', options: Record<string, any> = {}) {
-    const model = this.getModelById('originModel');
-    return this.documentVisual?.exportScene?.(format, filename, model, options);
+    const visual: any = this.documentVisual;
+    const csgGroup = visual?.csgGroup;
+    const hasCSG = !!(csgGroup && csgGroup.children && csgGroup.children.length > 0);
+    const model = hasCSG
+      ? csgGroup
+      : this.getModelById('originModel') || visual?.entityGroup || visual?.scene;
+    return visual?.exportScene?.(format, filename, model, options);
   }
 
   exportSelected(format: string, filename: string = 'selected', options: Record<string, any> = {}) {

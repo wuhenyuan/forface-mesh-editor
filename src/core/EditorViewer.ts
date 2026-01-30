@@ -650,19 +650,31 @@ export class EditorViewer extends Viewer {
   /**
    * 初始化文字系统
    */
+  _getTextTargetMeshes() {
+    const root = this.entityGroup || this.scene;
+    const meshes: any[] = [];
+    root?.traverse?.((obj: any) => {
+      if (!obj?.isMesh) return;
+      if (obj.userData?.isHelper) return;
+      if (obj.userData?.isTextObject) return;
+      meshes.push(obj);
+    });
+    return meshes;
+  }
+
   initTextSystem() {
     if (this._surfaceTextManager) return this._surfaceTextManager;
 
     try {
       this._surfaceTextManager = new SurfaceTextManager(
-        this.scene,
+        this.entityGroup || this.scene,
         this.camera,
         this.renderer,
         this.container,
         null // 不依赖 facePicker
       );
 
-      this._surfaceTextManager.setTargetMeshes(this._meshes);
+      this._surfaceTextManager.setTargetMeshes(this._getTextTargetMeshes());
       this._surfaceTextManager.enableClickListener();
 
       this._setupTextSystemEvents();
@@ -974,7 +986,7 @@ export class EditorViewer extends Viewer {
 
     // 同步到文字系统
     if (this._surfaceTextManager) {
-      this._surfaceTextManager.setTargetMeshes(this._meshes);
+      this._surfaceTextManager.setTargetMeshes(this._getTextTargetMeshes());
     }
 
     // 同步到物体选择

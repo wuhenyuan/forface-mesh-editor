@@ -5,6 +5,8 @@ import AssetsManager from './AssetsManager';
 import ExportManager from './ExportManager';
 import ProjectManager from './ProjectManager';
 import { FeatureDetector } from './facePicking/FeatureDetector';
+import { ADDITION, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
+import { createBrushFromObject, normalizeModelBooleanOp } from './csg/ModelCSG';
 
 export class EditorDocumentVisual extends EditorViewer {
   document: Document;
@@ -19,6 +21,10 @@ export class EditorDocumentVisual extends EditorViewer {
   private _textEntityBound: boolean;
   private _textEntitySyncDepth: number;
   private _textAnchorMesh: any;
+  private _csgUpdateToken: number;
+  private _csgScheduledToken: any;
+  private _csgResultMesh: THREE.Mesh | null;
+  private _csgBusy: boolean;
   private _entityHandler: {
     addEntity?: (entity: any, options?: Record<string, any>) => any;
     updateEntity?: (id: string, patch: Record<string, any>, options?: Record<string, any>) => any;
@@ -53,6 +59,10 @@ export class EditorDocumentVisual extends EditorViewer {
     this._textEntityBound = false;
     this._textEntitySyncDepth = 0;
     this._textAnchorMesh = null;
+    this._csgUpdateToken = 0;
+    this._csgScheduledToken = null;
+    this._csgResultMesh = null;
+    this._csgBusy = false;
     this._entityHandler = options?.entityHandler || null;
 
     this.assetsManager.onProgress = (progress) => {
@@ -437,6 +447,7 @@ export class EditorDocumentVisual extends EditorViewer {
       if (this._loadTokens.get(key) === token) {
         this._loadTokens.delete(key);
       }
+      this._scheduleCSGUpdate();
     }
   }
 
@@ -479,6 +490,10 @@ export class EditorDocumentVisual extends EditorViewer {
 
     if (patch.color !== undefined) {
       this._applyModelColor(model, patch.color);
+    }
+
+    if (nextTransform || patch.boolean !== undefined) {
+      this._scheduleCSGUpdate();
     }
   }
 
@@ -795,6 +810,150 @@ export class EditorDocumentVisual extends EditorViewer {
     });
   }
 
+  private _syncCSGVisibilityAndSelection() {
+    const hasCSG = !!this._csgResultMesh && (this.csgGroup?.children?.length || 0) > 0;
+
+    if (this.viewMode === 'result') {
+      if (this.entityGroup) this.entityGroup.visible = !hasCSG;
+      if (this.csgGroup) this.csgGroup.visible = hasCSG;
+    } else {
+      if (this.entityGroup) this.entityGroup.visible = true;
+      if (this.csgGroup) this.csgGroup.visible = false;
+    }
+
+    if (this._objectSelectionManager?.setSelectableObjects) {
+      const selectable =
+        this.viewMode === 'result' && hasCSG
+          ? [this._csgResultMesh]
+          : this._meshes.filter((mesh: any) => !mesh.userData?.isHelper);
+      this._objectSelectionManager.setSelectableObjects(selectable);
+    }
+  }
+
+  private _clearCSGResult() {
+    if (this.csgGroup) {
+      const children = [...this.csgGroup.children];
+      children.forEach((child: any) => {
+        child.parent?.remove?.(child);
+        child.geometry?.dispose?.();
+        if (child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m: any) => m?.dispose?.());
+        }
+      });
+    }
+    this._csgResultMesh = null;
+    this._syncCSGVisibilityAndSelection();
+  }
+
+  private _scheduleCSGUpdate() {
+    if (this._isDisposed) return;
+    if (this._csgScheduledToken) {
+      clearTimeout(this._csgScheduledToken);
+      this._csgScheduledToken = null;
+    }
+    const token = ++this._csgUpdateToken;
+    this._csgScheduledToken = setTimeout(() => {
+      this._csgScheduledToken = null;
+      this._updateCSG(token).catch((error) => {
+        console.warn('[CSG] update failed:', error);
+      });
+    }, 0);
+  }
+
+  private async _updateCSG(token: number) {
+    if (this._isDisposed) return;
+    if (this._loadTokens.size > 0) return;
+    if (this._csgBusy) return;
+
+    this._csgBusy = true;
+    try {
+      if (token !== this._csgUpdateToken) return;
+
+      const keysInOrder = Array.from(this.document?.models?.keys?.() || []) as string[];
+      const loadedKeys = keysInOrder.filter((key) => this._loadedModels.has(key));
+      const brushes: Array<{ key: string; brush: any; op: any }> = [];
+
+      for (const key of loadedKeys) {
+        const model = this._loadedModels.get(key);
+        if (!model) continue;
+        const brush = createBrushFromObject(model);
+        if (!brush) continue;
+        const entity = this.document?.entityManager?.getEntity?.(key);
+        const op = normalizeModelBooleanOp(entity?.boolean) || 'union';
+        brushes.push({ key, brush, op });
+      }
+
+      if (brushes.length < 2) {
+        brushes.forEach((b) => b.brush?.geometry?.dispose?.());
+        this._clearCSGResult();
+        return;
+      }
+
+      const evaluator = new Evaluator();
+      evaluator.useGroups = true;
+      evaluator.consolidateGroups = true;
+
+      let current = brushes[0].brush;
+      for (let i = 1; i < brushes.length; i++) {
+        const next = brushes[i].brush;
+        const op = brushes[i].op;
+        const operation =
+          op === 'subtract'
+            ? SUBTRACTION
+            : op === 'intersect'
+              ? INTERSECTION
+              : op === 'difference'
+                ? DIFFERENCE
+                : ADDITION;
+
+        const result = evaluator.evaluate(current, next, operation);
+        if (current && current !== brushes[0].brush) {
+          current.geometry?.dispose?.();
+        }
+        current = result;
+      }
+
+      // Dispose input brush geometries (keep final result geometry)
+      for (const b of brushes) {
+        if (b.brush && b.brush !== current) {
+          b.brush.geometry?.dispose?.();
+        }
+      }
+
+      const rawMaterials = current?.material;
+      const clonedMaterials = Array.isArray(rawMaterials)
+        ? rawMaterials.map(
+            (m: any) => (m?.clone ? m.clone() : m) || new THREE.MeshStandardMaterial()
+          )
+        : rawMaterials?.clone
+          ? rawMaterials.clone()
+          : rawMaterials || new THREE.MeshStandardMaterial();
+
+      const resultMesh = new THREE.Mesh(current.geometry, clonedMaterials as any);
+      resultMesh.name = 'csgResult';
+      resultMesh.castShadow = true;
+      resultMesh.receiveShadow = true;
+      resultMesh.userData = {
+        ...(resultMesh.userData || {}),
+        isCSGResult: true,
+      };
+      resultMesh.geometry?.computeVertexNormals?.();
+      resultMesh.geometry?.computeBoundingBox?.();
+      resultMesh.geometry?.computeBoundingSphere?.();
+
+      this._clearCSGResult();
+      this.csgGroup?.add?.(resultMesh);
+      this._csgResultMesh = resultMesh;
+      this._syncCSGVisibilityAndSelection();
+    } finally {
+      this._csgBusy = false;
+      if (!this._isDisposed && token !== this._csgUpdateToken) {
+        this._scheduleCSGUpdate();
+      }
+    }
+  }
+
   private _removeLoadedModel(key: string) {
     this._loadTokens.delete(key);
     const model = this._loadedModels.get(key);
@@ -802,6 +961,7 @@ export class EditorDocumentVisual extends EditorViewer {
       this.removeMesh(model);
       this._loadedModels.delete(key);
     }
+    this._scheduleCSGUpdate();
   }
 
   private _clearLoadedModels() {
@@ -810,6 +970,7 @@ export class EditorDocumentVisual extends EditorViewer {
       this._removeLoadedModel(key);
     }
     this._loadTokens.clear();
+    this._clearCSGResult();
   }
 
   getModelById(modelId: string) {
@@ -842,6 +1003,7 @@ export class EditorDocumentVisual extends EditorViewer {
       }
 
       this.viewMode = mode;
+      this._syncCSGVisibilityAndSelection();
       this.events.emit('viewModeChanged', { mode });
     } finally {
       this._viewModeBusy = false;
@@ -867,6 +1029,10 @@ export class EditorDocumentVisual extends EditorViewer {
       this._textAnchorMesh = null;
     }
     this._clearLoadedModels();
+    if (this._csgScheduledToken) {
+      clearTimeout(this._csgScheduledToken);
+      this._csgScheduledToken = null;
+    }
     super.dispose();
   }
 }

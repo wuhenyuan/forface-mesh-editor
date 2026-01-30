@@ -281,9 +281,10 @@ export class ExportManager {
 
   _getTextureName(texture: THREE.Texture, propName: string) {
     if (texture.name) {
-      return texture.name.includes('.') ? texture.name : `${texture.name}.png`;
+      const dot = texture.name.lastIndexOf('.');
+      return dot > 0 ? `${texture.name.slice(0, dot)}.jpg` : `${texture.name}.jpg`;
     }
-    return `${propName}_${texture.uuid.substring(0, 8)}.png`;
+    return `${propName}_${texture.uuid.substring(0, 8)}.jpg`;
   }
 
   _textureToBlob(texture: THREE.Texture): Blob | null {
@@ -308,15 +309,15 @@ export class ExportManager {
 
       ctx.drawImage(image as CanvasImageSource, 0, 0);
 
-      const dataUrl = canvas.toDataURL('image/png');
-      const base64 = dataUrl.split(',')[1];
-      const binary = atob(base64);
-      const array = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        array[i] = binary.charCodeAt(i);
-      }
+       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+       const base64 = dataUrl.split(',')[1];
+       const binary = atob(base64);
+       const array = new Uint8Array(binary.length);
+       for (let i = 0; i < binary.length; i++) {
+         array[i] = binary.charCodeAt(i);
+       }
 
-      return new Blob([array], { type: 'image/png' });
+      return new Blob([array], { type: 'image/jpeg' });
     } catch (error) {
       console.warn('Texture export failed:', error);
       return null;
