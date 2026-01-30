@@ -4,7 +4,8 @@
  */
 import * as THREE from 'three';
 import { STLExporter, type STLExporterOptions } from 'three/examples/jsm/exporters/STLExporter.js';
-import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+// import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+import { OBJExporter } from './ObjExport';
 import {
   GLTFExporter,
   type GLTFExporterOptions,
@@ -309,13 +310,13 @@ export class ExportManager {
 
       ctx.drawImage(image as CanvasImageSource, 0, 0);
 
-       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-       const base64 = dataUrl.split(',')[1];
-       const binary = atob(base64);
-       const array = new Uint8Array(binary.length);
-       for (let i = 0; i < binary.length; i++) {
-         array[i] = binary.charCodeAt(i);
-       }
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const base64 = dataUrl.split(',')[1];
+      const binary = atob(base64);
+      const array = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i);
+      }
 
       return new Blob([array], { type: 'image/jpeg' });
     } catch (error) {
