@@ -50,13 +50,32 @@ class OBJExporter {
       const uvs = geometry.getAttribute('uv');
       const indices = geometry.getIndex();
 
+      const meshMaterials = Array.isArray(mesh.material)
+        ? mesh.material
+        : mesh.material
+          ? [mesh.material]
+          : [];
+
+      const groups =
+        geometry.groups && geometry.groups.length > 0
+          ? geometry.groups
+          : [
+              {
+                start: 0,
+                count: indices ? indices.count : vertices ? vertices.count : 0,
+                materialIndex: 0,
+              },
+            ];
+
+      function resolveMaterialName(material) {
+        if (!material) return '';
+        if (material.name) return material.name;
+        if (material.uuid) return `material_${material.uuid.substring(0, 8)}`;
+        return '';
+      }
+
       // name of the mesh object
       output += 'o ' + mesh.name + '\n';
-
-      // name of the mesh material
-      if (mesh.material && mesh.material.name) {
-        output += 'usemtl ' + mesh.material.name + '\n';
-      }
 
       // vertices
 
@@ -102,36 +121,66 @@ class OBJExporter {
       // faces
 
       if (indices !== null) {
-        for (let i = 0, l = indices.count; i < l; i += 3) {
-          for (let m = 0; m < 3; m++) {
-            const j = indices.getX(i + m) + 1;
-
-            face[m] =
-              indexVertex +
-              j +
-              (normals || uvs
-                ? '/' + (uvs ? indexVertexUvs + j : '') + (normals ? '/' + (indexNormals + j) : '')
-                : '');
+        for (let g = 0; g < groups.length; g++) {
+          const group = groups[g];
+          const material =
+            meshMaterials.length > 0
+              ? meshMaterials[group.materialIndex] || meshMaterials[0]
+              : null;
+          const materialName = resolveMaterialName(material);
+          if (materialName) {
+            output += 'usemtl ' + materialName + '\n';
           }
+          const start = group.start;
+          const end = group.start + group.count;
+          for (let i = start; i < end; i += 3) {
+            for (let m = 0; m < 3; m++) {
+              const j = indices.getX(i + m) + 1;
 
-          // transform the face to export format
-          output += 'f ' + face.join(' ') + '\n';
+              face[m] =
+                indexVertex +
+                j +
+                (normals || uvs
+                  ? '/' +
+                    (uvs ? indexVertexUvs + j : '') +
+                    (normals ? '/' + (indexNormals + j) : '')
+                  : '');
+            }
+
+            // transform the face to export format
+            output += 'f ' + face.join(' ') + '\n';
+          }
         }
-      } else {
-        for (let i = 0, l = vertices.count; i < l; i += 3) {
-          for (let m = 0; m < 3; m++) {
-            const j = i + m + 1;
-
-            face[m] =
-              indexVertex +
-              j +
-              (normals || uvs
-                ? '/' + (uvs ? indexVertexUvs + j : '') + (normals ? '/' + (indexNormals + j) : '')
-                : '');
+      } else if (vertices !== undefined) {
+        for (let g = 0; g < groups.length; g++) {
+          const group = groups[g];
+          const material =
+            meshMaterials.length > 0
+              ? meshMaterials[group.materialIndex] || meshMaterials[0]
+              : null;
+          const materialName = resolveMaterialName(material);
+          if (materialName) {
+            output += 'usemtl ' + materialName + '\n';
           }
+          const start = group.start;
+          const end = group.start + group.count;
+          for (let i = start; i < end; i += 3) {
+            for (let m = 0; m < 3; m++) {
+              const j = i + m + 1;
 
-          // transform the face to export format
-          output += 'f ' + face.join(' ') + '\n';
+              face[m] =
+                indexVertex +
+                j +
+                (normals || uvs
+                  ? '/' +
+                    (uvs ? indexVertexUvs + j : '') +
+                    (normals ? '/' + (indexNormals + j) : '')
+                  : '');
+            }
+
+            // transform the face to export format
+            output += 'f ' + face.join(' ') + '\n';
+          }
         }
       }
 
