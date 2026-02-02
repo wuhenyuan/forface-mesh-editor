@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { STLExporter, type STLExporterOptions } from 'three/examples/jsm/exporters/STLExporter.js';
 // import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
-import { OBJExporter } from './ObjExport';
+import { OBJExporter } from './export/ObjExport';
 import { collectMaterialsAndTextures, generateMTL } from './export/ObjMtl';
 import {
   GLTFExporter,

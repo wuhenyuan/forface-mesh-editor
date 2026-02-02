@@ -1708,7 +1708,10 @@ export class SurfaceTextManager {
         targetGeometryForCSG,
         textGeometryForCSG,
         null,
-        { textId: textObject.id }
+        {
+          textId: textObject.id,
+          targetMaterial: textObject.originalTargetMaterial,
+        }
       );
 
       console.log('[DEBUG] 布尔操作返回结果:', {
@@ -1745,15 +1748,22 @@ export class SurfaceTextManager {
         // result.materials[1] = 雕刻区域材质
         if (result.materials && result.materials.length > 1) {
           // 使用原始材质的颜色更新布尔操作返回的材质
-          const originalColor = textObject.originalTargetMaterial?.color?.getHex() || 0x409eff;
-          result.materials[0].color.setHex(originalColor);
+          const originalColor =
+            textObject.originalTargetMaterial?.color?.getHex?.() ??
+            result.materials[0]?.color?.getHex?.() ??
+            0x409eff;
+          if (result.materials[0]?.color?.setHex) {
+            result.materials[0].color.setHex(originalColor);
+          }
 
           // 雕刻区域使用深色
           const r = ((originalColor >> 16) & 0xff) * 0.4;
           const g = ((originalColor >> 8) & 0xff) * 0.4;
           const b = (originalColor & 0xff) * 0.4;
           const engravedColor = (Math.floor(r) << 16) | (Math.floor(g) << 8) | Math.floor(b);
-          result.materials[1].color.setHex(engravedColor);
+          if (result.materials[1]?.color?.setHex) {
+            result.materials[1].color.setHex(engravedColor);
+          }
           result.materials[1].userData = { textId: textObject.id, isEngravedText: true };
 
           // 设置多材质

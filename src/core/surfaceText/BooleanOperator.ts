@@ -171,16 +171,36 @@ export class BooleanOperator {
       // 创建材质用于标识来源
       // 材质0: 原始表面
       // 材质1: 雕刻区域（来自文字几何体的切割面）
-      const targetMaterial = new THREE.MeshStandardMaterial({
-        color: 0x409eff,
-        name: 'original_surface',
-      });
-      const toolMaterial = new THREE.MeshStandardMaterial({
-        color: 0xff0000,
-        name: options.textId ? `engraved_${options.textId}` : 'engraved_text',
-      });
+      const providedTargetMaterial = options.targetMaterial || options.baseMaterial;
+      const providedToolMaterial = options.toolMaterial || options.engravedMaterial;
+      const targetMaterial =
+        providedTargetMaterial && typeof providedTargetMaterial.clone === 'function'
+          ? providedTargetMaterial.clone()
+          : providedTargetMaterial ||
+            new THREE.MeshStandardMaterial({
+              color: 0x409eff,
+              name: 'original_surface',
+            });
+      if (targetMaterial && !targetMaterial.name) {
+        targetMaterial.name = 'original_surface';
+      }
+      const toolMaterial =
+        providedToolMaterial && typeof providedToolMaterial.clone === 'function'
+          ? providedToolMaterial.clone()
+          : providedToolMaterial ||
+            new THREE.MeshStandardMaterial({
+              color: 0xff0000,
+              name: options.textId ? `engraved_${options.textId}` : 'engraved_text',
+            });
+      if (toolMaterial && !toolMaterial.name) {
+        toolMaterial.name = options.textId ? `engraved_${options.textId}` : 'engraved_text';
+      }
       // 存储 textId 到材质的 userData
-      toolMaterial.userData = { textId: options.textId, isEngravedText: true };
+      toolMaterial.userData = {
+        ...(toolMaterial.userData || {}),
+        textId: options.textId,
+        isEngravedText: true,
+      };
 
       // 创建 Brush 对象，带材质
       const targetBrush = this.createBrush(targetGeometry, targetMaterial);
