@@ -14,8 +14,11 @@ export { ExportManager } from './ExportManager';
 export { ProjectManager } from './ProjectManager';
 export { default as CoreEmitter } from './CoreEmitter';
 
-// 子模块
-export * from './facePicking';
-export * from './surfaceText';
-export * from './objectSelection';
-export * from './history';
+// 新架构模块
+export { Editor } from './Editor';
+export * from './Document/Entity';
+export * from './Document/EntityManager';
+export * from './visual';
+export * from './boolean';
+export * from './text';
+export * from './interaction';

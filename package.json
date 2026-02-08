@@ -50,6 +50,7 @@
   },
   "scripts": {
     "dev": "vite --config vite.dev.config.ts",
+    "demodev": "cd examples/vite-vue2-demo && npm run dev",
     "build": "vite build --config vite.config.ts",
     "build:lib": "vite build --mode lib --config vite.config.ts",
     "eslint:fix": "eslint \"src/**/*.{js,ts,vue}\" \"config/**/*.{js,ts}\" --fix",

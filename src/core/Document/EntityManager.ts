@@ -1,185 +1,158 @@
-import EventManager from '../EventManager';
-import { DocumentEventBus } from './EventBus';
 import { Entity, EntityPatch, EntityProps, EntityType, ModelEntity, TextEntity } from './Entity';
 
 export interface EntityEventPayload {
   id: string;
-  key: string;
   type: EntityType;
   entity: Entity;
 }
 
 export interface EntityUpdatedPayload extends EntityEventPayload {
   patch: EntityPatch;
-  reload: boolean;
 }
 
-export class EntityManager {
-  events: DocumentEventBus;
-  private _entities: Map<string, Entity>;
+type EventCallback = (payload: any) => void;
 
-  constructor(options: { events?: DocumentEventBus } = {}) {
-    this.events = options.events || new EventManager();
+/**
+ * 实体管理器
+ * 职责：管理所有实体数据，提供 CRUD 接口，发送变更事件
+ */
+export class EntityManager {
+  private _entities: Map<string, Entity>;
+  private _listeners: Map<string, Set<EventCallback>>;
+
+  constructor() {
     this._entities = new Map();
+    this._listeners = new Map();
   }
 
-  get entities() {
+  get entities(): Map<string, Entity> {
     return this._entities;
   }
 
-  getEntity(id: string) {
+  /**
+   * 获取实体
+   */
+  getEntity(id: string): Entity | null {
     return this._entities.get(id) || null;
   }
 
-  getEntitiesByType(type: EntityType) {
-    const result = new Map<string, Entity>();
-    for (const [id, entity] of this._entities.entries()) {
-      if (entity.type === type) {
-        result.set(id, entity);
-      }
-    }
-    return result;
+  /**
+   * 获取所有实体
+   */
+  getAllEntities(): Entity[] {
+    return Array.from(this._entities.values());
   }
 
-  addEntity(entityOrProps: Entity | EntityProps, options: { silent?: boolean } = {}) {
+  /**
+   * 按类型获取实体
+   */
+  getEntitiesByType(type: EntityType): Entity[] {
+    return this.getAllEntities().filter((e) => e.type === type);
+  }
+
+  /**
+   * 添加实体
+   */
+  addEntity(entityOrProps: Entity | EntityProps): Entity {
     const entity = this._normalizeEntity(entityOrProps);
     this._entities.set(entity.id, entity);
-    if (!options.silent) {
-      this.events.emit('entityAdded', {
-        id: entity.id,
-        key: entity.id,
-        entity,
-        type: entity.type,
-      });
-      this.events.emit('addEntity', {
-        id: entity.id,
-        key: entity.id,
-        entity,
-        type: entity.type,
-      });
-    }
+
+    this._emit('entityAdded', {
+      id: entity.id,
+      type: entity.type,
+      entity,
+    });
+
     return entity;
   }
 
-  updateEntity(id: string, patch: EntityPatch = {}, options: { silent?: boolean } = {}) {
+  /**
+   * 更新实体
+   */
+  updateEntity(id: string, patch: EntityPatch = {}): boolean {
     const entity = this._entities.get(id);
     if (!entity) return false;
 
-    const nextPatch = this._normalizePatch(entity, patch);
-    entity.update(nextPatch);
+    entity.update(patch);
 
-    const reload =
-      entity.type === 'model' &&
-      (nextPatch.resource !== undefined || (nextPatch as ModelEntity).loaderOptions !== undefined);
+    this._emit('entityUpdated', {
+      id,
+      type: entity.type,
+      entity,
+      patch,
+    });
 
-    if (!options.silent) {
-      this.events.emit('entityUpdated', {
-        id,
-        key: id,
-        entity,
-        patch: nextPatch,
-        reload,
-        type: entity.type,
-      });
-      this.events.emit('updateEntity', {
-        id,
-        key: id,
-        entity,
-        patch: nextPatch,
-        reload,
-        type: entity.type,
-      });
-    }
     return true;
   }
 
-  removeEntity(id: string, options: { silent?: boolean } = {}) {
+  /**
+   * 删除实体
+   */
+  delEntity(id: string): boolean {
     const entity = this._entities.get(id);
     if (!entity) return false;
 
     this._entities.delete(id);
-    if (!options.silent) {
-      this.events.emit('entityRemoved', {
-        id,
-        key: id,
-        entity,
-        type: entity.type,
-      });
-      this.events.emit('delEntity', {
-        id,
-        key: id,
-        entity,
-        type: entity.type,
-      });
-    }
+
+    this._emit('entityRemoved', {
+      id,
+      type: entity.type,
+      entity,
+    });
+
     return true;
   }
 
-  delEntity(id: string, options: { silent?: boolean } = {}) {
-    return this.removeEntity(id, options);
-  }
-
-  clear(options: { silent?: boolean } = {}) {
-    if (!options.silent) {
-      for (const [id, entity] of this._entities.entries()) {
-        this.events.emit('entityRemoved', {
-          id,
-          key: id,
-          entity,
-          type: entity.type,
-        });
-        this.events.emit('delEntity', {
-          id,
-          key: id,
-          entity,
-          type: entity.type,
-        });
-      }
-    }
+  /**
+   * 清空所有实体
+   */
+  clear(): void {
+    const entities = this.getAllEntities();
     this._entities.clear();
+
+    entities.forEach((entity) => {
+      this._emit('entityRemoved', {
+        id: entity.id,
+        type: entity.type,
+        entity,
+      });
+    });
   }
 
-  replaceAll(entities: Array<Entity | EntityProps>, options: { silent?: boolean } = {}) {
-    const silent = !!options.silent;
-    this.clear({ silent: true });
-    for (const entity of entities) {
-      this.addEntity(entity, { silent: true });
+  /**
+   * 监听事件
+   */
+  on(event: 'entityAdded' | 'entityUpdated' | 'entityRemoved', callback: EventCallback): void {
+    if (!this._listeners.has(event)) {
+      this._listeners.set(event, new Set());
     }
-    if (!silent) {
-      for (const [id, entity] of this._entities.entries()) {
-        this.events.emit('entityAdded', {
-          id,
-          key: id,
-          entity,
-          type: entity.type,
-        });
-        this.events.emit('addEntity', {
-          id,
-          key: id,
-          entity,
-          type: entity.type,
-        });
+    this._listeners.get(event)!.add(callback);
+  }
+
+  /**
+   * 移除监听
+   */
+  off(event: string, callback: EventCallback): void {
+    this._listeners.get(event)?.delete(callback);
+  }
+
+  /**
+   * 发出事件
+   */
+  private _emit(event: string, payload: any): void {
+    this._listeners.get(event)?.forEach((cb) => {
+      try {
+        cb(payload);
+      } catch (e) {
+        console.error(`[EntityManager] Error in ${event} callback:`, e);
       }
-    }
+    });
   }
 
-  on(event: string, callback: (...args: any[]) => void) {
-    return this.events.on(event, callback);
-  }
-
-  once(event: string, callback: (...args: any[]) => void) {
-    return this.events.once(event, callback);
-  }
-
-  off(event: string, callback?: (...args: any[]) => void) {
-    return this.events.off(event, callback);
-  }
-
-  onAny(callback: (event: string, data?: any) => void) {
-    return this.events.onAny(callback);
-  }
-
-  private _normalizeEntity(entityOrProps: Entity | EntityProps) {
+  /**
+   * 标准化实体
+   */
+  private _normalizeEntity(entityOrProps: Entity | EntityProps): Entity {
     if (entityOrProps instanceof Entity) {
       return entityOrProps;
     }
@@ -191,29 +164,11 @@ export class EntityManager {
     return new ModelEntity(entityOrProps);
   }
 
-  private _normalizePatch(entity: Entity, patch: EntityPatch) {
-    if (entity.type !== 'model') {
-      return patch;
-    }
-
-    const model = entity as ModelEntity;
-    const nextPatch: EntityPatch = { ...patch };
-
-    if ((patch as ModelEntity).loaderOptions) {
-      nextPatch.loaderOptions = {
-        ...(model.loaderOptions || {}),
-        ...(patch as ModelEntity).loaderOptions,
-      };
-    }
-
-    if ((patch as ModelEntity).visualOptions) {
-      nextPatch.visualOptions = {
-        ...(model.visualOptions || {}),
-        ...(patch as ModelEntity).visualOptions,
-      };
-    }
-
-    return nextPatch;
+  /**
+   * 导出所有实体数据
+   */
+  toJSON(): Record<string, any>[] {
+    return this.getAllEntities().map((e) => e.toJSON());
   }
 }
 

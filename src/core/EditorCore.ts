@@ -2,10 +2,6 @@ import Document from './Document';
 import EditorDocumentVisual from './EditorDocumentVisual';
 import AssetsManager from './AssetsManager';
 import CoreEmitter from './CoreEmitter';
-import EditorSceneManager from './EditorSceneManager';
-import { AddEntityCommand } from './history/AddEntityCommand';
-import { UpdateEntityCommand } from './history/UpdateEntityCommand';
-import { RemoveEntityCommand } from './history/RemoveEntityCommand';
 import type { EntityProps } from './Document/Entity';
 
 export type EditorCoreEvents = Record<string, any>;
@@ -15,72 +11,41 @@ export default class EditorCore {
   documentVisual: EditorDocumentVisual;
   assetsManager: AssetsManager;
   emitter: CoreEmitter<EditorCoreEvents>;
-  sceneManager: EditorSceneManager;
 
   constructor(dom: HTMLElement, options: Record<string, any> = {}) {
-    const { history, ...viewerOptions } = options;
     this.emitter = new CoreEmitter<EditorCoreEvents>();
     this.assetsManager = new AssetsManager();
     this.document = new Document({ events: this.emitter });
     this.documentVisual = new EditorDocumentVisual(this.document, this.assetsManager, dom, {
-      ...viewerOptions,
+      ...options,
       events: this.emitter,
       entityHandler: {
-        addEntity: (entity: EntityProps, options: Record<string, any> = {}) =>
-          this.addEntity(entity, options),
-        updateEntity: (id: string, patch: Record<string, any>, options: Record<string, any> = {}) =>
-          this.updateEntity(id, patch, options),
-        delEntity: (id: string, options: Record<string, any> = {}) => this.delEntity(id, options),
+        addEntity: (entity: EntityProps, opts: Record<string, any> = {}) =>
+          this.addEntity(entity, opts),
+        updateEntity: (id: string, patch: Record<string, any>, opts: Record<string, any> = {}) =>
+          this.updateEntity(id, patch, opts),
+        delEntity: (id: string, opts: Record<string, any> = {}) => this.delEntity(id, opts),
       },
     });
-    this.sceneManager = new EditorSceneManager({
-      viewer: this.documentVisual,
-      history,
-    });
-
-    const historyManager = this.sceneManager?.history;
-    if (historyManager?.setOnChange) {
-      historyManager.setOnChange((snapshot: Record<string, any>) => {
-        this.emitter.emit('historyChanged', snapshot);
-      });
-    }
   }
 
-  async addEntity(entity: EntityProps, options: Record<string, any> = {}) {
+  async addEntity(entity: EntityProps, _options: Record<string, any> = {}) {
     if (!entity) return null;
-    const history = this.sceneManager?.history;
-    if (!history) {
-      return this.document.addEntity(entity);
-    }
-    const command = new AddEntityCommand(this.document, entity, options);
-    await history.execute(command);
-    return command.entityId ? this.document.entityManager.getEntity(command.entityId) : null;
+    return this.document.addEntity(entity);
   }
 
   async updateEntity(
     id: string,
     patch: Record<string, any> = {},
-    options: Record<string, any> = {}
+    _options: Record<string, any> = {}
   ) {
     if (!id) return false;
-    const history = this.sceneManager?.history;
-    if (!history) {
-      return this.document.updateEntity(id, patch);
-    }
-    const command = new UpdateEntityCommand(this.document, id, patch, options);
-    await history.execute(command);
-    return true;
+    return this.document.updateEntity(id, patch);
   }
 
-  async delEntity(id: string, options: Record<string, any> = {}) {
+  async delEntity(id: string, _options: Record<string, any> = {}) {
     if (!id) return false;
-    const history = this.sceneManager?.history;
-    if (!history) {
-      return this.document.removeEntity(id);
-    }
-    const command = new RemoveEntityCommand(this.document, id, options);
-    await history.execute(command);
-    return true;
+    return this.document.removeEntity(id);
   }
 
   async removeEntity(id: string, options: Record<string, any> = {}) {
@@ -89,26 +54,6 @@ export default class EditorCore {
 
   load(config: Record<string, any> = {}) {
     return this.document?.load?.(config);
-  }
-
-  async executeCommand(command: any) {
-    const history = this.sceneManager?.history;
-    if (history?.execute) {
-      return await history.execute(command);
-    }
-    return await command?.execute?.();
-  }
-
-  async undo() {
-    return await this.sceneManager?.history?.undo?.();
-  }
-
-  async redo() {
-    return await this.sceneManager?.history?.redo?.();
-  }
-
-  getHistorySnapshot() {
-    return this.sceneManager?.history?.getSnapshot?.() || null;
   }
 
   async setViewMode(mode: 'construct' | 'result') {
@@ -123,32 +68,12 @@ export default class EditorCore {
     return this.documentVisual?.resetView?.();
   }
 
-  initTextSystem() {
-    return this.documentVisual?.initTextSystem?.();
-  }
-
-  initObjectSelection() {
-    return this.documentVisual?.initObjectSelection?.();
-  }
-
-  enableTextMode() {
-    return this.documentVisual?.enableTextMode?.();
-  }
-
-  disableTextMode() {
-    return this.documentVisual?.disableTextMode?.();
-  }
-
   focusOn(target: any) {
     return this.documentVisual?.focusOn?.(target);
   }
 
   screenshot(options: Record<string, any> = {}) {
     return this.documentVisual?.screenshot?.(options);
-  }
-
-  selectText(textId: string) {
-    return this.documentVisual?.selectText?.(textId);
   }
 
   selectObject(target: any) {
@@ -203,8 +128,6 @@ export default class EditorCore {
 
   dispose() {
     this.emitter.clear();
-    this.sceneManager?.history?.setOnChange?.(null);
-    this.sceneManager?.dispose();
     this.documentVisual?.dispose();
     this.document?.dispose();
     this.assetsManager?.dispose();

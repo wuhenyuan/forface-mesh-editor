@@ -6,6 +6,8 @@ export type EntityVector3 = [number, number, number];
 
 export type EntityResource = Blob | File | string;
 
+export type BooleanType = 'none' | 'subtract' | 'union';
+
 export interface BaseEntityProps {
   id?: string;
   type: EntityType;
@@ -14,22 +16,20 @@ export interface BaseEntityProps {
   rotation?: EntityVector3;
   scale?: EntityVector3;
   color?: EntityColor;
+  booleanType?: BooleanType;
   meta?: Record<string, any>;
-  boolean?: string;
 }
 
 export interface ModelEntityProps extends BaseEntityProps {
   type: 'model';
   resource: EntityResource;
-  loaderOptions?: Record<string, any>;
-  visualOptions?: Record<string, any>;
 }
 
 export interface TextEntityProps extends BaseEntityProps {
   type: 'text';
   resource?: EntityResource;
-  textType?: string;
-  content?: string;
+  fontType?: string;
+  text?: string;
   size?: number;
   depth?: number;
 }
@@ -48,58 +48,82 @@ export class Entity {
   id: string;
   type: EntityType;
   resource?: EntityResource;
-  position?: EntityVector3;
-  rotation?: EntityVector3;
-  scale?: EntityVector3;
-  color?: EntityColor;
+  position: EntityVector3;
+  rotation: EntityVector3;
+  scale: EntityVector3;
+  color: EntityColor;
+  booleanType: BooleanType;
   meta?: Record<string, any>;
-  boolean?: string;
 
   constructor(props: BaseEntityProps) {
     this.id = props.id || generateEntityId();
     this.type = props.type;
     this.resource = props.resource;
-    this.position = props.position;
-    this.rotation = props.rotation;
-    this.scale = props.scale;
-    this.color = props.color;
+    this.position = props.position || [0, 0, 0];
+    this.rotation = props.rotation || [0, 0, 0];
+    this.scale = props.scale || [1, 1, 1];
+    this.color = props.color ?? 0x409eff;
+    this.booleanType = props.booleanType || 'none';
     this.meta = props.meta;
-    this.boolean = props.boolean;
   }
 
   update(patch: EntityPatch) {
     Object.assign(this, patch);
   }
+
+  toJSON(): Record<string, any> {
+    return {
+      id: this.id,
+      type: this.type,
+      resource: this.resource,
+      position: this.position,
+      rotation: this.rotation,
+      scale: this.scale,
+      color: this.color,
+      booleanType: this.booleanType,
+      meta: this.meta,
+    };
+  }
 }
 
 export class ModelEntity extends Entity {
-  type: 'model';
-  resource: EntityResource;
-  loaderOptions?: Record<string, any>;
-  visualOptions?: Record<string, any>;
+  type: 'model' = 'model';
+  declare resource: EntityResource;
 
   constructor(props: ModelEntityProps) {
     super(props);
-    this.type = 'model';
     this.resource = props.resource;
-    this.loaderOptions = props.loaderOptions;
-    this.visualOptions = props.visualOptions;
+  }
+
+  toJSON(): Record<string, any> {
+    return {
+      ...super.toJSON(),
+    };
   }
 }
 
 export class TextEntity extends Entity {
-  type: 'text';
-  textType?: string;
-  content?: string;
-  size?: number;
-  depth?: number;
+  type: 'text' = 'text';
+  fontType: string;
+  text: string;
+  size: number;
+  depth: number;
 
   constructor(props: TextEntityProps) {
     super(props);
-    this.type = 'text';
-    this.textType = props.textType;
-    this.content = props.content;
-    this.size = props.size;
-    this.depth = props.depth;
+    this.fontType = props.fontType || 'helvetiker';
+    this.text = props.text || '';
+    this.size = props.size ?? 3;
+    this.depth = props.depth ?? 0.5;
+  }
+
+  toJSON(): Record<string, any> {
+    return {
+      ...super.toJSON(),
+      fontType: this.fontType,
+      text: this.text,
+      size: this.size,
+      depth: this.depth,
+    };
   }
 }

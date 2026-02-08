@@ -14,7 +14,7 @@
 
 <script>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
-import { EditorCore, TransformCommand } from '../core';
+import { EditorCore } from '../core';
 import { EntityEvent } from '../types/events';
 import { useEditorStore } from '../store';
 import { ContextMenu, ColorPicker, EditMenu, FloatingTooltip } from './floating';
@@ -284,16 +284,8 @@ export default {
               console.error('更新实体变换失败:', err);
             });
         } else {
-          store
-            .executeCommand(
-              new TransformCommand(selectedObject, before, after, {
-                description,
-                document: core?.document,
-              })
-            )
-            .catch((err) => {
-              console.error('记录变换失败:', err);
-            });
+          // 直接应用变换（历史记录已移除）
+          console.log('变换已应用:', description);
         }
         lastTransformPayload = null;
       });

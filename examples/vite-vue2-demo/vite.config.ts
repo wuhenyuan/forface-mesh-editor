@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [createVuePlugin()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': resolve(__dirname, '../../src'),
     },
   },
   server: {

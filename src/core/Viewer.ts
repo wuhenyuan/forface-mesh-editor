@@ -1,17 +1,41 @@
 /**
  * 3D 场景查看器
- * 封装 Three.js 场景管理和所有 3D 交互逻辑
+ * 简化版本 - 封装 Three.js 场景管理
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { EventManager } from './EventManager';
-import { OptimizedFacePicker } from './facePicking/OptimizedFacePicker';
-import { FeatureDetector } from './facePicking/FeatureDetector';
-import { FeatureBasedNaming } from './facePicking/FeatureBasedNaming';
 
 export class Viewer {
   [key: string]: any;
+
+  container: HTMLElement;
+  options: Record<string, any>;
+  scene: THREE.Scene | null = null;
+  camera: THREE.PerspectiveCamera | null = null;
+  renderer: THREE.WebGLRenderer | null = null;
+  controls: OrbitControls | null = null;
+  entityGroup: THREE.Group | null = null;
+  csgGroup: THREE.Group | null = null;
+  events: EventManager;
+
+  _animationId: number | null = null;
+  _isDisposed = false;
+  _meshes: THREE.Mesh[] = [];
+  _selectableObjects: THREE.Object3D[] = [];
+  _selectedObject: THREE.Object3D | null = null;
+  _hoveredObject: THREE.Object3D | null = null;
+
+  _raycaster = new THREE.Raycaster();
+  _mouse = new THREE.Vector2();
+
+  _mouseState = {
+    isDown: false,
+    startPosition: { x: 0, y: 0 },
+    dragThreshold: 10,
+    hasDragged: false,
+  };
 
   constructor(container: HTMLElement, options: Record<string, any> = {}) {
     const { events, ...viewerOptions } = options;
@@ -24,43 +48,8 @@ export class Viewer {
       ...viewerOptions,
     };
 
-    // 核心对象
-    this.scene = null;
-    this.camera = null;
-    this.renderer = null;
-    this.controls = null;
-    this.entityGroup = null;
-    this.csgGroup = null;
-
-    // 事件管理器
     this.events = events || new EventManager();
 
-    // 状态
-    this._animationId = null;
-    this._isDisposed = false;
-
-    // 对象管理
-    this._meshes = []; // 所有网格对象
-    this._selectableObjects = []; // 可选择的对象
-    this._selectedObject = null;
-    this._hoveredObject = null;
-
-    // 交互
-    this._raycaster = new THREE.Raycaster();
-    this._mouse = new THREE.Vector2();
-
-    // 子系统（延迟初始化）
-    this._facePicker = null;
-    this._surfaceTextManager = null;
-    this._objectSelectionManager = null;
-
-    // 特征检测系统
-    this._featureDetector = new FeatureDetector();
-    this._featureNaming = new FeatureBasedNaming();
-    this._featureOnlyMode = false; // 只允许选中特征面的开关
-    this._detectedFeatures = new Map(); // meshId -> features
-
-    // 初始化
     this._init();
     this._bindEvents();
     this._animate();
@@ -86,7 +75,7 @@ export class Viewer {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(this.options.backgroundColor);
 
-    // 实体与布尔结果分组（都挂到 scene）
+    // 实体与布尔结果分组
     this.entityGroup = new THREE.Group();
     this.entityGroup.name = 'entityGroup';
     this.scene.add(this.entityGroup);
@@ -108,123 +97,76 @@ export class Viewer {
     if (this.options.enableGrid) {
       this._setupGrid();
     }
-
-    // 初始化面拾取器
-    this._initFacePicker();
-  }
-
-  /**
-   * 初始化面拾取器
-   */
-  _initFacePicker() {
-    this._facePicker = new OptimizedFacePicker(
-      this.scene,
-      this.camera,
-      this.renderer,
-      this.renderer.domElement
-    );
-
-    // 监听面拾取事件
-    this._facePicker.on('faceSelected', (faceInfo, event) => {
-      this.events.emit('faceSelected', { faceInfo, event });
-    });
-
-    this._facePicker.on('faceDeselected', (faceInfo, event) => {
-      this.events.emit('faceDeselected', { faceInfo, event });
-    });
-
-    this._facePicker.on('featureSelected', (data) => {
-      this.events.emit('featureSelected', data);
-    });
-
-    this._facePicker.on('selectionChanged', (summary) => {
-      this.events.emit('faceSelectionChanged', summary);
-    });
   }
 
   _setupLighting() {
     const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
-    this.scene.add(hemi);
+    this.scene!.add(hemi);
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.35);
-    this.scene.add(ambient);
+    this.scene!.add(ambient);
 
     const dir = new THREE.DirectionalLight(0xffffff, 0.6);
     dir.position.set(5, 10, 7.5);
     dir.castShadow = true;
     dir.shadow.mapSize.width = 2048;
     dir.shadow.mapSize.height = 2048;
-    this.scene.add(dir);
+    this.scene!.add(dir);
   }
 
   _setupGrid() {
     const grid = new THREE.GridHelper(20, 20, 0xcccccc, 0xeeeeee);
     grid.userData.isHelper = true;
-    this.scene.add(grid);
+    this.scene!.add(grid);
   }
 
   // ==================== 事件绑定 ====================
 
   _bindEvents() {
-    const canvas = this.renderer.domElement;
+    const canvas = this.renderer!.domElement;
 
-    this._onClick = this._onClick.bind(this);
     this._onDblClick = this._onDblClick.bind(this);
     this._onContextMenu = this._onContextMenu.bind(this);
     this._onMouseMove = this._onMouseMove.bind(this);
     this._onMouseDown = this._onMouseDown.bind(this);
     this._onMouseUp = this._onMouseUp.bind(this);
     this._onResize = this._onResize.bind(this);
-    this._onKeyDown = this._onKeyDown.bind(this);
 
-    canvas.addEventListener('click', this._onClick);
     canvas.addEventListener('dblclick', this._onDblClick);
     canvas.addEventListener('contextmenu', this._onContextMenu);
     canvas.addEventListener('mousemove', this._onMouseMove);
     canvas.addEventListener('mousedown', this._onMouseDown);
     canvas.addEventListener('mouseup', this._onMouseUp);
-
     window.addEventListener('resize', this._onResize);
-    window.addEventListener('keydown', this._onKeyDown);
   }
 
   _unbindEvents() {
-    const canvas = this.renderer.domElement;
+    const canvas = this.renderer!.domElement;
 
-    canvas.removeEventListener('click', this._onClick);
     canvas.removeEventListener('dblclick', this._onDblClick);
     canvas.removeEventListener('contextmenu', this._onContextMenu);
     canvas.removeEventListener('mousemove', this._onMouseMove);
     canvas.removeEventListener('mousedown', this._onMouseDown);
     canvas.removeEventListener('mouseup', this._onMouseUp);
-
     window.removeEventListener('resize', this._onResize);
-    window.removeEventListener('keydown', this._onKeyDown);
   }
 
   // ==================== 事件处理 ====================
 
-  _updateMouse(event) {
-    const rect = this.renderer.domElement.getBoundingClientRect();
+  _updateMouse(event: MouseEvent) {
+    const rect = this.renderer!.domElement.getBoundingClientRect();
     this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
-  _raycast(objects = null) {
-    this._raycaster.setFromCamera(this._mouse, this.camera);
+  _raycast(objects: THREE.Object3D[] | null = null) {
+    this._raycaster.setFromCamera(this._mouse, this.camera!);
     const targets = objects || this._selectableObjects.filter((obj) => obj.visible);
     return this._raycaster.intersectObjects(targets, true);
   }
 
-  _getTargetType(object) {
-    if (!object) return 'empty';
-    if (object.userData.isText) return 'text';
-    if (object.userData.isSurface || object.userData.isMesh) return 'surface';
-    return 'object';
-  }
-
-  _findSelectableParent(object) {
-    let current = object;
+  _findSelectableParent(object: THREE.Object3D) {
+    let current: THREE.Object3D | null = object;
     while (current) {
       if (this._selectableObjects.includes(current)) {
         return current;
@@ -234,46 +176,7 @@ export class Viewer {
     return object;
   }
 
-  _onClick(event) {
-    this._updateMouse(event);
-    const intersects = this._raycast();
-
-    if (intersects.length > 0) {
-      const hit = intersects[0];
-      const target = this._findSelectableParent(hit.object);
-
-      // 特征面过滤模式检查
-      if (this._featureOnlyMode && hit.faceIndex !== undefined) {
-        const feature = this.getFeatureByFace(hit.object, hit.faceIndex);
-        if (!feature) {
-          // 未识别的面，不触发点击事件
-          console.log('[Viewer] 特征面过滤: 点击的面未被识别为特征');
-          this.events.emit('click', {
-            target: null,
-            targetType: 'empty',
-            event,
-            filtered: true,
-            reason: 'not_a_feature',
-          });
-          return;
-        }
-      }
-
-      this.events.emit('click', {
-        target,
-        targetType: this._getTargetType(target),
-        point: hit.point,
-        faceIndex: hit.faceIndex,
-        face: hit.face,
-        uv: hit.uv,
-        event,
-      });
-    } else {
-      this.events.emit('click', { target: null, targetType: 'empty', event });
-    }
-  }
-
-  _onDblClick(event) {
+  _onDblClick(event: MouseEvent) {
     this._updateMouse(event);
     const intersects = this._raycast();
 
@@ -283,7 +186,6 @@ export class Viewer {
 
       this.events.emit('dblclick', {
         target,
-        targetType: this._getTargetType(target),
         point: hit.point,
         faceIndex: hit.faceIndex,
         face: hit.face,
@@ -292,90 +194,99 @@ export class Viewer {
     }
   }
 
-  _onContextMenu(event) {
+  _onContextMenu(event: MouseEvent) {
     event.preventDefault();
     this._updateMouse(event);
     const intersects = this._raycast();
 
     let target = null;
-    let targetType = 'empty';
     let point = null;
-    let faceIndex = null;
 
     if (intersects.length > 0) {
       const hit = intersects[0];
       target = this._findSelectableParent(hit.object);
-      targetType = this._getTargetType(target);
       point = hit.point;
-      faceIndex = hit.faceIndex;
     }
 
     this.events.emit('contextmenu', {
       x: event.clientX,
       y: event.clientY,
       target,
-      targetType,
       point,
-      faceIndex,
       event,
     });
   }
 
-  _onMouseMove(event) {
-    this._updateMouse(event);
-    const intersects = this._raycast();
+  _onMouseMove(event: MouseEvent) {
+    if (this._mouseState.isDown && !this._mouseState.hasDragged) {
+      const deltaX = Math.abs(event.clientX - this._mouseState.startPosition.x);
+      const deltaY = Math.abs(event.clientY - this._mouseState.startPosition.y);
 
-    const newHovered =
-      intersects.length > 0 ? this._findSelectableParent(intersects[0].object) : null;
-
-    if (newHovered !== this._hoveredObject) {
-      if (this._hoveredObject) {
-        this.events.emit('hoverEnd', { target: this._hoveredObject });
-      }
-
-      this._hoveredObject = newHovered;
-
-      if (newHovered) {
-        this.events.emit('hover', {
-          target: newHovered,
-          targetType: this._getTargetType(newHovered),
-          point: intersects[0]?.point,
-          event,
-        });
+      if (deltaX > this._mouseState.dragThreshold || deltaY > this._mouseState.dragThreshold) {
+        this._mouseState.hasDragged = true;
       }
     }
 
-    this.events.emit('mousemove', { event, intersects });
+    this._updateMouse(event);
+    this.events.emit('mousemove', { event });
   }
 
-  _onMouseDown(event) {
+  _onMouseDown(event: MouseEvent) {
+    if (event.button !== 0) return;
+
+    this._mouseState.isDown = true;
+    this._mouseState.startPosition = { x: event.clientX, y: event.clientY };
+    this._mouseState.hasDragged = false;
+
     this.events.emit('mousedown', { event });
   }
 
-  _onMouseUp(event) {
+  _onMouseUp(event: MouseEvent) {
+    if (event.button !== 0) {
+      this.events.emit('mouseup', { event });
+      return;
+    }
+
+    if (this._mouseState.isDown) {
+      const deltaX = Math.abs(event.clientX - this._mouseState.startPosition.x);
+      const deltaY = Math.abs(event.clientY - this._mouseState.startPosition.y);
+      const hasDragged = deltaX > this._mouseState.dragThreshold || deltaY > this._mouseState.dragThreshold;
+
+      if (!hasDragged) {
+        this._performClick(event);
+      }
+    }
+
+    this._mouseState.isDown = false;
+    this._mouseState.hasDragged = false;
     this.events.emit('mouseup', { event });
+  }
+
+  _performClick(event: MouseEvent) {
+    this._updateMouse(event);
+    const intersects = this._raycast();
+
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      const target = this._findSelectableParent(hit.object);
+
+      this.events.emit('click', {
+        target,
+        point: hit.point,
+        faceIndex: hit.faceIndex,
+        event,
+      });
+    } else {
+      this.events.emit('click', { target: null, event });
+    }
   }
 
   _onResize() {
     const rect = this.container.getBoundingClientRect();
-    this.camera.aspect = rect.width / rect.height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(rect.width, rect.height);
-
+    this.camera!.aspect = rect.width / rect.height;
+    this.camera!.updateProjectionMatrix();
+    this.renderer!.setSize(rect.width, rect.height);
     this.events.emit('resize', { width: rect.width, height: rect.height });
-  }
-
-  _onKeyDown(event) {
-    this.events.emit('keydown', { key: event.key, event });
-
-    if (event.key === 'Escape') {
-      this.clearSelection();
-      this.events.emit('escape');
-    }
-
-    if (event.key === 'Delete' && this._selectedObject) {
-      this.events.emit('deleteRequest', { target: this._selectedObject });
-    }
   }
 
   // ==================== 渲染循环 ====================
@@ -384,32 +295,26 @@ export class Viewer {
     if (this._isDisposed) return;
 
     this._animationId = requestAnimationFrame(() => this._animate());
-    this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.controls?.update();
+    this.renderer!.render(this.scene!, this.camera!);
   }
 
-  // ==================== 对象管理 ====================
+  // ==================== 网格管理 ====================
 
-  /**
-   * 添加网格到场景
-   */
-  addMesh(mesh: any, options: Record<string, any> = {}) {
-    const { selectable = true, castShadow = true, receiveShadow = true, group = 'entity' } = options;
+  addMesh(mesh: THREE.Object3D, options: Record<string, any> = {}) {
+    const { selectable = true, addToEntityGroup = true } = options;
 
-    mesh.castShadow = castShadow;
-    mesh.receiveShadow = receiveShadow;
+    if (addToEntityGroup && this.entityGroup) {
+      this.entityGroup.add(mesh);
+    } else {
+      this.scene!.add(mesh);
+    }
 
-    const targetGroup =
-      group === 'scene'
-        ? this.scene
-        : group === 'csg'
-          ? (this.csgGroup || this.scene)
-          : (this.entityGroup || this.scene);
+    if (mesh instanceof THREE.Mesh) {
+      this._meshes.push(mesh);
+    }
 
-    targetGroup.add(mesh);
-    this._meshes.push(mesh);
-
-    if (selectable && !mesh.userData.isHelper) {
+    if (selectable) {
       this._selectableObjects.push(mesh);
     }
 
@@ -417,64 +322,83 @@ export class Viewer {
     return mesh;
   }
 
-  /**
-   * 移除网格
-   */
-  removeMesh(mesh) {
-    mesh?.parent?.remove?.(mesh);
-
-    const meshIndex = this._meshes.indexOf(mesh);
-    if (meshIndex > -1) this._meshes.splice(meshIndex, 1);
-
-    const selectableIndex = this._selectableObjects.indexOf(mesh);
-    if (selectableIndex > -1) this._selectableObjects.splice(selectableIndex, 1);
-
-    if (this._selectedObject === mesh) {
-      this._selectedObject = null;
+  removeMesh(mesh: THREE.Object3D) {
+    if (mesh.parent) {
+      mesh.parent.remove(mesh);
     }
 
-    // 清理资源
-    if (mesh.geometry) mesh.geometry.dispose();
-    if (mesh.material) {
-      if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((m) => m.dispose());
-      } else {
-        mesh.material.dispose();
-      }
+    const meshIndex = this._meshes.indexOf(mesh as THREE.Mesh);
+    if (meshIndex !== -1) {
+      this._meshes.splice(meshIndex, 1);
+    }
+
+    const selectableIndex = this._selectableObjects.indexOf(mesh);
+    if (selectableIndex !== -1) {
+      this._selectableObjects.splice(selectableIndex, 1);
     }
 
     this.events.emit('meshRemoved', { mesh });
   }
 
-  /**
-   * 获取所有网格
-   */
   getMeshes() {
     return [...this._meshes];
   }
 
-  /**
-   * 根据名称查找网格
-   */
-  getMeshByName(name) {
-    return this._meshes.find((m) => m.name === name);
+  // ==================== 选中管理 ====================
+
+  getSelectedObject() {
+    return this._selectedObject;
   }
 
-  // ==================== 模型加载 ====================
+  selectObject(object: THREE.Object3D | null) {
+    if (this._selectedObject === object) return;
 
-  /**
-   * 加载 STL 模型
-   */
-  loadSTL(url: any, options: Record<string, any> = {}) {
+    const previous = this._selectedObject;
+    this._selectedObject = object;
+
+    this.events.emit('selectionChanged', { previous, current: object });
+  }
+
+  clearSelection() {
+    this.selectObject(null);
+  }
+
+  // ==================== 控制器 ====================
+
+  setControlsEnabled(enabled: boolean) {
+    if (this.controls) {
+      this.controls.enabled = enabled;
+    }
+  }
+
+  resetCamera() {
+    this.camera!.position.set(30, 30, 60);
+    this.camera!.lookAt(0, 0, 0);
+    this.controls?.reset();
+  }
+
+  focusOnObject(object: THREE.Object3D) {
+    const box = new THREE.Box3().setFromObject(object);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const distance = maxDim * 2;
+
+    this.camera!.position.copy(center).add(new THREE.Vector3(distance, distance, distance));
+    this.camera!.lookAt(center);
+    this.controls!.target.copy(center);
+    this.controls!.update();
+  }
+
+  // ==================== STL 加载 ====================
+
+  loadSTL(url: string, options: Record<string, any> = {}) {
     return new Promise((resolve, reject) => {
       const loader = new STLLoader();
-
       const {
         color = 0x999999,
         roughness = 0.8,
         metalness = 0.1,
-        scale = null,
-        targetSize = 4,
         position = [0, 0, 0],
         name = 'STLModel',
       } = options;
@@ -486,488 +410,18 @@ export class Viewer {
 
           const material = new THREE.MeshStandardMaterial({ color, roughness, metalness });
           const mesh = new THREE.Mesh(geometry, material);
-
-          // 自动缩放
-          if (scale) {
-            mesh.scale.setScalar(scale);
-          } else {
-            const box = new THREE.Box3().setFromBufferAttribute(
-              geometry.attributes.position as any
-            );
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const maxDim = Math.max(size.x, size.y, size.z) || 1;
-            mesh.scale.setScalar(targetSize / maxDim);
-          }
-
-          mesh.position.set(position[0], position[1], position[2]);
           mesh.name = name;
+          mesh.position.fromArray(position);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
 
           this.addMesh(mesh);
-          this.events.emit('modelLoaded', { mesh, type: 'stl' });
           resolve(mesh);
         },
-        (progress) => {
-          const percent = progress.total ? (progress.loaded / progress.total) * 100 : 0;
-          this.events.emit('loadProgress', { percent, type: 'stl' });
-        },
-        (error) => {
-          this.events.emit('loadError', { error, type: 'stl' });
-          reject(error);
-        }
+        undefined,
+        (error) => reject(error)
       );
     });
-  }
-
-  // ==================== 几何体创建 ====================
-
-  /**
-   * 创建圆柱体
-   */
-  createCylinder(options: Record<string, any> = {}) {
-    const {
-      radiusTop = 5,
-      radiusBottom = 5,
-      height = 15,
-      segments = 256,
-      color = 0x67c23a,
-      position = [0, 7.5, 0],
-      name = 'Cylinder',
-    } = options;
-
-    const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, segments);
-    const material = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.6,
-      metalness: 0.2,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(position[0], position[1], position[2]);
-    mesh.name = name;
-    mesh.userData.isSurface = true;
-
-    return this.addMesh(mesh);
-  }
-
-  /**
-   * 创建立方体
-   */
-  createBox(options: Record<string, any> = {}) {
-    const {
-      width = 5,
-      height = 5,
-      depth = 5,
-      color = 0x409eff,
-      position = [0, 2.5, 0],
-      name = 'Box',
-    } = options;
-
-    const geometry = new THREE.BoxGeometry(width, height, depth);
-    const material = new THREE.MeshStandardMaterial({ color });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(position[0], position[1], position[2]);
-    mesh.name = name;
-    mesh.userData.isSurface = true;
-
-    return this.addMesh(mesh);
-  }
-
-  /**
-   * 创建球体
-   */
-  createSphere(options: Record<string, any> = {}) {
-    const {
-      radius = 3,
-      segments = 64,
-      color = 0xe6a23c,
-      position = [0, 3, 0],
-      name = 'Sphere',
-    } = options;
-
-    const geometry = new THREE.SphereGeometry(radius, segments, segments);
-    const material = new THREE.MeshStandardMaterial({ color });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(position[0], position[1], position[2]);
-    mesh.name = name;
-    mesh.userData.isSurface = true;
-
-    return this.addMesh(mesh);
-  }
-
-  // ==================== 选择管理 ====================
-
-  /**
-   * 选中对象
-   */
-  select(object) {
-    if (this._selectedObject === object) return;
-
-    const previous = this._selectedObject;
-    this._selectedObject = object;
-
-    if (previous) {
-      this.events.emit('deselect', { target: previous });
-    }
-
-    if (object) {
-      this.events.emit('select', {
-        target: object,
-        targetType: this._getTargetType(object),
-      });
-    }
-  }
-
-  /**
-   * 清除选择
-   */
-  clearSelection() {
-    if (this._selectedObject) {
-      const previous = this._selectedObject;
-      this._selectedObject = null;
-      this.events.emit('deselect', { target: previous });
-      this.events.emit('selectionCleared');
-    }
-  }
-
-  /**
-   * 获取选中对象
-   */
-  getSelectedObject() {
-    return this._selectedObject;
-  }
-
-  // ==================== 相机控制 ====================
-
-  /**
-   * 重置视图
-   */
-  resetView() {
-    this.camera.position.set(30, 30, 60);
-    this.camera.lookAt(0, 0, 0);
-    this.controls.reset();
-    this.events.emit('viewReset');
-  }
-
-  /**
-   * 聚焦到对象
-   */
-  focusOn(object) {
-    if (!object) return;
-
-    const box = new THREE.Box3().setFromObject(object);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    const distance = maxDim * 2;
-    this.camera.position.set(center.x + distance, center.y + distance, center.z + distance);
-    this.controls.target.copy(center);
-    this.controls.update();
-
-    this.events.emit('focusChanged', { target: object });
-  }
-
-  /**
-   * 启用/禁用相机控制
-   */
-  setControlsEnabled(enabled) {
-    this.controls.enabled = enabled;
-  }
-
-  // ==================== 材质操作 ====================
-
-  /**
-   * 修改对象颜色
-   */
-  setObjectColor(object, color) {
-    if (!object || !object.material) return;
-
-    const colorValue = typeof color === 'string' ? parseInt(color.replace('#', ''), 16) : color;
-
-    if (Array.isArray(object.material)) {
-      object.material.forEach((m) => m.color.setHex(colorValue));
-    } else {
-      object.material.color.setHex(colorValue);
-    }
-
-    this.events.emit('colorChanged', { object, color: colorValue });
-  }
-
-  /**
-   * 设置对象可见性
-   */
-  setObjectVisible(object, visible) {
-    if (!object) return;
-    object.visible = visible;
-    this.events.emit('visibilityChanged', { object, visible });
-  }
-
-  // ==================== 工具方法 ====================
-
-  /**
-   * 获取 canvas 元素
-   */
-  getCanvas() {
-    return this.renderer.domElement;
-  }
-
-  /**
-   * 获取容器尺寸
-   */
-  getSize() {
-    const rect = this.container.getBoundingClientRect();
-    return { width: rect.width, height: rect.height };
-  }
-
-  /**
-   * 截图
-   */
-  screenshot(options: Record<string, any> = {}) {
-    const { width, height, type = 'image/png', quality = 1 } = options;
-
-    // 如果指定了尺寸，临时调整
-    if (width && height) {
-      this.renderer.setSize(width, height);
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
-      this.renderer.render(this.scene, this.camera);
-    }
-
-    const dataUrl = this.renderer.domElement.toDataURL(type, quality);
-
-    // 恢复原尺寸
-    if (width && height) {
-      this._onResize();
-    }
-
-    return dataUrl;
-  }
-
-  // ==================== 特征检测系统 ====================
-
-  /**
-   * 为网格检测特征（平面、圆柱面等）
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @returns {Promise<Object>} 特征数据
-   */
-  async detectFeatures(mesh) {
-    if (!mesh || !mesh.geometry) {
-      console.warn('无效的网格对象');
-      return null;
-    }
-
-    const meshId = this._featureDetector.generateMeshId(mesh);
-
-    // 检查缓存
-    if (this._detectedFeatures.has(meshId)) {
-      return this._detectedFeatures.get(meshId);
-    }
-
-    console.log(`[Viewer] 开始检测网格特征: ${mesh.name || meshId}`);
-
-    try {
-      // 执行特征检测
-      const features = await this._featureDetector.preprocessMesh(mesh);
-
-      // 生成特征命名
-      const namedFeatures = this._featureNaming.detectAndNameFeatures(mesh, meshId);
-
-      // 合并结果
-      const result = {
-        meshId,
-        meshName: mesh.name,
-        ...features,
-        namedFeatures,
-      };
-
-      // 缓存结果
-      this._detectedFeatures.set(meshId, result);
-
-      // 更新面拾取器
-      if (this._facePicker) {
-        await this._facePicker.setMeshes([mesh]);
-      }
-
-      this.events.emit('featuresDetected', { mesh, features: result });
-
-      console.log(
-        `[Viewer] 特征检测完成: ${features.planes.length} 个平面, ${features.cylinders.length} 个圆柱面`
-      );
-
-      return result;
-    } catch (error) {
-      console.error('[Viewer] 特征检测失败:', error);
-      this.events.emit('featureDetectionError', { mesh, error });
-      return null;
-    }
-  }
-
-  /**
-   * 批量检测多个网格的特征
-   * @param {THREE.Mesh[]} meshes - 网格数组
-   * @returns {Promise<Map>} meshId -> features 的映射
-   */
-  async detectFeaturesForMeshes(meshes) {
-    const results = new Map();
-
-    for (const mesh of meshes) {
-      const features = await this.detectFeatures(mesh);
-      if (features) {
-        results.set(features.meshId, features);
-      }
-    }
-
-    // 更新面拾取器
-    if (this._facePicker && meshes.length > 0) {
-      await this._facePicker.setMeshes(meshes);
-    }
-
-    return results;
-  }
-
-  /**
-   * 根据面索引获取特征信息
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @param {number} faceIndex - 面索引
-   * @returns {Object|null} 特征信息
-   */
-  getFeatureByFace(mesh, faceIndex) {
-    const meshId = this._featureDetector.generateMeshId(mesh);
-
-    // 从特征命名系统获取
-    const featureName = this._featureNaming.getFeatureNameByTriangle(meshId, faceIndex);
-    if (featureName) {
-      return this._featureNaming.getFeatureByName(featureName);
-    }
-
-    // 从特征检测器获取
-    return this._featureDetector.getFeatureByFaceIndex(meshId, faceIndex);
-  }
-
-  /**
-   * 获取网格的所有特征
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @returns {Object|null} 特征数据
-   */
-  getMeshFeatures(mesh) {
-    const meshId = this._featureDetector.generateMeshId(mesh);
-    return this._detectedFeatures.get(meshId) || null;
-  }
-
-  /**
-   * 获取特征的所有三角形索引
-   * @param {string} featureName - 特征名字
-   * @returns {Array} 三角形索引数组
-   */
-  getFeatureTriangles(featureName) {
-    return this._featureNaming.getFeatureTriangles(featureName);
-  }
-
-  /**
-   * 选择整个特征（选中特征包含的所有面）
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @param {string} featureId - 特征ID
-   */
-  selectFeature(mesh, featureId) {
-    if (!this._facePicker) return;
-
-    const meshId = this._featureDetector.generateMeshId(mesh);
-    this._facePicker.selectFeature(meshId, featureId);
-  }
-
-  /**
-   * 设置特征面过滤模式
-   * @param {boolean} enabled - 是否只允许选中识别出的特征面
-   */
-  setFeatureOnlyMode(enabled) {
-    this._featureOnlyMode = enabled;
-    console.log(`[Viewer] 特征面过滤模式: ${enabled ? '开启' : '关闭'}`);
-    this.events.emit('featureOnlyModeChanged', { enabled });
-  }
-
-  /**
-   * 获取特征面过滤模式状态
-   * @returns {boolean} 是否开启
-   */
-  isFeatureOnlyMode() {
-    return this._featureOnlyMode;
-  }
-
-  /**
-   * 启用面拾取功能
-   */
-  enableFacePicking() {
-    if (this._facePicker) {
-      this._facePicker.enable();
-      console.log('[Viewer] 面拾取功能已启用');
-    }
-  }
-
-  /**
-   * 禁用面拾取功能
-   */
-  disableFacePicking() {
-    if (this._facePicker) {
-      this._facePicker.disable();
-      console.log('[Viewer] 面拾取功能已禁用');
-    }
-  }
-
-  /**
-   * 获取面拾取器实例
-   * @returns {OptimizedFacePicker|null}
-   */
-  getFacePicker() {
-    return this._facePicker;
-  }
-
-  /**
-   * 获取特征检测器实例
-   * @returns {FeatureDetector}
-   */
-  getFeatureDetector() {
-    return this._featureDetector;
-  }
-
-  /**
-   * 获取特征命名系统实例
-   * @returns {FeatureBasedNaming}
-   */
-  getFeatureNaming() {
-    return this._featureNaming;
-  }
-
-  /**
-   * 清除特征缓存
-   * @param {THREE.Mesh} mesh - 网格对象（可选，不传则清除所有）
-   */
-  clearFeatureCache(mesh = null) {
-    if (mesh) {
-      const meshId = this._featureDetector.generateMeshId(mesh);
-      this._detectedFeatures.delete(meshId);
-      this._featureDetector.clearCache(meshId);
-    } else {
-      this._detectedFeatures.clear();
-      this._featureDetector.clearCache();
-      this._featureNaming.clearCache();
-    }
-    console.log('[Viewer] 特征缓存已清除');
-  }
-
-  /**
-   * 获取特征检测统计信息
-   * @returns {Object} 统计信息
-   */
-  getFeatureStats() {
-    const detectorStats = this._featureDetector.getCacheStats();
-    const facePickerStats = this._facePicker?.getPerformanceStats() || {};
-
-    return {
-      detector: detectorStats,
-      facePicker: facePickerStats,
-      cachedMeshes: this._detectedFeatures.size,
-      featureOnlyMode: this._featureOnlyMode,
-    };
   }
 
   // ==================== 销毁 ====================
@@ -980,39 +434,29 @@ export class Viewer {
     }
 
     this._unbindEvents();
-    this.events.clear();
 
-    // 清理面拾取器
-    if (this._facePicker) {
-      this._facePicker.destroy();
-      this._facePicker = null;
-    }
-
-    // 清理特征检测系统
-    this._featureDetector.clearCache();
-    this._featureNaming.clearCache();
-    this._detectedFeatures.clear();
-
-    // 清理所有网格
     this._meshes.forEach((mesh) => {
-      if (mesh.geometry) mesh.geometry.dispose();
-      if (mesh.material) {
-        if (Array.isArray(mesh.material)) {
-          mesh.material.forEach((m) => m.dispose());
-        } else {
-          mesh.material.dispose();
-        }
+      mesh.geometry?.dispose();
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach((m) => m.dispose());
+      } else {
+        mesh.material?.dispose();
       }
     });
     this._meshes = [];
     this._selectableObjects = [];
 
-    this.controls.dispose();
-    this.renderer.dispose();
+    this.controls?.dispose();
+    this.renderer?.dispose();
 
-    if (this.container.contains(this.renderer.domElement)) {
-      this.container.removeChild(this.renderer.domElement);
+    if (this.renderer?.domElement.parentNode) {
+      this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
     }
+
+    this.scene = null;
+    this.camera = null;
+    this.renderer = null;
+    this.controls = null;
 
     this.events.emit('disposed');
   }
