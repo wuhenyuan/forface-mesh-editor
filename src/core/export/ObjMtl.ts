@@ -55,13 +55,11 @@ export function generateMTL(materials: Map<string, ExportMaterial>) {
     lines.push(`newmtl ${name}`);
 
     const mat = material;
-    if (mat.color) {
-      const c = mat.color;
-      lines.push(`Kd ${c.r.toFixed(6)} ${c.g.toFixed(6)} ${c.b.toFixed(6)}`);
-      lines.push(
-        `Ka ${(c.r * 0.2).toFixed(6)} ${(c.g * 0.2).toFixed(6)} ${(c.b * 0.2).toFixed(6)}`
-      );
-    }
+
+    // 获取颜色，如果没有 color 属性则使用默认白色
+    const c = mat.color ?? new THREE.Color(1, 1, 1);
+    lines.push(`Kd ${c.r.toFixed(6)} ${c.g.toFixed(6)} ${c.b.toFixed(6)}`);
+    lines.push(`Ka ${(c.r * 0.2).toFixed(6)} ${(c.g * 0.2).toFixed(6)} ${(c.b * 0.2).toFixed(6)}`);
 
     lines.push('Ks 0.500000 0.500000 0.500000');
     const shininess = mat.roughness !== undefined ? (1 - mat.roughness) * 100 : 30;

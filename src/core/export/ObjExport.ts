@@ -42,6 +42,12 @@ class OBJExporter {
 
       const geometry = mesh.geometry;
 
+      // 检查 geometry 是否有效
+      if (!geometry) {
+        console.warn('[OBJExporter] Mesh has no geometry:', mesh.name);
+        return;
+      }
+
       const normalMatrixWorld = new Matrix3();
 
       // shortcuts
@@ -49,6 +55,12 @@ class OBJExporter {
       const normals = geometry.getAttribute('normal');
       const uvs = geometry.getAttribute('uv');
       const indices = geometry.getIndex();
+
+      // 检查顶点是否存在
+      if (!vertices) {
+        console.warn('[OBJExporter] Geometry has no position attribute:', mesh.name, geometry);
+        return;
+      }
 
       const meshMaterials = Array.isArray(mesh.material)
         ? mesh.material
