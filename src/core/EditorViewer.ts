@@ -908,14 +908,17 @@ export class EditorViewer extends Viewer {
 
     this._objectSelectionManager.on('objectSelected', (object) => {
       this.events.emit('objectSelected', { object });
+      this.setOutlineSelection?.(object);
     });
 
     this._objectSelectionManager.on('objectDeselected', (object) => {
       this.events.emit('objectDeselected', { object });
+      this.clearOutlineSelection?.();
     });
 
     this._objectSelectionManager.on('selectionCleared', () => {
       this.events.emit('objectSelectionCleared');
+      this.clearOutlineSelection?.();
     });
 
     this._objectSelectionManager.on('draggingChanged', (isDragging) => {
@@ -953,6 +956,7 @@ export class EditorViewer extends Viewer {
     if (this._objectSelectionManager) {
       this._objectSelectionManager.disable();
       this._objectSelectionEnabled = false;
+      this.clearOutlineSelection?.();
       this.events.emit('objectSelectionDisabled');
     }
   }

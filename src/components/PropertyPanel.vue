@@ -67,36 +67,36 @@
               </div>
               <div class="row">
                 <span>字符间距</span>
-                <el-input-number
+                <editor-input-number
                   v-model="textForm.letterSpacing"
                   :min="0"
                   :max="2"
                   :step="0.1"
                   size="mini"
                   @change="updateLetterSpacing"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
               <div class="row">
                 <span>弯曲强度</span>
-                <el-input-number
+                <editor-input-number
                   v-model="textForm.curvingStrength"
                   :min="0"
                   :max="2"
                   :step="0.1"
                   size="mini"
                   @change="updateCurvingStrength"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
               <div class="row">
                 <span>起始角度</span>
-                <el-input-number
+                <editor-input-number
                   v-model="textForm.startAngle"
                   :min="-180"
                   :max="180"
                   :step="5"
                   size="mini"
                   @change="updateStartAngle"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
             </div>
 
@@ -109,97 +109,97 @@
             </div>
             <div class="row">
               <span>大小</span>
-              <el-input-number
+              <editor-input-number
                 v-model="textForm.size"
                 :min="0.1"
                 :max="10"
                 :step="0.1"
                 size="mini"
                 @change="updateTextSize"
-              ></el-input-number>
+              ></editor-input-number>
             </div>
             <div class="row">
               <span>厚度</span>
-              <el-input-number
+              <editor-input-number
                 v-model="textForm.thickness"
                 :min="0.01"
                 :max="2"
                 :step="0.01"
                 size="mini"
                 @change="updateTextThickness"
-              ></el-input-number>
+              ></editor-input-number>
             </div>
             <div class="properties-subtitle">变换</div>
             <div class="row">
               <span>位置</span>
               <div class="axis-inputs">
-                <el-input-number
+                <editor-input-number
                   v-model="textForm.position.x"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="textForm.position.y"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="textForm.position.z"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
             </div>
             <div class="row">
               <span>旋转(弧度)</span>
               <div class="axis-inputs">
-                <el-input-number
+                <editor-input-number
                   v-model="textForm.rotation.x"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="textForm.rotation.y"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="textForm.rotation.z"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
             </div>
             <div class="row">
               <span>缩放</span>
               <div class="axis-inputs">
-                <el-input-number
+                <editor-input-number
                   v-model="textForm.scale.x"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="textForm.scale.y"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="textForm.scale.z"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
                   @change="updateTextTransform"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
             </div>
             <div class="text-actions">
@@ -213,73 +213,73 @@
             <div class="row">
               <span>位置</span>
               <div class="axis-inputs">
-                <el-input-number
+                <editor-input-number
                   v-model="objectForm.position.x"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="objectForm.position.y"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="objectForm.position.z"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
             </div>
             <div class="row">
               <span>旋转(弧度)</span>
               <div class="axis-inputs">
-                <el-input-number
+                <editor-input-number
                   v-model="objectForm.rotation.x"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="objectForm.rotation.y"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="objectForm.rotation.z"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
             </div>
             <div class="row">
               <span>缩放</span>
               <div class="axis-inputs">
-                <el-input-number
+                <editor-input-number
                   v-model="objectForm.scale.x"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="objectForm.scale.y"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
-                <el-input-number
+                ></editor-input-number>
+                <editor-input-number
                   v-model="objectForm.scale.z"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
                   @change="updateObjectTransform"
-                ></el-input-number>
+                ></editor-input-number>
               </div>
             </div>
           </div>
@@ -323,9 +323,13 @@
 <script>
 import { ref, computed, watch, reactive } from 'vue';
 import { useEditorStore } from '../store';
+import EditorInputNumber from './common/SmartInputNumber.vue';
 
 export default {
   name: 'PropertyPanel',
+  components: {
+    'editor-input-number': EditorInputNumber,
+  },
   setup() {
     const store = useEditorStore();
     const activeNames = ref(['text', 'object', 'base', 'color']);

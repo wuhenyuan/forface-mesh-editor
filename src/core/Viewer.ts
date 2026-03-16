@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import OutlinePostProcessor from './postprocessing/OutlinePostProcessor';
 import { EventManager } from './EventManager';
 import { OptimizedFacePicker } from './facePicking/OptimizedFacePicker';
 import { FeatureDetector } from './facePicking/FeatureDetector';
@@ -48,6 +49,9 @@ export class Viewer {
     // 交互
     this._raycaster = new THREE.Raycaster();
     this._mouse = new THREE.Vector2();
+
+    // 后处理（延迟初始化）
+    this._outlinePostProcessor = null;
 
     // 子系统（延迟初始化）
     this._facePicker = null;
@@ -361,6 +365,7 @@ export class Viewer {
     this.camera.aspect = rect.width / rect.height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(rect.width, rect.height);
+    this._outlinePostProcessor?.setSize?.(rect.width, rect.height);
 
     this.events.emit('resize', { width: rect.width, height: rect.height });
   }
@@ -378,6 +383,38 @@ export class Viewer {
     }
   }
 
+  // ==================== 后处理 ====================
+
+  _ensureOutlinePostProcessor() {
+    if (this._outlinePostProcessor) return;
+    this._outlinePostProcessor = new OutlinePostProcessor(
+      this.renderer,
+      this.scene,
+      this.camera,
+      this.options?.postProcessing?.outline || {}
+    );
+
+    const rect = this.container.getBoundingClientRect();
+    this._outlinePostProcessor.setSize(rect.width, rect.height);
+  }
+
+  setOutlineSelection(object) {
+    this._ensureOutlinePostProcessor();
+    this._outlinePostProcessor?.setSelection?.(object);
+  }
+
+  clearOutlineSelection() {
+    this._outlinePostProcessor?.clearSelection?.();
+  }
+
+  _renderFrame() {
+    if (this._outlinePostProcessor) {
+      this._outlinePostProcessor.render();
+      return;
+    }
+    this.renderer.render(this.scene, this.camera);
+  }
+
   // ==================== 渲染循环 ====================
 
   _animate() {
@@ -385,7 +422,7 @@ export class Viewer {
 
     this._animationId = requestAnimationFrame(() => this._animate());
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this._renderFrame();
   }
 
   // ==================== 对象管理 ====================
@@ -394,7 +431,12 @@ export class Viewer {
    * 添加网格到场景
    */
   addMesh(mesh: any, options: Record<string, any> = {}) {
-    const { selectable = true, castShadow = true, receiveShadow = true, group = 'entity' } = options;
+    const {
+      selectable = true,
+      castShadow = true,
+      receiveShadow = true,
+      group = 'entity',
+    } = options;
 
     mesh.castShadow = castShadow;
     mesh.receiveShadow = receiveShadow;
@@ -403,8 +445,8 @@ export class Viewer {
       group === 'scene'
         ? this.scene
         : group === 'csg'
-          ? (this.csgGroup || this.scene)
-          : (this.entityGroup || this.scene);
+          ? this.csgGroup || this.scene
+          : this.entityGroup || this.scene;
 
     targetGroup.add(mesh);
     this._meshes.push(mesh);
@@ -730,7 +772,8 @@ export class Viewer {
       this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
-      this.renderer.render(this.scene, this.camera);
+      this._outlinePostProcessor?.setSize?.(width, height);
+      this._renderFrame();
     }
 
     const dataUrl = this.renderer.domElement.toDataURL(type, quality);
@@ -1006,6 +1049,11 @@ export class Viewer {
     });
     this._meshes = [];
     this._selectableObjects = [];
+
+    if (this._outlinePostProcessor) {
+      this._outlinePostProcessor.dispose?.();
+      this._outlinePostProcessor = null;
+    }
 
     this.controls.dispose();
     this.renderer.dispose();
