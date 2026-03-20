@@ -11,7 +11,7 @@ import { normalizeConfig } from '../../../config/config';
 export type { DocumentEventBus } from './EventBus';
 
 export interface DocumentConfig {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type DocumentAssetSource = Blob | File | string;
@@ -57,6 +57,10 @@ export interface DocumentData {
   previews: Map<string, Blob>;
   fonts: Map<string, DocumentFontSource>;
 }
+
+type SourceContainer = {
+  source: DocumentAssetSource;
+};
 
 export default class Document {
   events: DocumentEventBus;
@@ -250,7 +254,7 @@ export default class Document {
   private async _loadFolder(
     zip: JSZip,
     folderName: string,
-    targetMap: Map<string, any>,
+    targetMap: Map<string, unknown>,
     wrapSource: boolean
   ): Promise<void> {
     const folderPrefix = `${folderName}/`;
@@ -310,23 +314,24 @@ export default class Document {
     return normalizeConfig(source);
   }
 
-  private _normalizeFeatureList(features: any[]) {
+  private _normalizeFeatureList(features: unknown[]) {
     return features.map((feature, index) => {
       if (!feature || typeof feature !== 'object') return feature;
-      if (feature.payload && typeof feature.payload === 'object') return feature;
+      const featureRecord = feature as Record<string, unknown>;
+      if (featureRecord.payload && typeof featureRecord.payload === 'object') return featureRecord;
 
-      const kind = feature.kind || feature.type;
+      const kind = featureRecord.kind || featureRecord.type;
       if (kind === 'model') {
-        return this._normalizeModelFeature(feature, index);
+        return this._normalizeModelFeature(featureRecord as Record<string, any>, index);
       }
       if (kind === 'text') {
-        return this._normalizeTextFeature(feature, index);
+        return this._normalizeTextFeature(featureRecord as Record<string, any>, index);
       }
-      return feature;
+      return featureRecord;
     });
   }
 
-  private _decomposeMatrix(matrix: any) {
+  private _decomposeMatrix(matrix: unknown) {
     if (!Array.isArray(matrix) || matrix.length !== 16) return null;
     const mat = new THREE.Matrix4().fromArray(matrix);
     const position = new THREE.Vector3();
@@ -419,17 +424,23 @@ export default class Document {
 
     const models = config?.models && typeof config.models === 'object' ? config.models : {};
     for (const [key, model] of Object.entries(models)) {
-      const path = typeof (model as any)?.path === 'string' ? (model as any).path : '';
+      const modelRecord = model as Record<string, unknown>;
+      const path = typeof modelRecord.path === 'string' ? modelRecord.path : '';
       if (!path) continue;
 
       const modelConfig =
-        (model as any)?.config && typeof (model as any).config === 'object'
-          ? (model as any).config
+        modelRecord.config && typeof modelRecord.config === 'object'
+          ? (modelRecord.config as Record<string, unknown>)
           : {};
 
-      const position = Array.isArray(modelConfig.position) ? modelConfig.position : undefined;
-      const rotation = Array.isArray(modelConfig.rotation) ? modelConfig.rotation : undefined;
-      const scale = Array.isArray(modelConfig.scale) ? modelConfig.scale : undefined;
+      const position = this._toVector3(modelConfig.position);
+      const rotation = this._toVector3(modelConfig.rotation);
+      const scale = this._toVector3(modelConfig.scale);
+      const meta =
+        modelConfig.meta && typeof modelConfig.meta === 'object'
+          ? (modelConfig.meta as Record<string, any>)
+          : undefined;
+      const booleanOp = typeof modelConfig.boolean === 'string' ? modelConfig.boolean : undefined;
 
       entities.push({
         id: key,
@@ -438,38 +449,47 @@ export default class Document {
         position,
         rotation,
         scale,
-        meta: modelConfig.meta,
-        boolean: modelConfig.boolean,
+        meta,
+        boolean: booleanOp,
       });
     }
 
     const texts = Array.isArray(config?.texts) ? config.texts : [];
     for (const entry of texts) {
       if (!entry || typeof entry !== 'object') continue;
+      const textEntry = entry as Record<string, unknown>;
 
       const id =
-        (typeof (entry as any).id === 'string' && (entry as any).id) ||
-        (typeof (entry as any).index === 'string' && (entry as any).index);
+        (typeof textEntry.id === 'string' && textEntry.id) ||
+        (typeof textEntry.index === 'string' && textEntry.index);
       if (!id) continue;
 
-      const textMode = this._resolveTextMode(entry);
-      const font = this._resolveTextFont(entry, textMode);
+      const textMode = this._resolveTextMode(textEntry as Record<string, any>);
+      const font = this._resolveTextFont(textEntry as Record<string, any>, textMode);
       const content =
-        typeof (entry as any).text === 'string'
-          ? (entry as any).text
-          : typeof (entry as any).content === 'string'
-            ? (entry as any).content
+        typeof textEntry.text === 'string'
+          ? textEntry.text
+          : typeof textEntry.content === 'string'
+            ? textEntry.content
             : '';
 
-      const position = Array.isArray((entry as any).position) ? (entry as any).position : undefined;
-      const rotation = this._resolveTextRotation(entry);
-      const scale = Array.isArray((entry as any).scale) ? (entry as any).scale : undefined;
+      const position = this._toVector3(textEntry.position);
+      const rotation = this._resolveTextRotation(textEntry as Record<string, any>);
+      const scale = this._toVector3(textEntry.scale);
       const meta: Record<string, any> = {};
-      if ((entry as any).wrap !== undefined) meta.wrap = (entry as any).wrap;
-      if ((entry as any).attachmentSurface !== undefined) {
-        meta.attachmentSurface = (entry as any).attachmentSurface;
+      if (textEntry.wrap !== undefined) meta.wrap = textEntry.wrap;
+      if (textEntry.attachmentSurface !== undefined) {
+        meta.attachmentSurface = textEntry.attachmentSurface;
       }
-      if ((entry as any).effect !== undefined) meta.effect = (entry as any).effect;
+      if (textEntry.effect !== undefined) meta.effect = textEntry.effect;
+
+      const size = typeof textEntry.size === 'number' ? textEntry.size : undefined;
+      const depth = typeof textEntry.depth === 'number' ? textEntry.depth : undefined;
+      const color =
+        typeof textEntry.color === 'string' || typeof textEntry.color === 'number'
+          ? textEntry.color
+          : undefined;
+      const booleanOp = typeof textEntry.boolean === 'string' ? textEntry.boolean : undefined;
 
       entities.push({
         id,
@@ -477,13 +497,13 @@ export default class Document {
         resource: font,
         textType: textMode,
         content,
-        size: (entry as any).size,
-        depth: (entry as any).depth,
-        color: (entry as any).color,
+        size,
+        depth,
+        color,
         position,
         rotation,
         scale,
-        boolean: (entry as any).boolean,
+        boolean: booleanOp,
         meta: Object.keys(meta).length > 0 ? meta : undefined,
       });
     }
@@ -525,9 +545,35 @@ export default class Document {
   }
 
   private _resolveTextRotation(entry: Record<string, any>) {
-    if (Array.isArray(entry.rotate)) return entry.rotate;
-    if (Array.isArray(entry.rotation)) return entry.rotation;
+    const fromRotate = this._toVector3(entry.rotate);
+    if (fromRotate) return fromRotate;
+    const fromRotation = this._toVector3(entry.rotation);
+    if (fromRotation) return fromRotation;
     return undefined;
+  }
+
+  private _toVector3(value: unknown): [number, number, number] | undefined {
+    if (!Array.isArray(value) || value.length < 3) return undefined;
+    const [x, y, z] = value;
+    if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return undefined;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return undefined;
+    return [x, y, z];
+  }
+
+  private _extractAssetSource(entry: DocumentAssetSource | SourceContainer): DocumentAssetSource {
+    if (this._isSourceContainer(entry)) {
+      return entry.source;
+    }
+    return entry as DocumentAssetSource;
+  }
+
+  private _isBlobLike(value: DocumentAssetSource): value is Blob {
+    return value instanceof Blob;
+  }
+
+  private _isSourceContainer(value: unknown): value is SourceContainer {
+    if (!value || typeof value !== 'object') return false;
+    return 'source' in value;
   }
 
   private _entityFromModelSource(key: string, entry: DocumentModelSource) {
@@ -700,13 +746,17 @@ export default class Document {
     return this._getObjectUrl(this._fonts, fileName);
   }
 
-  private _getObjectUrl(source: Map<string, any>, fileName: string): string | null {
+  private _getObjectUrl<T extends DocumentAssetSource | SourceContainer>(
+    source: Map<string, T>,
+    fileName: string
+  ): string | null {
     const entry = source.get(fileName);
     if (!entry) return null;
 
-    const asset = entry?.source ?? entry;
+    const asset = this._extractAssetSource(entry);
     if (!asset) return null;
     if (typeof asset === 'string') return asset;
+    if (!this._isBlobLike(asset)) return null;
 
     const prefix =
       source === this._models
@@ -789,12 +839,16 @@ export default class Document {
     return blob;
   }
 
-  async exportModel(objects: any, format: string, options: Record<string, any> = {}) {
+  async exportModel(
+    objects: THREE.Object3D | THREE.Object3D[],
+    format: string,
+    options: Record<string, any> = {}
+  ) {
     return this.exportManager.export(objects, format, options);
   }
 
   async exportAndDownload(
-    objects: any,
+    objects: THREE.Object3D | THREE.Object3D[],
     format: string,
     filename: string = 'model',
     options: Record<string, any> = {}
@@ -865,10 +919,15 @@ export default class Document {
     return this.projectManager.isDirty();
   }
 
-  private async _appendAssetsToZip(zip: JSZip, folderName: string, sourceMap: Map<string, any>) {
+  private async _appendAssetsToZip<T extends SourceContainer>(
+    zip: JSZip,
+    folderName: string,
+    sourceMap: Map<string, T>
+  ) {
     for (const [path, entry] of sourceMap.entries()) {
-      const asset = entry?.source ?? entry;
+      const asset = entry.source;
       if (!asset || typeof asset === 'string') continue;
+      if (!this._isBlobLike(asset)) continue;
 
       const normalized = this._normalizeAssetPath(path);
       const basePath = normalized.startsWith(`${folderName}/`)

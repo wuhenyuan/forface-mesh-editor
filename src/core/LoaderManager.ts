@@ -25,15 +25,15 @@ import { IndexedOBJLoader } from './loaders/IndexedOBJLoader';
  */
 
 export class LoaderManager {
-  stlLoader: any;
-  indexedObjLoader: any;
-  gltfLoader: any;
-  mtlLoader: any;
-  featureDetector: any;
+  stlLoader: unknown;
+  indexedObjLoader: unknown;
+  gltfLoader: unknown;
+  mtlLoader: unknown;
+  featureDetector: unknown;
   loadCounter: number;
-  loadedModels: Map<string, any> = new Map();
-  onProgress: ((...args: any[]) => void) | null;
-  onError: ((error: any) => void) | null;
+  loadedModels: Map<string, unknown> = new Map();
+  onProgress: ((...args: unknown[]) => void) | null;
+  onError: ((error: unknown) => void) | null;
 
   constructor() {
     // Loaders
@@ -56,7 +56,7 @@ export class LoaderManager {
   /**
    * 设置特征检测器（由 Viewer 调用�?   * @param {FeatureDetector} detector
    */
-  setFeatureDetector(detector: any) {
+  setFeatureDetector(detector: unknown) {
     this.featureDetector = detector;
   }
 
@@ -65,7 +65,7 @@ export class LoaderManager {
    * @param {LoadOptions} options - 加载选项
    * @returns {Promise<LoadResult>}
    */
-  async load(source: any, options: Record<string, any> = {}) {
+  async load(source: unknown, options: Record<string, any> = {}) {
     const {
       modelId = this._generateModelId(),
       detectFeatures = false,
@@ -124,7 +124,7 @@ export class LoaderManager {
     // 特征检�?
     if (detectFeatures && this.featureDetector) {
       console.log(`[LoaderManager] 开始特征检�? ${modelId}`);
-      const detector: any = this.featureDetector;
+      const detector: unknown = this.featureDetector;
       if (typeof detector.detect === 'function') {
         await detector.detect(model, modelId);
       } else if (typeof detector.preprocessMesh === 'function') {
@@ -139,7 +139,7 @@ export class LoaderManager {
    * 加载 STL 文件
    * @private
    */
-  async _loadSTL(source: any, material: any) {
+  async _loadSTL(source: unknown, material: unknown) {
     return new Promise((resolve, reject) => {
       const onLoad = (geometry) => {
         geometry.computeVertexNormals();
@@ -159,7 +159,7 @@ export class LoaderManager {
       if (source instanceof Blob || source instanceof File) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          const geometry = this.stlLoader.parse((e as any)?.target?.result);
+          const geometry = this.stlLoader.parse((e as unknown)?.target?.result);
           onLoad(geometry);
         };
         reader.onerror = reject;
@@ -174,7 +174,7 @@ export class LoaderManager {
    * 加载 OBJ 文件
    * @private
    */
-  async _loadOBJ(source: any, material: any, options: Record<string, any> = {}) {
+  async _loadOBJ(source: unknown, material: unknown, options: Record<string, any> = {}) {
     const splitUrl = (value: string) => {
       const match = value.match(/^[^?#]+/);
       const base = match ? match[0] : value;
@@ -203,7 +203,7 @@ export class LoaderManager {
         this.mtlLoader.setResourcePath(basePath);
         this.mtlLoader.load(
           mtlUrl,
-          (materials: any) => {
+          (materials: unknown) => {
             materials.preload();
             resolve(materials);
           },
@@ -239,7 +239,7 @@ export class LoaderManager {
         const reader = new FileReader();
         reader.onload = (e) => {
           try {
-            const objText = String((e as any)?.target?.result || '');
+            const objText = String((e as unknown)?.target?.result || '');
             resolve(parseFromText(objText));
           } catch (error) {
             reject(error);
@@ -262,9 +262,9 @@ export class LoaderManager {
    * Load GLTF/GLB files
    * @private
    */
-  async _loadGLTF(source: any, material: any) {
+  async _loadGLTF(source: unknown, material: unknown) {
     return new Promise((resolve, reject) => {
-      const onLoad = (gltf: any) => {
+      const onLoad = (gltf: unknown) => {
         const model = gltf?.scene || (Array.isArray(gltf?.scenes) ? gltf.scenes[0] : null);
         const root = model || new THREE.Group();
 
@@ -287,7 +287,7 @@ export class LoaderManager {
         const reader = new FileReader();
 
         reader.onload = (e) => {
-          const result = (e as any)?.target?.result;
+          const result = (e as unknown)?.target?.result;
           if (isGltf && typeof result === 'string') {
             this.gltfLoader.parse(result, '', onLoad, reject);
           } else {
@@ -311,7 +311,7 @@ export class LoaderManager {
    * @private
    */
   async _loadZipOBJ(source: string) {
-    const JSZipModule: any = await import('jszip');
+    const JSZipModule: unknown = await import('jszip');
     const JSZip = JSZipModule?.default || JSZipModule;
 
     const zipInput = await this._fetchArrayBuffer(source);
@@ -469,7 +469,7 @@ export class LoaderManager {
     });
   }
 
-  _pickFirstMaterial(materialCreator: any) {
+  _pickFirstMaterial(materialCreator: unknown) {
     if (!materialCreator) return null;
 
     const existingMaterials = materialCreator.materials;
@@ -512,7 +512,7 @@ export class LoaderManager {
   /**
    * 检测文件格�?   * @private
    */
-  _detectFormat(source: any) {
+  _detectFormat(source: unknown) {
     let filename = '';
 
     if (typeof source === 'string') {
@@ -543,7 +543,7 @@ export class LoaderManager {
    * 居中模型
    * @private
    */
-  _centerModel(model: any) {
+  _centerModel(model: unknown) {
     const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
 
@@ -557,7 +557,7 @@ export class LoaderManager {
   /**
    * 提取模型元数�?   * @private
    */
-  _extractMetadata(model: any) {
+  _extractMetadata(model: unknown) {
     let vertexCount = 0;
     let faceCount = 0;
     const boundingBox = new THREE.Box3().setFromObject(model);
@@ -610,7 +610,7 @@ export class LoaderManager {
     const result = this.loadedModels.get(modelId);
     if (result) {
       // 清理特征数据
-      const detector: any = this.featureDetector;
+      const detector: unknown = this.featureDetector;
       if (detector?.clearFeatures) {
         detector.clearFeatures(modelId);
       } else if (detector?.clearCache) {

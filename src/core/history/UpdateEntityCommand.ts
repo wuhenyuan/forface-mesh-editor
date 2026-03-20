@@ -2,7 +2,7 @@ import type Document from '../Document';
 import { BaseCommand } from './BaseCommand';
 import type { EntityPatch } from '../Document/Entity';
 
-const cloneValue = (value: any) => {
+const cloneValue = (value: unknown) => {
   if (Array.isArray(value)) return value.slice();
   if (value && typeof value === 'object') return { ...value };
   return value;
@@ -77,7 +77,7 @@ export class UpdateEntityCommand extends BaseCommand {
 
     const before: Record<string, any> = {};
     Object.keys(this.patch || {}).forEach((key) => {
-      before[key] = cloneValue((entity as any)[key]);
+      before[key] = cloneValue((entity as unknown)[key]);
     });
     return before as EntityPatch;
   }

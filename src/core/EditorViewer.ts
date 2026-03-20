@@ -1,7 +1,6 @@
-/**
- * 编辑器专用 Viewer
- * 在基础 Viewer 上集成面拾取、文字系统、物体选择等功能
- */
+﻿/**
+ * 缂栬緫鍣ㄤ笓鐢?Viewer
+ * 鍦ㄥ熀纭€ Viewer 涓婇泦鎴愰潰鎷惧彇銆佹枃瀛楃郴缁熴€佺墿浣撻€夋嫨绛夊姛鑳? */
 import * as THREE from 'three';
 import { Viewer } from './Viewer';
 import { FacePicker, FacePickingUtils } from './facePicking';
@@ -12,54 +11,99 @@ import { ExportManager } from './ExportManager';
 import { ProjectManager } from './ProjectManager';
 import { FeatureDetector } from './facePicking/FeatureDetector';
 
+type ViewerEventBus = {
+  emit: (event: string, payload?: unknown) => void;
+  on: (event: string, callback: (...args: unknown[]) => void) => unknown;
+};
+
+type FeatureDetectorLike = FeatureDetector & {
+  detect?: (model: unknown, modelId?: string, options?: Record<string, any>) => Promise<unknown>;
+  getFeatureAtIntersection?: (modelId: string, intersection: unknown) => unknown;
+  getModelFeatures?: (modelId: string) => unknown;
+  getTextableSurfaces?: (modelId: string, options?: Record<string, any>) => unknown[];
+};
+
+type EditorTextObject = Record<string, unknown> & {
+  id?: string;
+  displayName?: string;
+  content?: string;
+  config?: Record<string, unknown> & {
+    font?: string;
+    size?: number;
+    thickness?: number;
+  };
+  mode?: unknown;
+  material?: {
+    color?: {
+      getHexString?: () => string;
+    };
+  };
+  mesh?: {
+    position?: { toArray?: () => number[] };
+    rotation?: { toArray?: () => number[] };
+  };
+  featureName?: string;
+};
+
+type EditorViewerMesh = THREE.Object3D & {
+  userData: Record<string, unknown> & { isHelper?: boolean };
+};
+
 export class EditorViewer extends Viewer {
+  _loaderManager: LoaderManager | null;
+  _exportManager: ExportManager | null;
+  _projectManager: ProjectManager | null;
+  declare _featureDetector: FeatureDetectorLike | null;
+  declare _facePicker: Viewer['_facePicker'];
+  declare _surfaceTextManager: SurfaceTextManager | null;
+  declare _objectSelectionManager: ObjectSelectionManager | null;
+  _textObjects: EditorTextObject[];
+  _selectedTextId: string | null;
+  _textModeEnabled: boolean;
+  _facePickingEnabled: boolean;
+  _objectSelectionEnabled: boolean;
+
   constructor(container: HTMLElement, options: Record<string, any> = {}) {
     super(container, options);
 
-    // 核心子系统
     this._loaderManager = null;
     this._exportManager = null;
     this._projectManager = null;
     this._featureDetector = null;
 
-    // 交互子系统
     this._facePicker = null;
     this._surfaceTextManager = null;
     this._objectSelectionManager = null;
 
-    // 文字对象列表
+    // 鏂囧瓧瀵硅薄鍒楄〃
     this._textObjects = [];
     this._selectedTextId = null;
 
-    // 模式状态
     this._textModeEnabled = false;
     this._facePickingEnabled = false;
     this._objectSelectionEnabled = false;
 
-    // 初始化核心子系统
+    // 鍒濆鍖栨牳蹇冨瓙绯荤粺
     this._initCoreSubsystems();
   }
 
-  // ==================== 核心子系统 ====================
+  // ==================== 鏍稿績瀛愮郴缁?====================
 
   /**
-   * 初始化核心子系统
+   * 鍒濆鍖栨牳蹇冨瓙绯荤粺
    */
   _initCoreSubsystems() {
-    // 特征检测器
+    // 鐗瑰緛妫€娴嬪櫒
     this._featureDetector = new FeatureDetector();
 
-    // 加载管理器
     this._loaderManager = new LoaderManager();
     this._loaderManager.setFeatureDetector(this._featureDetector);
 
-    // 导出管理器
     this._exportManager = new ExportManager();
 
-    // 项目管理器
     this._projectManager = new ProjectManager();
 
-    // 设置加载事件
+    // 璁剧疆鍔犺浇浜嬩欢
     this._loaderManager.onProgress = (progress) => {
       this.events.emit('loadProgress', progress);
     };
@@ -67,7 +111,7 @@ export class EditorViewer extends Viewer {
       this.events.emit('loadError', { error });
     };
 
-    // 设置导出事件
+    // 璁剧疆瀵煎嚭浜嬩欢
     this._exportManager.onProgress = (progress) => {
       this.events.emit('exportProgress', progress);
     };
@@ -75,7 +119,7 @@ export class EditorViewer extends Viewer {
       this.events.emit('exportError', { error });
     };
 
-    // 设置项目管理事件
+    // 璁剧疆椤圭洰绠＄悊浜嬩欢
     this._projectManager.onChange = (event) => {
       this.events.emit('projectChanged', event);
     };
@@ -86,7 +130,6 @@ export class EditorViewer extends Viewer {
       this.events.emit('projectLoaded', event);
     };
 
-    // 设置特征检测事件
     this._featureDetector.onDetectionStart = (modelId) => {
       this.events.emit('featureDetectionStart', { modelId });
     };
@@ -98,25 +141,22 @@ export class EditorViewer extends Viewer {
     };
   }
 
-  // ==================== 模型加载 ====================
+  // ==================== 妯″瀷鍔犺浇 ====================
 
   /**
-   * 加载模型（统一入口）
-   * @param {string|File|Blob} source - 文件路径或文件对象
-   * @param {Object} options - 加载选项
-   * @returns {Promise<Object>} 加载结果
+   * 鍔犺浇妯″瀷锛堢粺涓€鍏ュ彛锛?   * @param {string|File|Blob} source - 鏂囦欢璺緞鎴栨枃浠跺璞?   * @param {Object} options - 鍔犺浇閫夐」
+   * @returns {Promise<Object>} 鍔犺浇缁撴灉
    */
-  async loadModel(source: any, options: Record<string, any> = {}) {
+  async loadModel(source: unknown, options: Record<string, any> = {}) {
     const { addToScene = true, detectFeatures = false, ...loaderOptions } = options;
 
     try {
-      // 使用 LoaderManager 加载
+      // 浣跨敤 LoaderManager 鍔犺浇
       const result = await this._loaderManager.load(source, {
         detectFeatures,
         ...loaderOptions,
       });
 
-      // 添加到场景
       if (addToScene) {
         this.addMesh(result.model, {
           selectable: true,
@@ -135,40 +175,42 @@ export class EditorViewer extends Viewer {
 
       return result;
     } catch (error) {
-      console.error('[EditorViewer] 模型加载失败:', error);
+      console.error('[EditorViewer] 妯″瀷鍔犺浇澶辫触:', error);
       throw error;
     }
   }
 
   /**
-   * 获取加载管理器
-   */
+   * 鑾峰彇鍔犺浇绠＄悊鍣?   */
   getLoaderManager() {
     return this._loaderManager;
   }
 
-  // ==================== 模型导出 ====================
+  // ==================== 妯″瀷瀵煎嚭 ====================
 
   /**
-   * 导出模型
-   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
-   * @param {string} format - 导出格式: 'stl' | 'obj' | 'gltf' | 'glb'
-   * @param {Object} options - 导出选项
-   * @returns {Promise<Blob>} 导出结果
+   * 瀵煎嚭妯″瀷
+   * @param {THREE.Object3D|THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
+   * @param {string} format - 瀵煎嚭鏍煎紡: 'stl' | 'obj' | 'gltf' | 'glb'
+   * @param {Object} options - 瀵煎嚭閫夐」
+   * @returns {Promise<Blob>} 瀵煎嚭缁撴灉
    */
-  async exportModel(objects: any, format: string, options: Record<string, any> = {}) {
+  async exportModel(
+    objects: THREE.Object3D | THREE.Object3D[],
+    format: string,
+    options: Record<string, any> = {}
+  ) {
     return this._exportManager.export(objects, format, options);
   }
 
   /**
-   * 导出并下载模型
-   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
-   * @param {string} format - 导出格式
-   * @param {string} filename - 文件名（不含扩展名）
-   * @param {Object} options - 导出选项
+   * 瀵煎嚭骞朵笅杞芥ā鍨?   * @param {THREE.Object3D|THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
+   * @param {string} format - 瀵煎嚭鏍煎紡
+   * @param {string} filename - 鏂囦欢鍚嶏紙涓嶅惈鎵╁睍鍚嶏級
+   * @param {Object} options - 瀵煎嚭閫夐」
    */
   async exportAndDownload(
-    objects: any,
+    objects: THREE.Object3D | THREE.Object3D[],
     format: string,
     filename: string = 'model',
     options: Record<string, any> = {}
@@ -178,22 +220,23 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 导出场景中的所有网格
-   * @param {string} format - 导出格式
-   * @param {string} filename - 文件名
-   * @param {Object} options - 导出选项
+   * 瀵煎嚭鍦烘櫙涓殑鎵€鏈夌綉鏍?   * @param {string} format - 瀵煎嚭鏍煎紡
+   * @param {string} filename - 鏂囦欢鍚?   * @param {Object} options - 瀵煎嚭閫夐」
    */
   async exportScene(
     format: string,
     filename: string = 'scene',
-    model = undefined,
+    model: THREE.Object3D | THREE.Object3D[] | undefined = undefined,
     options: Record<string, any> = {}
   ) {
-    model = model ?? this.scene;
-    const blob = await this._exportManager.exportScene(model, format, {
+    const target = model ?? this.scene;
+    const exportOptions = {
       ...options,
       filename,
-    });
+    };
+    const blob = (target as THREE.Scene).isScene
+      ? await this._exportManager.exportScene(target as THREE.Scene, format, exportOptions)
+      : await this._exportManager.export(target as THREE.Object3D | THREE.Object3D[], format, exportOptions);
     this._exportManager._downloadBlob(
       blob,
       `${filename}.${this._exportManager._getExtension(format)}`
@@ -202,10 +245,8 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 导出选中的对象
-   * @param {string} format - 导出格式
-   * @param {string} filename - 文件名
-   * @param {Object} options - 导出选项
+   * 瀵煎嚭閫変腑鐨勫璞?   * @param {string} format - 瀵煎嚭鏍煎紡
+   * @param {string} filename - 鏂囦欢鍚?   * @param {Object} options - 瀵煎嚭閫夐」
    */
   async exportSelected(
     format: string,
@@ -214,7 +255,7 @@ export class EditorViewer extends Viewer {
   ) {
     const selected = this.getSelectedObject();
     if (!selected) {
-      throw new Error('没有选中的对象');
+      throw new Error('No selected object');
     }
 
     await this._exportManager.exportAndDownload(selected, format, filename, options);
@@ -222,19 +263,20 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 导出所有网格（合并后）
-   * @param {string} format - 导出格式
-   * @param {string} filename - 文件名
-   * @param {Object} options - 导出选项
+   * 瀵煎嚭鎵€鏈夌綉鏍硷紙鍚堝苟鍚庯級
+   * @param {string} format - 瀵煎嚭鏍煎紡
+   * @param {string} filename - 鏂囦欢鍚?   * @param {Object} options - 瀵煎嚭閫夐」
    */
   async exportMerged(
     format: string,
     filename: string = 'merged',
     options: Record<string, any> = {}
   ) {
-    const meshes = this._meshes.filter((m) => !m.userData.isHelper);
+    const meshes = this._meshes.filter(
+      (m): m is THREE.Mesh => (m as THREE.Mesh).isMesh && !m.userData.isHelper
+    );
     if (meshes.length === 0) {
-      throw new Error('没有可导出的网格');
+      throw new Error('娌℃湁鍙鍑虹殑缃戞牸');
     }
 
     const blob = await this._exportManager.exportMerged(meshes, format, options);
@@ -246,42 +288,38 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 获取支持的导出格式
-   * @returns {Object[]} 格式列表
+   * 鑾峰彇鏀寔鐨勫鍑烘牸寮?   * @returns {Object[]} 鏍煎紡鍒楄〃
    */
   getSupportedExportFormats() {
     return this._exportManager.getSupportedFormats();
   }
 
   /**
-   * 估算导出文件大小
-   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
-   * @param {string} format - 导出格式
-   * @returns {Object} 估算信息
+   * 浼扮畻瀵煎嚭鏂囦欢澶у皬
+   * @param {THREE.Object3D|THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
+   * @param {string} format - 瀵煎嚭鏍煎紡
+   * @returns {Object} 浼扮畻淇℃伅
    */
-  estimateExportSize(objects, format) {
+  estimateExportSize(objects: THREE.Object3D | THREE.Object3D[], format: string) {
     return this._exportManager.estimateExportSize(objects, format);
   }
 
   /**
-   * 获取导出管理器
-   */
+   * 鑾峰彇瀵煎嚭绠＄悊鍣?   */
   getExportManager() {
     return this._exportManager;
   }
 
-  // ==================== 项目管理 ====================
+  // ==================== 椤圭洰绠＄悊 ====================
 
   /**
-   * 创建新项目
-   * @param {Object} options - 项目选项
-   * @returns {Object} 项目数据
+   * 鍒涘缓鏂伴」鐩?   * @param {Object} options - 椤圭洰閫夐」
+   * @returns {Object} 椤圭洰鏁版嵁
    */
   createProject(options: Record<string, any> = {}) {
-    // 清理当前场景
+    // 娓呯悊褰撳墠鍦烘櫙
     this._clearScene();
 
-    // 创建新项目
     const project = this._projectManager.createProject(options);
 
     this.events.emit('projectCreated', project);
@@ -289,12 +327,11 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 保存项目到本地
-   * @param {string} key - 存储键名（可选）
-   * @returns {boolean} 是否成功
+   * 淇濆瓨椤圭洰鍒版湰鍦?   * @param {string} key - 瀛樺偍閿悕锛堝彲閫夛級
+   * @returns {boolean} 鏄惁鎴愬姛
    */
   saveProject(key) {
-    // 同步当前状态到项目配置
+    // 鍚屾褰撳墠鐘舵€佸埌椤圭洰閰嶇疆
     this._syncStateToProject();
 
     const storageKey = key || `editor_project_${this._projectManager.projectInfo.id}`;
@@ -302,33 +339,29 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 从本地加载项目
-   * @param {string} key - 存储键名
-   * @returns {Promise<Object>} 项目数据
+   * 浠庢湰鍦板姞杞介」鐩?   * @param {string} key - 瀛樺偍閿悕
+   * @returns {Promise<Object>} 椤圭洰鏁版嵁
    */
   async loadProject(key = 'editor_project') {
     const data = this._projectManager.loadFromLocal(key);
     if (!data) return null;
 
-    // 恢复场景状态
     await this._restoreProjectState(data);
 
     return data;
   }
 
   /**
-   * 导出项目文件
-   * @param {string} filename - 文件名
-   */
+   * 瀵煎嚭椤圭洰鏂囦欢
+   * @param {string} filename - 鏂囦欢鍚?   */
   exportProjectFile(filename) {
     this._syncStateToProject();
     this._projectManager.exportProjectFile(filename || this._projectManager.getProjectName());
   }
 
   /**
-   * 导出项目 ZIP 包（project.json + models/*）
-   * @param {string} filename
-   * @param {Object} options 透传到 ProjectManager.exportProjectPackage
+   * 瀵煎嚭椤圭洰 ZIP 鍖咃紙project.json + models/*锛?   * @param {string} filename
+   * @param {Object} options 閫忎紶鍒?ProjectManager.exportProjectPackage
    */
   async exportProjectPackage(filename: string, options: Record<string, any> = {}) {
     this._syncStateToProject();
@@ -339,9 +372,9 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 导出“本地全量包”(ZIP)：project.json + model/*
+   * 瀵煎嚭鈥滄湰鍦板叏閲忓寘鈥?ZIP)锛歱roject.json + model/*
    * @param {string} filename
-   * @param {Object} options 透传到 ProjectManager.exportLocalFullPackage
+   * @param {Object} options 閫忎紶鍒?ProjectManager.exportLocalFullPackage
    */
   async exportLocalFullPackage(filename: string, options: Record<string, any> = {}) {
     this._syncStateToProject();
@@ -352,9 +385,9 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 导入项目文件
-   * @param {File} file - JSON 文件
-   * @returns {Promise<Object>} 项目数据
+   * 瀵煎叆椤圭洰鏂囦欢
+   * @param {File} file - JSON 鏂囦欢
+   * @returns {Promise<Object>} 椤圭洰鏁版嵁
    */
   async importProjectFile(file) {
     const data = await this._projectManager.importProjectFile(file);
@@ -363,23 +396,23 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 获取本地项目列表
-   * @returns {Array} 项目列表
+   * 鑾峰彇鏈湴椤圭洰鍒楄〃
+   * @returns {Array} 椤圭洰鍒楄〃
    */
   getLocalProjectList() {
     return this._projectManager.getLocalProjectList();
   }
 
   /**
-   * 删除本地项目
-   * @param {string} key - 存储键名
+   * 鍒犻櫎鏈湴椤圭洰
+   * @param {string} key - 瀛樺偍閿悕
    */
   deleteLocalProject(key) {
     this._projectManager.deleteLocalProject(key);
   }
 
   /**
-   * 获取项目名称
+   * 鑾峰彇椤圭洰鍚嶇О
    * @returns {string}
    */
   getProjectName() {
@@ -387,7 +420,7 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 设置项目名称
+   * 璁剧疆椤圭洰鍚嶇О
    * @param {string} name
    */
   setProjectName(name) {
@@ -395,26 +428,24 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 项目是否有未保存的修改
-   * @returns {boolean}
+   * 椤圭洰鏄惁鏈夋湭淇濆瓨鐨勪慨鏀?   * @returns {boolean}
    */
   isProjectDirty() {
     return this._projectManager.isDirty();
   }
 
   /**
-   * 获取项目管理器
-   */
+   * 鑾峰彇椤圭洰绠＄悊鍣?   */
   getProjectManager() {
     return this._projectManager;
   }
 
   /**
-   * 同步当前状态到项目配置
+   * 鍚屾褰撳墠鐘舵€佸埌椤圭洰閰嶇疆
    * @private
    */
   _syncStateToProject() {
-    // 同步模型配置
+    // 鍚屾妯″瀷閰嶇疆
     const meshes = this._meshes.filter((m) => !m.userData.isHelper);
     if (meshes.length > 0) {
       const mainMesh = meshes[0];
@@ -427,9 +458,11 @@ export class EditorViewer extends Viewer {
       });
     }
 
-    // 同步文字配置
-    this._projectManager.config.texts = [];
+    // 鍚屾鏂囧瓧閰嶇疆
+    const projectConfig = this._projectManager.config as { texts: Array<Record<string, unknown>> };
+    projectConfig.texts = [];
     this._textObjects.forEach((textObj) => {
+      const textColor = textObj.material?.color?.getHexString?.();
       this._projectManager.addTextConfig({
         id: textObj.id,
         displayName: textObj.displayName,
@@ -438,28 +471,27 @@ export class EditorViewer extends Viewer {
         size: textObj.config?.size,
         thickness: textObj.config?.thickness,
         mode: textObj.mode,
-        color: textObj.material?.color ? '#' + textObj.material.color.getHexString() : '#333333',
+        color: textColor ? `#${textColor}` : '#333333',
         position: textObj.mesh?.position?.toArray() || [0, 0, 0],
         rotation: textObj.mesh?.rotation?.toArray() || [0, 0, 0],
         featureName: textObj.featureName,
       });
     });
 
-    // 更新属性标识符
+    // 鏇存柊灞炴€ф爣璇嗙
     this._projectManager.updatePropIdentifier();
   }
 
   /**
-   * 从项目数据恢复场景状态
-   * @private
+   * 浠庨」鐩暟鎹仮澶嶅満鏅姸鎬?   * @private
    */
   async _restoreProjectState(projectData) {
     const config = projectData.config;
 
-    // 清理当前场景
+    // 娓呯悊褰撳墠鍦烘櫙
     this._clearScene();
 
-    // 加载原始模型
+    // 鍔犺浇鍘熷妯″瀷
     const originPath =
       this._projectManager?.resolveModelPath?.('origin') ||
       config?.models?.origin?.path ||
@@ -468,11 +500,11 @@ export class EditorViewer extends Viewer {
       try {
         await this.loadModel(originPath);
       } catch (error) {
-        console.warn('[EditorViewer] 加载原始模型失败:', error);
+        console.warn('[EditorViewer] 鍔犺浇鍘熷妯″瀷澶辫触:', error);
       }
     }
 
-    // 加载底座模型
+    // 鍔犺浇搴曞骇妯″瀷
     const basePath =
       this._projectManager?.resolveModelPath?.('base') ||
       config?.models?.base?.path ||
@@ -481,46 +513,45 @@ export class EditorViewer extends Viewer {
       try {
         await this.loadModel(basePath, { name: 'base' });
       } catch (error) {
-        console.warn('[EditorViewer] 加载底座模型失败:', error);
+        console.warn('[EditorViewer] 鍔犺浇搴曞骇妯″瀷澶辫触:', error);
       }
     }
 
-    // 恢复文字
-    // 注意：文字恢复需要先有模型和特征检测完成
-    // 这里只是示例，实际实现可能需要更复杂的逻辑
-    console.log(`[EditorViewer] 待恢复 ${config.texts.length} 个文字`);
+    // 鎭㈠鏂囧瓧
+    // 娉ㄦ剰锛氭枃瀛楁仮澶嶉渶瑕佸厛鏈夋ā鍨嬪拰鐗瑰緛妫€娴嬪畬鎴?    // 杩欓噷鍙槸绀轰緥锛屽疄闄呭疄鐜板彲鑳介渶瑕佹洿澶嶆潅鐨勯€昏緫
+    const textCount = Array.isArray(config?.texts) ? config.texts.length : 0;
+    console.log('[EditorViewer] pending text restore count: ' + textCount);
   }
 
   /**
-   * 清理场景
+   * 娓呯悊鍦烘櫙
    * @private
    */
   _clearScene() {
-    // 清理文字
+    // 娓呯悊鏂囧瓧
     this._textObjects.forEach((textObj) => {
       this._surfaceTextManager?.deleteText(textObj.id);
     });
     this._textObjects = [];
 
-    // 清理网格（保留辅助对象）
+    // 娓呯悊缃戞牸锛堜繚鐣欒緟鍔╁璞★級
     const meshesToRemove = this._meshes.filter((m) => !m.userData.isHelper);
     meshesToRemove.forEach((mesh) => this.removeMesh(mesh));
 
-    // 清理特征缓存
+    // 娓呯悊鐗瑰緛缂撳瓨
     this._featureDetector?.clearCache();
   }
 
-  // ==================== 特征检测 ====================
+  // ==================== 鐗瑰緛妫€娴?====================
 
   /**
-   * 手动触发特征检测
-   * @param {THREE.Mesh|THREE.Group} model - 模型
-   * @param {string} modelId - 模型ID
-   * @param {Object} options - 检测选项
+   * 鎵嬪姩瑙﹀彂鐗瑰緛妫€娴?   * @param {THREE.Mesh|THREE.Group} model - 妯″瀷
+   * @param {string} modelId - 妯″瀷ID
+   * @param {Object} options - 妫€娴嬮€夐」
    */
-  async detectFeatures(model: any, modelId?: string, options: Record<string, any> = {}) {
-    const detector = this._featureDetector as any;
-    if (typeof detector?.detect === 'function') {
+  async detectFeatures(model: unknown, modelId?: string, options: Record<string, any> = {}) {
+    const detector = this._featureDetector as FeatureDetectorLike | null;
+    if (detector?.detect) {
       return await detector.detect(model, modelId, options);
     }
 
@@ -528,42 +559,43 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 根据点击获取特征
-   * @param {string} modelId - 模型ID
-   * @param {THREE.Intersection} intersection - 射线交点
+   * 鏍规嵁鐐瑰嚮鑾峰彇鐗瑰緛
+   * @param {string} modelId - 妯″瀷ID
+   * @param {THREE.Intersection} intersection - 灏勭嚎浜ょ偣
    */
   getFeatureAtIntersection(modelId, intersection) {
-    return this._featureDetector?.getFeatureAtIntersection?.(modelId, intersection) ?? null;
+    const detector = this._featureDetector as FeatureDetectorLike | null;
+    return detector?.getFeatureAtIntersection?.(modelId, intersection) ?? null;
   }
 
   /**
-   * 获取模型的所有特征
-   * @param {string} modelId - 模型ID
+   * 鑾峰彇妯″瀷鐨勬墍鏈夌壒寰?   * @param {string} modelId - 妯″瀷ID
    */
   getModelFeatures(modelId) {
-    return this._featureDetector?.getModelFeatures?.(modelId) ?? null;
+    const detector = this._featureDetector as FeatureDetectorLike | null;
+    return detector?.getModelFeatures?.(modelId) ?? null;
   }
 
   /**
-   * 获取适合添加文字的表面
-   * @param {string} modelId - 模型ID
-   * @param {Object} options - 筛选选项
+   * 鑾峰彇閫傚悎娣诲姞鏂囧瓧鐨勮〃闈?   * @param {string} modelId - 妯″瀷ID
+   * @param {Object} options - 绛涢€夐€夐」
    */
   getTextableSurfaces(modelId: string, options: Record<string, any> = {}) {
-    return this._featureDetector?.getTextableSurfaces?.(modelId, options) ?? [];
+    const detector = this._featureDetector as FeatureDetectorLike | null;
+    return detector?.getTextableSurfaces?.(modelId, options) ?? [];
   }
 
   /**
-   * 获取特征检测器
+   * 鑾峰彇鐗瑰緛妫€娴嬪櫒
    */
   getFeatureDetector() {
     return this._featureDetector;
   }
 
-  // ==================== 面拾取系统 ====================
+  // ==================== 闈㈡嬀鍙栫郴缁?====================
 
   /**
-   * 初始化面拾取
+   * 鍒濆鍖栭潰鎷惧彇
    */
   initFacePicking() {
     if (this._facePicker) return this._facePicker;
@@ -576,10 +608,10 @@ export class EditorViewer extends Viewer {
 
       this._setupFacePickingEvents();
 
-      console.log('面拾取系统已初始化');
+      console.log('Face picking system initialized');
       return this._facePicker;
     } catch (error) {
-      console.error('面拾取初始化失败:', error);
+      console.error('闈㈡嬀鍙栧垵濮嬪寲澶辫触:', error);
       return null;
     }
   }
@@ -590,7 +622,7 @@ export class EditorViewer extends Viewer {
     this._facePicker.on('faceSelected', (faceInfo, originalEvent) => {
       this.events.emit('faceSelected', { faceInfo, originalEvent });
 
-      // 如果文字模式启用，转发给文字系统
+      // 濡傛灉鏂囧瓧妯″紡鍚敤锛岃浆鍙戠粰鏂囧瓧绯荤粺
       if (this._textModeEnabled && this._surfaceTextManager) {
         this._surfaceTextManager.handleFaceSelected(faceInfo, originalEvent);
       }
@@ -614,8 +646,7 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 启用面拾取
-   */
+   * 鍚敤闈㈡嬀鍙?   */
   enableFacePicking() {
     if (!this._facePicker) {
       this.initFacePicking();
@@ -628,8 +659,7 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 禁用面拾取
-   */
+   * 绂佺敤闈㈡嬀鍙?   */
   disableFacePicking() {
     if (this._facePicker) {
       this._facePicker.disable();
@@ -639,25 +669,25 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 获取面拾取器
+   * 鑾峰彇闈㈡嬀鍙栧櫒
    */
   getFacePicker() {
     return this._facePicker;
   }
 
-  // ==================== 文字系统 ====================
+  // ==================== 鏂囧瓧绯荤粺 ====================
 
   /**
-   * 初始化文字系统
-   */
+   * 鍒濆鍖栨枃瀛楃郴缁?   */
   _getTextTargetMeshes() {
     const root = this.entityGroup || this.scene;
-    const meshes: any[] = [];
-    root?.traverse?.((obj: any) => {
-      if (!obj?.isMesh) return;
-      if (obj.userData?.isHelper) return;
-      if (obj.userData?.isTextObject) return;
-      meshes.push(obj);
+    const meshes: THREE.Mesh[] = [];
+    root?.traverse?.((obj: THREE.Object3D) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.userData?.isHelper) return;
+      if (mesh.userData?.isTextObject) return;
+      meshes.push(mesh);
     });
     return meshes;
   }
@@ -671,7 +701,7 @@ export class EditorViewer extends Viewer {
         this.camera,
         this.renderer,
         this.container,
-        null // 不依赖 facePicker
+        null // 涓嶄緷璧?facePicker
       );
 
       this._surfaceTextManager.setTargetMeshes(this._getTextTargetMeshes());
@@ -679,10 +709,10 @@ export class EditorViewer extends Viewer {
 
       this._setupTextSystemEvents();
 
-      console.log('文字系统已初始化');
+      console.log('鏂囧瓧绯荤粺宸插垵濮嬪寲');
       return this._surfaceTextManager;
     } catch (error) {
-      console.error('文字系统初始化失败:', error);
+      console.error('鏂囧瓧绯荤粺鍒濆鍖栧け璐?', error);
       return null;
     }
   }
@@ -716,7 +746,6 @@ export class EditorViewer extends Viewer {
       this.events.emit('textDeleted', { id, textObject });
     });
 
-    // 同步转发更新事件（用于 UI/store 同步）
     this._surfaceTextManager.on('textContentUpdated', (data) => {
       this.events.emit('textContentUpdated', data);
     });
@@ -743,8 +772,18 @@ export class EditorViewer extends Viewer {
       this.events.emit('textModeDisabled');
     });
 
-    // 拖动时禁用相机控制
-    const transformControls = this._surfaceTextManager.transformControls;
+    const transformControls = this._surfaceTextManager.transformControls as
+      | {
+          on?: (eventName: string, callback: (isDragging: boolean) => void) => void;
+          addEventListener?: (eventName: string, callback: (event: { value: boolean }) => void) => void;
+          controls?: {
+            addEventListener?: (
+              eventName: string,
+              callback: (event: { value: boolean }) => void
+            ) => void;
+          };
+        }
+      | null;
     if (transformControls) {
       if (typeof transformControls.on === 'function') {
         transformControls.on('dragging-changed', (isDragging) => {
@@ -763,7 +802,7 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 启用文字添加模式
+   * 鍚敤鏂囧瓧娣诲姞妯″紡
    */
   enableTextMode() {
     if (!this._surfaceTextManager) {
@@ -775,7 +814,7 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 禁用文字添加模式
+   * 绂佺敤鏂囧瓧娣诲姞妯″紡
    */
   disableTextMode() {
     if (this._surfaceTextManager) {
@@ -784,7 +823,7 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 创建文字
+   * 鍒涘缓鏂囧瓧
    */
   async createText(content, faceInfo) {
     if (!this._surfaceTextManager) {
@@ -794,14 +833,14 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 更新文字内容
+   * 鏇存柊鏂囧瓧鍐呭
    */
   async updateTextContent(textId, content) {
     return this._surfaceTextManager?.updateTextContent(textId, content);
   }
 
   /**
-   * 更新文字颜色
+   * 鏇存柊鏂囧瓧棰滆壊
    */
   updateTextColor(textId, color) {
     const colorHex = typeof color === 'string' ? parseInt(color.replace('#', ''), 16) : color;
@@ -809,36 +848,33 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 更新文字配置
+   * 鏇存柊鏂囧瓧閰嶇疆
    */
   async updateTextConfig(textId, config) {
     return this._surfaceTextManager?.updateTextConfig(textId, config);
   }
 
   /**
-   * 切换文字模式（凸起/内嵌）
-   */
+   * 鍒囨崲鏂囧瓧妯″紡锛堝嚫璧?鍐呭祵锛?   */
   async switchTextMode(textId, mode) {
     return this._surfaceTextManager?.switchTextMode(textId, mode);
   }
 
   /**
-   * 删除文字
+   * 鍒犻櫎鏂囧瓧
    */
   async deleteText(textId) {
     return await this._surfaceTextManager?.deleteText(textId);
   }
 
   /**
-   * 获取文字快照（用于撤销/重做）
-   */
+   * 鑾峰彇鏂囧瓧蹇収锛堢敤浜庢挙閿€/閲嶅仛锛?   */
   getTextSnapshot(textId) {
     return this._surfaceTextManager?.getTextSnapshot?.(textId) || null;
   }
 
   /**
-   * 从快照恢复文字（用于撤销/重做）
-   */
+   * 浠庡揩鐓ф仮澶嶆枃瀛楋紙鐢ㄤ簬鎾ら攢/閲嶅仛锛?   */
   async restoreText(snapshot) {
     if (!this._surfaceTextManager) {
       this.initTextSystem();
@@ -847,37 +883,35 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 选择文字
+   * 閫夋嫨鏂囧瓧
    */
   selectText(textId) {
     this._surfaceTextManager?.selectText(textId);
   }
 
   /**
-   * 获取文字对象列表
+   * 鑾峰彇鏂囧瓧瀵硅薄鍒楄〃
    */
   getTextObjects() {
     return [...this._textObjects];
   }
 
   /**
-   * 获取选中的文字对象
-   */
+   * 鑾峰彇閫変腑鐨勬枃瀛楀璞?   */
   getSelectedTextObject() {
     return this._surfaceTextManager?.getSelectedTextObject();
   }
 
   /**
-   * 获取文字管理器
-   */
+   * 鑾峰彇鏂囧瓧绠＄悊鍣?   */
   getTextManager() {
     return this._surfaceTextManager;
   }
 
-  // ==================== 物体选择系统 ====================
+  // ==================== 鐗╀綋閫夋嫨绯荤粺 ====================
 
   /**
-   * 初始化物体选择
+   * 鍒濆鍖栫墿浣撻€夋嫨
    */
   initObjectSelection() {
     if (this._objectSelectionManager) return this._objectSelectionManager;
@@ -895,30 +929,34 @@ export class EditorViewer extends Viewer {
 
       this._setupObjectSelectionEvents();
 
-      console.log('物体选择系统已初始化');
+      console.log('鐗╀綋閫夋嫨绯荤粺宸插垵濮嬪寲');
       return this._objectSelectionManager;
     } catch (error) {
-      console.error('物体选择系统初始化失败:', error);
+      console.error('鐗╀綋閫夋嫨绯荤粺鍒濆鍖栧け璐?', error);
       return null;
     }
   }
 
   _setupObjectSelectionEvents() {
     if (!this._objectSelectionManager) return;
+    const outlineHelpers = this as {
+      setOutlineSelection?: (object: unknown) => void;
+      clearOutlineSelection?: () => void;
+    };
 
     this._objectSelectionManager.on('objectSelected', (object) => {
       this.events.emit('objectSelected', { object });
-      this.setOutlineSelection?.(object);
+      outlineHelpers.setOutlineSelection?.(object);
     });
 
     this._objectSelectionManager.on('objectDeselected', (object) => {
       this.events.emit('objectDeselected', { object });
-      this.clearOutlineSelection?.();
+      outlineHelpers.clearOutlineSelection?.();
     });
 
     this._objectSelectionManager.on('selectionCleared', () => {
       this.events.emit('objectSelectionCleared');
-      this.clearOutlineSelection?.();
+      outlineHelpers.clearOutlineSelection?.();
     });
 
     this._objectSelectionManager.on('draggingChanged', (isDragging) => {
@@ -936,7 +974,7 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 启用物体选择
+   * 鍚敤鐗╀綋閫夋嫨
    */
   enableObjectSelection() {
     if (!this._objectSelectionManager) {
@@ -950,50 +988,48 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 禁用物体选择
+   * 绂佺敤鐗╀綋閫夋嫨
    */
   disableObjectSelection() {
     if (this._objectSelectionManager) {
       this._objectSelectionManager.disable();
       this._objectSelectionEnabled = false;
-      this.clearOutlineSelection?.();
+      const outlineHelpers = this as { clearOutlineSelection?: () => void };
+      outlineHelpers.clearOutlineSelection?.();
       this.events.emit('objectSelectionDisabled');
     }
   }
 
   /**
-   * 设置变换模式
+   * 璁剧疆鍙樻崲妯″紡
    */
   setTransformMode(mode) {
     this._objectSelectionManager?.setTransformMode(mode);
   }
 
   /**
-   * 获取物体选择管理器
-   */
+   * 鑾峰彇鐗╀綋閫夋嫨绠＄悊鍣?   */
   getObjectSelectionManager() {
     return this._objectSelectionManager;
   }
 
-  // ==================== 重写父类方法 ====================
+  // ==================== 閲嶅啓鐖剁被鏂规硶 ====================
 
   /**
-   * 添加网格时同步到子系统
-   */
-  addMesh(mesh: any, options: Record<string, any> = {}) {
+   * 娣诲姞缃戞牸鏃跺悓姝ュ埌瀛愮郴缁?   */
+  addMesh(mesh: EditorViewerMesh, options: Record<string, any> = {}) {
     const result = super.addMesh(mesh, options);
 
-    // 同步到面拾取
+    // 鍚屾鍒伴潰鎷惧彇
     if (this._facePicker && FacePickingUtils.validateMesh(mesh)) {
-      this._facePicker.addMesh(mesh);
+      this._facePicker.addMesh?.(mesh);
     }
 
-    // 同步到文字系统
     if (this._surfaceTextManager) {
       this._surfaceTextManager.setTargetMeshes(this._getTextTargetMeshes());
     }
 
-    // 同步到物体选择
+    // 鍚屾鍒扮墿浣撻€夋嫨
     if (this._objectSelectionManager && !mesh.userData.isHelper) {
       this._objectSelectionManager.addSelectableObject(mesh);
     }
@@ -1002,11 +1038,10 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 移除网格时同步到子系统
-   */
-  removeMesh(mesh) {
+   * 绉婚櫎缃戞牸鏃跺悓姝ュ埌瀛愮郴缁?   */
+  removeMesh(mesh: EditorViewerMesh) {
     if (this._facePicker) {
-      this._facePicker.removeMesh(mesh);
+      this._facePicker.removeMesh?.(mesh);
     }
 
     if (this._objectSelectionManager) {
@@ -1017,10 +1052,8 @@ export class EditorViewer extends Viewer {
   }
 
   /**
-   * 销毁时清理子系统
-   */
+   * 閿€姣佹椂娓呯悊瀛愮郴缁?   */
   dispose() {
-    // 清理核心子系统
     if (this._loaderManager) {
       this._loaderManager.dispose();
       this._loaderManager = null;
@@ -1041,7 +1074,6 @@ export class EditorViewer extends Viewer {
       this._featureDetector = null;
     }
 
-    // 清理交互子系统
     if (this._facePicker) {
       this._facePicker.destroy();
       this._facePicker = null;

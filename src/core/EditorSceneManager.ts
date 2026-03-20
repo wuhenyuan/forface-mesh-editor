@@ -21,8 +21,12 @@ export class EditorSceneManager {
 
   attachViewer(viewer: EditorViewer) {
     this.viewer = viewer;
-    this.selector = viewer.initObjectSelection?.() || viewer.getObjectSelectionManager?.() || null;
-    this.highlighter = (this.selector as any)?.objectSelector || null;
+    this.selector =
+      (viewer.initObjectSelection?.() as ObjectSelectionManager | null) ||
+      (viewer.getObjectSelectionManager?.() as ObjectSelectionManager | null) ||
+      null;
+    const selector = this.selector as (ObjectSelectionManager & { objectSelector?: ObjectSelector }) | null;
+    this.highlighter = selector?.objectSelector || null;
   }
 
   dispose() {

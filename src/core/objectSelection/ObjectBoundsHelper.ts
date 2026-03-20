@@ -4,7 +4,7 @@ import * as THREE from 'three';
  * 选中物体的包围盒辅助显示（包围盒 + 长宽高标注）
  */
 export class ObjectBoundsHelper {
-  [key: string]: any;
+  [key: string]: unknown;
 
   constructor(scene: THREE.Scene, options: Record<string, any> = {}) {
     this.scene = scene;

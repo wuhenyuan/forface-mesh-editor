@@ -40,7 +40,7 @@ function sliceBufferAttribute(
   const itemSize = attribute.itemSize;
   const begin = start * itemSize;
   const end = (start + count) * itemSize;
-  const array = (attribute.array as any).slice(begin, end);
+  const array = attribute.array.slice(begin, end);
   return new THREE.BufferAttribute(array, itemSize, attribute.normalized);
 }
 

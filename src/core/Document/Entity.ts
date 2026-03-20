@@ -35,7 +35,10 @@ export interface TextEntityProps extends BaseEntityProps {
 }
 
 export type EntityProps = ModelEntityProps | TextEntityProps;
-export type EntityPatch = Partial<EntityProps>;
+export type EntityPatch = Partial<Omit<ModelEntityProps, 'type'>> &
+  Partial<Omit<TextEntityProps, 'type'>> & {
+    type?: EntityType;
+  };
 
 export function generateEntityId() {
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.randomUUID) {
@@ -73,8 +76,8 @@ export class Entity {
 }
 
 export class ModelEntity extends Entity {
-  type: 'model';
-  resource: EntityResource;
+  declare type: 'model';
+  declare resource: EntityResource;
   loaderOptions?: Record<string, any>;
   visualOptions?: Record<string, any>;
 
@@ -88,7 +91,7 @@ export class ModelEntity extends Entity {
 }
 
 export class TextEntity extends Entity {
-  type: 'text';
+  declare type: 'text';
   textType?: string;
   content?: string;
   size?: number;

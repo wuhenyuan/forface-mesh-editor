@@ -6,12 +6,12 @@ import { FeatureDetector } from './FeatureDetector';
  * 提供 O(1) 的特征查找性能
  */
 export class FeaturePool {
-  featureDetector: any;
-  meshFeatures: Map<string, any>;
-  faceToFeature: Map<string, any>;
-  registeredMeshes: Map<string, any>;
-  stats: any;
-  config: any;
+  featureDetector: unknown;
+  meshFeatures: Map<string, unknown>;
+  faceToFeature: Map<string, unknown>;
+  registeredMeshes: Map<string, unknown>;
+  stats: unknown;
+  config: unknown;
   accessOrder: Map<string, number>;
 
   constructor() {
@@ -52,7 +52,7 @@ export class FeaturePool {
    * @param {boolean} autoPreprocess - 是否自动预处理
    * @returns {Promise<string>} 网格ID
    */
-  async registerMesh(mesh: any, autoPreprocess: boolean = true) {
+  async registerMesh(mesh: unknown, autoPreprocess: boolean = true) {
     const meshId = this.featureDetector.generateMeshId(mesh);
 
     // 检查是否已注册
@@ -124,7 +124,7 @@ export class FeaturePool {
    * @param {string} meshId - 网格ID
    * @param {Object} features - 特征数据
    */
-  cacheFeatures(meshId: string, features: any) {
+  cacheFeatures(meshId: string, features: unknown) {
     // 检查缓存大小限制
     if (this.config.enableLRU && this.meshFeatures.size >= this.config.maxCacheSize) {
       this.evictLRU();
@@ -147,7 +147,7 @@ export class FeaturePool {
    * @param {string} meshId - 网格ID
    * @param {Object} features - 特征数据
    */
-  buildFastLookupTable(meshId: string, features: any) {
+  buildFastLookupTable(meshId: string, features: unknown) {
     // 清理旧的查找表项
     const keysToDelete = [];
     for (const key of this.faceToFeature.keys()) {

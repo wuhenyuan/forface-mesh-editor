@@ -3,7 +3,7 @@
  * 提供文字对象的属性编辑界面
  */
 export class TextPropertyPanel {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor() {
     this.currentTextObject = null;
     this.eventListeners = new Map();
@@ -81,7 +81,7 @@ export class TextPropertyPanel {
   /**
    * 获取属性值
    * @param {string} propertyName - 属性名称
-   * @returns {any} 属性值
+   * @returns {unknown} 属性值
    */
   getPropertyValue(propertyName) {
     if (!this.currentTextObject) return null;
@@ -107,7 +107,7 @@ export class TextPropertyPanel {
   /**
    * 设置属性值
    * @param {string} propertyName - 属性名称
-   * @param {any} value - 属性值
+   * @param {unknown} value - 属性值
    */
   setPropertyValue(propertyName, value) {
     if (!this.currentTextObject) return;
@@ -175,7 +175,7 @@ export class TextPropertyPanel {
   /**
    * 验证属性值
    * @param {string} propertyName - 属性名称
-   * @param {any} value - 属性值
+   * @param {unknown} value - 属性值
    * @returns {Object} 验证结果
    */
   validatePropertyValue(propertyName, value) {
@@ -293,7 +293,7 @@ export class TextPropertyPanel {
     } else {
       // 重置所有属性
       Object.entries(this.properties as Record<string, any>).forEach(([name, config]) => {
-        const cfg = config as any;
+        const cfg = config as unknown;
         if (cfg.default !== undefined) {
           this.setPropertyValue(name, cfg.default);
         }
@@ -338,7 +338,7 @@ export class TextPropertyPanel {
     const properties = Object.entries(this.properties as Record<string, any>).map(
       ([name, config]) => ({
         name,
-        ...(config as any),
+        ...(config as unknown),
         value: this.getPropertyValue(name),
         isModified: this.isPropertyModified(name),
       })
@@ -382,7 +382,7 @@ export class TextPropertyPanel {
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
-   * @param {...any} args - 事件参数
+   * @param {...unknown} args - 事件参数
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;

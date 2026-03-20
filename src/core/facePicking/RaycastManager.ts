@@ -5,10 +5,10 @@ import * as THREE from 'three';
  * 负责处理鼠标位置到3D空间的射线投射和面检测
  */
 export class RaycastManager {
-  camera: any;
+  camera: unknown;
   raycaster: THREE.Raycaster;
 
-  constructor(camera: any) {
+  constructor(camera: unknown) {
     this.camera = camera;
     this.raycaster = new THREE.Raycaster();
 
@@ -41,7 +41,7 @@ export class RaycastManager {
    * @param {Object} options - 检测选项
    * @returns {Object|null} 面信息对象或null
    */
-  intersectFaces(mousePosition: any, meshes: any[], options: Record<string, any> = {}): any {
+  intersectFaces(mousePosition: unknown, meshes: unknown[], options: Record<string, any> = {}): unknown {
     // 输入验证
     if (!this.validateInput(mousePosition, meshes)) {
       return null;
@@ -87,8 +87,8 @@ export class RaycastManager {
    * @param {THREE.Mesh[]} meshes - 要检测的网格数组
    * @returns {Object[]} 按距离排序的面信息数组
    */
-  intersectFacesWithDepthSorting(mousePosition: any, meshes: any[]): any[] {
-    const result = this.intersectFaces(mousePosition, meshes, { returnAll: true }) as any[];
+  intersectFacesWithDepthSorting(mousePosition: unknown, meshes: unknown[]): unknown[] {
+    const result = this.intersectFaces(mousePosition, meshes, { returnAll: true }) as unknown[];
 
     if (!result || result.length === 0) {
       return [];
@@ -134,7 +134,7 @@ export class RaycastManager {
    * @param {Object} intersection - Three.js射线投射结果
    * @returns {Object} 面信息对象
    */
-  buildFaceInfo(intersection: any): any {
+  buildFaceInfo(intersection: unknown): unknown {
     const { object: mesh, face, faceIndex, point, distance, uv } = intersection;
 
     if (!mesh || !mesh.geometry) {
@@ -142,7 +142,7 @@ export class RaycastManager {
     }
 
     const geometry = mesh.geometry;
-    const faceInfo: any = {
+    const faceInfo: unknown = {
       mesh: mesh,
       faceIndex: faceIndex,
       face: face,

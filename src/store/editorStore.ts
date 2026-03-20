@@ -1,8 +1,16 @@
-/**
- * 编辑器状态管理
- * 兼容 Vue 2.6+ 的轻量级状态管理
- */
+﻿/**
+ * 缂栬緫鍣ㄧ姸鎬佺鐞? * 鍏煎 Vue 2.6+ 鐨勮交閲忕骇鐘舵€佺鐞? */
 import Vue from 'vue';
+type StoreEntity = {
+  id: string;
+  type?: string;
+  content?: unknown;
+  displayName?: string;
+  meta?: {
+    displayName?: string;
+  };
+  [key: string]: unknown;
+};
 
 const state = Vue.observable({
   currentFeature: 'base',
@@ -70,10 +78,11 @@ const normalizeEntityForStore = (entity: any) => {
 };
 
 const buildTextList = () => {
-  const texts = Object.values(state.entityMap).filter((entity) => entity?.type === 'text');
-  return texts.map((entity: any, index) => {
+  const entities = Object.values(state.entityMap as Record<string, StoreEntity>);
+  const texts = entities.filter((entity) => entity?.type === 'text');
+  return texts.map((entity, index) => {
     const content = typeof entity.content === 'string' ? entity.content : '';
-    const displayName = entity.displayName || entity.meta?.displayName || `文字${index + 1}`;
+    const displayName = entity.displayName || entity.meta?.displayName || `鏂囧瓧${index + 1}`;
     return { id: entity.id, content, displayName };
   });
 };
@@ -162,30 +171,30 @@ const actions = {
   },
 
   _getContextMenuItems(targetType: string, target: any) {
-    const baseItems = [{ key: 'resetView', label: '重置视图', icon: 'el-icon-refresh' }];
+    const baseItems = [{ key: 'resetView', label: '閲嶇疆瑙嗗浘', icon: 'el-icon-refresh' }];
 
     switch (targetType) {
       case 'text':
         return [
-          { key: 'editText', label: '编辑文字', icon: 'el-icon-edit' },
-          { key: 'changeColor', label: '修改颜色', icon: 'el-icon-brush' },
-          { key: 'duplicate', label: '复制', icon: 'el-icon-copy-document' },
-          { key: 'delete', label: '删除', icon: 'el-icon-delete', danger: true },
+          { key: 'editText', label: '缂栬緫鏂囧瓧', icon: 'el-icon-edit' },
+          { key: 'changeColor', label: '淇敼棰滆壊', icon: 'el-icon-brush' },
+          { key: 'duplicate', label: '澶嶅埗', icon: 'el-icon-copy-document' },
+          { key: 'delete', label: '鍒犻櫎', icon: 'el-icon-delete', danger: true },
           { divider: true },
           ...baseItems,
         ];
       case 'object':
         return [
-          { key: 'select', label: '选中', icon: 'el-icon-aim' },
-          { key: 'changeColor', label: '修改颜色', icon: 'el-icon-brush' },
-          { key: 'hide', label: '隐藏', icon: 'el-icon-view' },
+          { key: 'select', label: '閫変腑', icon: 'el-icon-aim' },
+          { key: 'changeColor', label: '淇敼棰滆壊', icon: 'el-icon-brush' },
+          { key: 'hide', label: '闅愯棌', icon: 'el-icon-view' },
           { divider: true },
           ...baseItems,
         ];
       case 'surface':
         return [
-          { key: 'addText', label: '添加文字', icon: 'el-icon-edit-outline' },
-          { key: 'changeColor', label: '修改表面颜色', icon: 'el-icon-brush' },
+          { key: 'addText', label: '娣诲姞鏂囧瓧', icon: 'el-icon-edit-outline' },
+          { key: 'changeColor', label: '淇敼琛ㄩ潰棰滆壊', icon: 'el-icon-brush' },
           { divider: true },
           ...baseItems,
         ];
@@ -349,7 +358,7 @@ const actions = {
   },
 };
 
-// ==================== 导出 ====================
+// ==================== 瀵煎嚭 ====================
 export const useEditorStore = () => ({
   state,
   ...getters,
@@ -359,3 +368,4 @@ export const useEditorStore = () => ({
 export { state, getters, actions };
 
 export default { state, getters, actions, useEditorStore };
+

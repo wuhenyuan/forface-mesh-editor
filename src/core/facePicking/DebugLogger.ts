@@ -1,14 +1,80 @@
-/**
- * 面拾取调试和日志工具
- * 提供详细的调试信息和性能监控
- */
+import type * as THREE from 'three';
+
+type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+type ConsoleMethod = 'debug' | 'info' | 'warn' | 'error';
+
+type LogEntry = {
+  level: LogLevel;
+  message: string;
+  data: unknown;
+  timestamp: number;
+  time: string;
+};
+
+type LogStats = {
+  total: number;
+  byLevel: Record<LogLevel, number>;
+};
+
+type LogReportItem = {
+  message: string;
+  timestamp: number;
+  data: unknown;
+};
+
+type FaceLike = {
+  mesh?: { name?: string };
+  faceIndex?: number;
+  point?: unknown;
+  distance?: number;
+};
+
+type SelectionChangeLike = {
+  selectedCount?: number;
+  mode?: unknown;
+  canUndo?: boolean;
+  canRedo?: boolean;
+};
+
+type MeshValidationLike = {
+  isValid?: boolean;
+  faceCount?: number;
+  geometryType?: string;
+  warnings?: unknown[];
+};
+
+type PerformanceMonitor = {
+  name: string;
+  startTime: number;
+  end: (context?: Record<string, unknown>) => number;
+  checkpoint: (checkpoint: string, context?: Record<string, unknown>) => void;
+};
+
+const LOG_LEVELS: Record<LogLevel, number> = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3,
+};
+
+const LOG_CONSOLE_METHOD: Record<LogLevel, ConsoleMethod> = {
+  DEBUG: 'debug',
+  INFO: 'info',
+  WARN: 'warn',
+  ERROR: 'error',
+};
+
+function isLogLevel(value: string): value is LogLevel {
+  return value in LOG_LEVELS;
+}
 
 export class DebugLogger {
   enabled: boolean;
-  logs: any[];
+  logs: LogEntry[];
   maxLogs: number;
   startTime: number;
-  levels: Record<string, number>;
+  levels: Record<LogLevel, number>;
   currentLevel: number;
 
   constructor(enabled = false) {
@@ -16,56 +82,32 @@ export class DebugLogger {
     this.logs = [];
     this.maxLogs = 1000;
     this.startTime = performance.now();
-
-    // 日志级别
-    this.levels = {
-      DEBUG: 0,
-      INFO: 1,
-      WARN: 2,
-      ERROR: 3,
-    };
-
+    this.levels = LOG_LEVELS;
     this.currentLevel = this.levels.INFO;
   }
 
-  /**
-   * 启用调试模式
-   */
   enable() {
     this.enabled = true;
-    this.log('DEBUG', '调试模式已启用');
+    this.log('DEBUG', 'Debug logging enabled');
   }
 
-  /**
-   * 禁用调试模式
-   */
   disable() {
     this.enabled = false;
   }
 
-  /**
-   * 设置日志级别
-   * @param {string} level - 日志级别 (DEBUG, INFO, WARN, ERROR)
-   */
-  setLevel(level) {
-    if (this.levels[level] !== undefined) {
+  setLevel(level: string) {
+    if (isLogLevel(level)) {
       this.currentLevel = this.levels[level];
     }
   }
 
-  /**
-   * 记录日志
-   * @param {string} level - 日志级别
-   * @param {string} message - 消息
-   * @param {Object} data - 附加数据
-   */
-  log(level, message, data = null) {
+  log(level: LogLevel, message: string, data: unknown = null) {
     if (!this.enabled || this.levels[level] < this.currentLevel) {
       return;
     }
 
     const timestamp = performance.now() - this.startTime;
-    const logEntry = {
+    const logEntry: LogEntry = {
       level,
       message,
       data,
@@ -74,73 +116,44 @@ export class DebugLogger {
     };
 
     this.logs.push(logEntry);
-
-    // 限制日志数量
     if (this.logs.length > this.maxLogs) {
       this.logs.shift();
     }
 
-    // 输出到控制台
-    const consoleAny = console as any;
-    const consoleMethod = level.toLowerCase();
-    if (consoleAny[consoleMethod]) {
-      const prefix = `[FacePicker ${level}] ${timestamp.toFixed(2)}ms:`;
-      if (data) {
-        consoleAny[consoleMethod](prefix, message, data);
-      } else {
-        consoleAny[consoleMethod](prefix, message);
-      }
+    const consoleMethod = LOG_CONSOLE_METHOD[level];
+    const prefix = `[FacePicker ${level}] ${timestamp.toFixed(2)}ms:`;
+    if (data !== null && data !== undefined) {
+      console[consoleMethod](prefix, message, data);
+    } else {
+      console[consoleMethod](prefix, message);
     }
   }
 
-  /**
-   * 调试级别日志
-   */
-  debug(message: string, data: any = null) {
+  debug(message: string, data: unknown = null) {
     this.log('DEBUG', message, data);
   }
 
-  /**
-   * 信息级别日志
-   */
-  info(message: string, data: any = null) {
+  info(message: string, data: unknown = null) {
     this.log('INFO', message, data);
   }
 
-  /**
-   * 警告级别日志
-   */
-  warn(message: string, data: any = null) {
+  warn(message: string, data: unknown = null) {
     this.log('WARN', message, data);
   }
 
-  /**
-   * 错误级别日志
-   */
-  error(message: string, data: any = null) {
+  error(message: string, data: unknown = null) {
     this.log('ERROR', message, data);
   }
 
-  /**
-   * 记录性能数据
-   * @param {string} operation - 操作名称
-   * @param {number} duration - 持续时间
-   * @param {Object} context - 上下文信息
-   */
-  logPerformance(operation, duration, context = {}) {
-    this.debug(`性能: ${operation}`, {
+  logPerformance(operation: string, duration: number, context: Record<string, unknown> = {}) {
+    this.debug(`Performance: ${operation}`, {
       duration: `${duration.toFixed(2)}ms`,
       ...context,
     });
   }
 
-  /**
-   * 记录面拾取事件
-   * @param {string} event - 事件类型
-   * @param {Object} faceInfo - 面信息
-   */
-  logFacePickingEvent(event, faceInfo) {
-    this.info(`面拾取事件: ${event}`, {
+  logFacePickingEvent(event: string, faceInfo: FaceLike | null | undefined) {
+    this.info(`FacePicking: ${event}`, {
       mesh: faceInfo?.mesh?.name || 'Unknown',
       faceIndex: faceInfo?.faceIndex,
       position: faceInfo?.point,
@@ -148,13 +161,8 @@ export class DebugLogger {
     });
   }
 
-  /**
-   * 记录选择状态变化
-   * @param {string} action - 动作类型
-   * @param {Object} selectionInfo - 选择信息
-   */
-  logSelectionChange(action, selectionInfo) {
-    this.info(`选择变化: ${action}`, {
+  logSelectionChange(action: string, selectionInfo: SelectionChangeLike) {
+    this.info(`Selection: ${action}`, {
       selectedCount: selectionInfo.selectedCount,
       mode: selectionInfo.mode,
       canUndo: selectionInfo.canUndo,
@@ -162,26 +170,15 @@ export class DebugLogger {
     });
   }
 
-  /**
-   * 记录错误信息
-   * @param {string} context - 错误上下文
-   * @param {Error} error - 错误对象
-   * @param {Object} additionalInfo - 附加信息
-   */
-  logError(context, error, additionalInfo = {}) {
-    this.error(`错误 [${context}]: ${error.message}`, {
+  logError(context: string, error: Error, additionalInfo: Record<string, unknown> = {}) {
+    this.error(`Error [${context}]: ${error.message}`, {
       stack: error.stack,
       ...additionalInfo,
     });
   }
 
-  /**
-   * 记录网格验证结果
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @param {Object} validationResult - 验证结果
-   */
-  logMeshValidation(mesh, validationResult) {
-    this.debug('网格验证', {
+  logMeshValidation(mesh: THREE.Mesh, validationResult: MeshValidationLike) {
+    this.debug('Mesh validation', {
       name: mesh.name || 'Unnamed',
       isValid: validationResult.isValid,
       faceCount: validationResult.faceCount,
@@ -190,67 +187,49 @@ export class DebugLogger {
     });
   }
 
-  /**
-   * 获取日志统计
-   * @returns {Object} 统计信息
-   */
-  getLogStats() {
-    const stats: any = {
-      total: this.logs.length,
-      byLevel: {} as Record<string, number>,
+  getLogStats(): LogStats {
+    const byLevel: Record<LogLevel, number> = {
+      DEBUG: 0,
+      INFO: 0,
+      WARN: 0,
+      ERROR: 0,
     };
 
-    Object.keys(this.levels).forEach((level) => {
-      stats.byLevel[level] = this.logs.filter((log) => log.level === level).length;
+    this.logs.forEach((log) => {
+      byLevel[log.level] += 1;
     });
 
-    return stats;
+    return {
+      total: this.logs.length,
+      byLevel,
+    };
   }
 
-  /**
-   * 获取最近的日志
-   * @param {number} count - 数量
-   * @returns {Array} 日志数组
-   */
-  getRecentLogs(count = 50) {
+  getRecentLogs(count = 50): LogEntry[] {
     return this.logs.slice(-count);
   }
 
-  /**
-   * 按级别过滤日志
-   * @param {string} level - 日志级别
-   * @returns {Array} 过滤后的日志
-   */
-  getLogsByLevel(level) {
+  getLogsByLevel(level: LogLevel): LogEntry[] {
     return this.logs.filter((log) => log.level === level);
   }
 
-  /**
-   * 搜索日志
-   * @param {string} query - 搜索关键词
-   * @returns {Array} 匹配的日志
-   */
-  searchLogs(query) {
+  searchLogs(query: string): LogEntry[] {
     const lowerQuery = query.toLowerCase();
-    return this.logs.filter(
-      (log) =>
-        log.message.toLowerCase().includes(lowerQuery) ||
-        (log.data && JSON.stringify(log.data).toLowerCase().includes(lowerQuery))
-    );
+    return this.logs.filter((log) => {
+      const inMessage = log.message.toLowerCase().includes(lowerQuery);
+      const inData =
+        log.data !== null &&
+        log.data !== undefined &&
+        JSON.stringify(log.data).toLowerCase().includes(lowerQuery);
+      return inMessage || inData;
+    });
   }
 
-  /**
-   * 清除所有日志
-   */
   clearLogs() {
     this.logs = [];
-    this.info('日志已清除');
+    this.info('Logs cleared');
   }
 
-  /**
-   * 导出日志为JSON
-   * @returns {string} JSON字符串
-   */
   exportLogs() {
     return JSON.stringify(
       {
@@ -263,64 +242,45 @@ export class DebugLogger {
     );
   }
 
-  /**
-   * 生成调试报告
-   * @returns {Object} 调试报告
-   */
   generateDebugReport() {
     const stats = this.getLogStats();
     const recentErrors = this.getLogsByLevel('ERROR').slice(-10);
     const recentWarnings = this.getLogsByLevel('WARN').slice(-10);
 
+    const mapReportItems = (items: LogEntry[]): LogReportItem[] =>
+      items.map((log) => ({
+        message: log.message,
+        timestamp: log.timestamp,
+        data: log.data,
+      }));
+
     return {
       summary: {
         enabled: this.enabled,
-        level: Object.keys(this.levels).find((key) => this.levels[key] === this.currentLevel),
+        level: (Object.keys(this.levels) as LogLevel[]).find(
+          (key) => this.levels[key] === this.currentLevel
+        ),
         uptime: Math.round((performance.now() - this.startTime) / 1000),
         totalLogs: stats.total,
       },
       stats,
-      recentErrors: recentErrors.map((log) => ({
-        message: log.message,
-        timestamp: log.timestamp,
-        data: log.data,
-      })),
-      recentWarnings: recentWarnings.map((log) => ({
-        message: log.message,
-        timestamp: log.timestamp,
-        data: log.data,
-      })),
+      recentErrors: mapReportItems(recentErrors),
+      recentWarnings: mapReportItems(recentWarnings),
     };
   }
 
-  /**
-   * 创建性能监控器
-   * @param {string} name - 监控器名称
-   * @returns {Object} 监控器对象
-   */
-  createPerformanceMonitor(name) {
+  createPerformanceMonitor(name: string): PerformanceMonitor {
     const startTime = performance.now();
 
     return {
       name,
       startTime,
-
-      /**
-       * 结束监控并记录结果
-       * @param {Object} context - 上下文信息
-       */
-      end: (context = {}) => {
+      end: (context: Record<string, unknown> = {}) => {
         const duration = performance.now() - startTime;
         this.logPerformance(name, duration, context);
         return duration;
       },
-
-      /**
-       * 记录中间点
-       * @param {string} checkpoint - 检查点名称
-       * @param {Object} context - 上下文信息
-       */
-      checkpoint: (checkpoint, context = {}) => {
+      checkpoint: (checkpoint: string, context: Record<string, unknown> = {}) => {
         const duration = performance.now() - startTime;
         this.debug(`${name} - ${checkpoint}`, {
           duration: `${duration.toFixed(2)}ms`,
@@ -331,10 +291,8 @@ export class DebugLogger {
   }
 }
 
-// 创建全局调试器实例
 export const debugLogger = new DebugLogger();
 
-// 在开发环境中自动启用调试
 if (process.env.NODE_ENV === 'development') {
   debugLogger.enable();
   debugLogger.setLevel('DEBUG');

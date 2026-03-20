@@ -9,6 +9,11 @@ import { RemoveEntityCommand } from './history/RemoveEntityCommand';
 import type { EntityProps } from './Document/Entity';
 
 export type EditorCoreEvents = Record<string, any>;
+type ExecutableCommand = {
+  execute?: () => unknown;
+};
+type RemoveMeshTarget = Parameters<EditorDocumentVisual['removeMesh']>[0];
+type ExportSceneTarget = Parameters<EditorDocumentVisual['exportScene']>[2];
 
 export default class EditorCore {
   document: Document;
@@ -91,12 +96,16 @@ export default class EditorCore {
     return this.document?.load?.(config);
   }
 
-  async executeCommand(command: any) {
+  async executeCommand(command: unknown) {
     const history = this.sceneManager?.history;
     if (history?.execute) {
       return await history.execute(command);
     }
-    return await command?.execute?.();
+    const executable = command as ExecutableCommand;
+    if (typeof executable?.execute === 'function') {
+      return await executable.execute();
+    }
+    return null;
   }
 
   async undo() {
@@ -139,7 +148,7 @@ export default class EditorCore {
     return this.documentVisual?.disableTextMode?.();
   }
 
-  focusOn(target: any) {
+  focusOn(target: unknown) {
     return this.documentVisual?.focusOn?.(target);
   }
 
@@ -151,20 +160,20 @@ export default class EditorCore {
     return this.documentVisual?.selectText?.(textId);
   }
 
-  selectObject(target: any) {
+  selectObject(target: unknown) {
     return this.documentVisual?.select?.(target);
   }
 
-  setObjectVisible(target: any, visible: boolean) {
+  setObjectVisible(target: unknown, visible: boolean) {
     return this.documentVisual?.setObjectVisible?.(target, visible);
   }
 
-  setObjectColor(target: any, color: string | number) {
+  setObjectColor(target: unknown, color: string | number) {
     return this.documentVisual?.setObjectColor?.(target, color);
   }
 
-  removeMesh(target: any) {
-    return this.documentVisual?.removeMesh?.(target);
+  removeMesh(target: unknown) {
+    return this.documentVisual?.removeMesh?.(target as RemoveMeshTarget);
   }
 
   getModelById(modelId: string) {
@@ -176,13 +185,15 @@ export default class EditorCore {
   }
 
   exportScene(format: string, filename: string = 'scene', options: Record<string, any> = {}) {
-    const visual: any = this.documentVisual;
-    const csgGroup = visual?.csgGroup;
-    const hasCSG = !!(csgGroup && csgGroup.children && csgGroup.children.length > 0);
+    const visual = this.documentVisual;
+    const csgGroup = visual?.csgGroup as { children?: unknown[] } | null | undefined;
+    const hasCSG = Array.isArray(csgGroup?.children) && csgGroup.children.length > 0;
     const model = hasCSG
       ? csgGroup
-      : this.getModelById('originModel') || visual?.entityGroup || visual?.scene;
-    return visual?.exportScene?.(format, filename, model, options);
+      : this.getModelById('originModel') ||
+        (visual?.entityGroup as unknown) ||
+        (visual?.scene as unknown);
+    return visual?.exportScene?.(format, filename, model as ExportSceneTarget, options);
   }
 
   exportSelected(format: string, filename: string = 'selected', options: Record<string, any> = {}) {

@@ -9,7 +9,7 @@ import { CSGCylinderText } from './CSGCylinderText';
  * 负责生成3D文字几何体
  */
 export class TextGeometryGenerator {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor() {
     this.fontLoader = new FontLoader();
     this.loadedFonts = new Map(); // 字体缓存

@@ -10,7 +10,7 @@ import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 export class BooleanOperator {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor() {
     this.evaluator = null;
     this.isLibraryLoaded = false;

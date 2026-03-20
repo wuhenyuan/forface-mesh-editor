@@ -1,7 +1,7 @@
 import { CompositeCommand } from './CompositeCommand';
 
 export class HistoryManager {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor(options: Record<string, any> = {}) {
     const { maxSize = 50, onChange = null } = options;
 

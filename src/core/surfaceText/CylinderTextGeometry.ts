@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 
 export class CylinderTextGeometry {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor() {
     this.defaultConfig = {
       curveSegments: 12,

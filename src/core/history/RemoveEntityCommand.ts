@@ -2,17 +2,17 @@ import type Document from '../Document';
 import { BaseCommand } from './BaseCommand';
 import type { EntityProps } from '../Document/Entity';
 
-const cloneEntity = (entity: any): EntityProps | null => {
+const cloneEntity = (entity: unknown): EntityProps | null => {
   if (!entity) return null;
   const snapshot = { ...entity } as EntityProps;
   if (entity.meta && typeof entity.meta === 'object') {
     snapshot.meta = { ...entity.meta };
   }
   if (entity.loaderOptions && typeof entity.loaderOptions === 'object') {
-    (snapshot as any).loaderOptions = { ...entity.loaderOptions };
+    (snapshot as unknown).loaderOptions = { ...entity.loaderOptions };
   }
   if (entity.visualOptions && typeof entity.visualOptions === 'object') {
-    (snapshot as any).visualOptions = { ...entity.visualOptions };
+    (snapshot as unknown).visualOptions = { ...entity.visualOptions };
   }
   return snapshot;
 };

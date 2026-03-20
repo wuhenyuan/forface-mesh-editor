@@ -11,7 +11,7 @@ import { VertexBasedIdentifier } from './VertexBasedIdentifier';
  * - 特征名字基于原始模型的顶点索引生成，绝对稳定唯一
  */
 export class FeatureBasedNaming {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor() {
     // 初始化基于顶点索引的标识符
     this.vertexIdentifier = new VertexBasedIdentifier();

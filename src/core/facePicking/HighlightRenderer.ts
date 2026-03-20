@@ -1,422 +1,231 @@
 import * as THREE from 'three';
 
-/**
- * 高亮渲染管理器
- * 负责管理面级高亮显示和悬停效果
- */
+type HighlightColors = {
+  selection: number;
+  hover: number;
+  multiSelection: number;
+};
+
+type HighlightStats = {
+  selectionHighlights: number;
+  hoverHighlights: number;
+  totalHighlights: number;
+  cachedMaterials: number;
+};
+
+function getColorMaterial(material: THREE.Material): { isLit: boolean } {
+  const lit =
+    (material as THREE.MeshStandardMaterial).isMeshStandardMaterial ||
+    (material as THREE.MeshPhongMaterial).isMeshPhongMaterial;
+  return { isLit: !!lit };
+}
+
 export class HighlightRenderer {
-  [key: string]: any;
+  scene: THREE.Scene;
+  highlightMeshes: Map<string, THREE.Mesh>;
+  hoverMeshes: Map<string, THREE.Mesh>;
+  colors: HighlightColors;
+  materialCache: Map<string, THREE.Material>;
+  highlightGroup: THREE.Group;
+  hoverGroup: THREE.Group;
 
-  constructor(scene: any) {
+  constructor(scene: THREE.Scene) {
     this.scene = scene;
-
-    // 高亮网格存储 - key: meshId_faceIndex, value: highlightMesh
     this.highlightMeshes = new Map();
-
-    // 悬停高亮网格存储
     this.hoverMeshes = new Map();
-
-    // 高亮颜色配置
     this.colors = {
-      selection: 0xff6b35, // 橙色 - 选中高亮
-      hover: 0x4fc3f7, // 浅蓝色 - 悬停高亮
-      multiSelection: 0xe91e63, // 粉色 - 多选高亮
+      selection: 0xff6b35,
+      hover: 0x4fc3f7,
+      multiSelection: 0xe91e63,
     };
-
-    // 高亮材质缓存
     this.materialCache = new Map();
 
-    // 高亮组 - 用于管理所有高亮网格
     this.highlightGroup = new THREE.Group();
     this.highlightGroup.name = 'FaceHighlightGroup';
     this.scene.add(this.highlightGroup);
 
-    // 悬停组
     this.hoverGroup = new THREE.Group();
     this.hoverGroup.name = 'FaceHoverGroup';
     this.scene.add(this.hoverGroup);
   }
 
-  /**
-   * 高亮显示面
-   * @param {THREE.Mesh} mesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色（可选）
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {boolean} 是否成功创建高亮
-   */
-  highlightFace(mesh: any, faceIndex: number, color: any = null, isHover: boolean = false) {
-    if (!mesh || !mesh.geometry || faceIndex < 0) {
-      console.warn('无效的网格或面索引');
-      return false;
-    }
+  highlightFace(mesh: THREE.Mesh, faceIndex: number, color: number | null = null, isHover = false) {
+    if (!mesh || !mesh.geometry || faceIndex < 0) return false;
 
-    const highlightId = this.generateHighlightId(mesh, faceIndex);
-    const targetGroup = isHover ? this.hoverGroup : this.highlightGroup;
+    const id = this.generateHighlightId(mesh, faceIndex);
     const targetMap = isHover ? this.hoverMeshes : this.highlightMeshes;
+    const targetGroup = isHover ? this.hoverGroup : this.highlightGroup;
 
-    // 如果已经存在高亮，先移除
-    if (targetMap.has(highlightId)) {
-      this.removeHighlightById(highlightId, isHover);
+    if (targetMap.has(id)) {
+      this.removeHighlightById(id, isHover);
     }
 
-    // 创建面高亮网格
     const highlightMesh = this.createFaceHighlightMesh(mesh, faceIndex, color, isHover);
+    if (!highlightMesh) return false;
 
-    if (highlightMesh) {
-      targetMap.set(highlightId, highlightMesh);
-      targetGroup.add(highlightMesh);
-      return true;
-    }
-
-    return false;
+    targetMap.set(id, highlightMesh);
+    targetGroup.add(highlightMesh);
+    return true;
   }
 
-  /**
-   * 移除面高亮
-   * @param {THREE.Mesh} mesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {boolean} 是否成功移除
-   */
-  removeHighlight(mesh: any, faceIndex: number, isHover: boolean = false) {
-    const highlightId = this.generateHighlightId(mesh, faceIndex);
-    return this.removeHighlightById(highlightId, isHover);
+  removeHighlight(mesh: THREE.Mesh, faceIndex: number, isHover = false) {
+    return this.removeHighlightById(this.generateHighlightId(mesh, faceIndex), isHover);
   }
 
-  /**
-   * 根据ID移除高亮
-   * @param {string} highlightId - 高亮ID
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {boolean} 是否成功移除
-   */
-  removeHighlightById(highlightId: string, isHover: boolean = false) {
-    const targetGroup = isHover ? this.hoverGroup : this.highlightGroup;
+  removeHighlightById(highlightId: string, isHover = false) {
     const targetMap = isHover ? this.hoverMeshes : this.highlightMeshes;
-
+    const targetGroup = isHover ? this.hoverGroup : this.highlightGroup;
     const highlightMesh = targetMap.get(highlightId);
-    if (highlightMesh) {
-      targetGroup.remove(highlightMesh);
+    if (!highlightMesh) return false;
 
-      // 清理几何体和材质
-      if (highlightMesh.geometry) {
-        highlightMesh.geometry.dispose();
-      }
-      if (highlightMesh.material) {
-        if (Array.isArray(highlightMesh.material)) {
-          highlightMesh.material.forEach((mat) => mat.dispose());
-        } else {
-          highlightMesh.material.dispose();
-        }
-      }
-
-      targetMap.delete(highlightId);
-      return true;
+    targetGroup.remove(highlightMesh);
+    highlightMesh.geometry.dispose();
+    const material = highlightMesh.material;
+    if (Array.isArray(material)) {
+      material.forEach((item) => item.dispose());
+    } else {
+      material.dispose();
     }
-
-    return false;
+    targetMap.delete(highlightId);
+    return true;
   }
 
-  /**
-   * 清除所有高亮
-   * @param {boolean} includeHover - 是否包括悬停效果
-   */
-  clearAllHighlights(includeHover: boolean = false) {
-    // 清除选择高亮
-    this.highlightMeshes.forEach((mesh, id) => {
-      this.removeHighlightById(id, false);
-    });
-
-    // 清除悬停高亮
+  clearAllHighlights(includeHover = false) {
+    Array.from(this.highlightMeshes.keys()).forEach((id) => this.removeHighlightById(id, false));
     if (includeHover) {
-      this.hoverMeshes.forEach((mesh, id) => {
-        this.removeHighlightById(id, true);
-      });
+      Array.from(this.hoverMeshes.keys()).forEach((id) => this.removeHighlightById(id, true));
     }
   }
 
-  /**
-   * 显示悬停效果
-   * @param {THREE.Mesh} mesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @returns {boolean} 是否成功显示
-   */
-  showHoverEffect(mesh: any, faceIndex: number) {
+  showHoverEffect(mesh: THREE.Mesh, faceIndex: number) {
     return this.highlightFace(mesh, faceIndex, this.colors.hover, true);
   }
 
-  /**
-   * 隐藏悬停效果
-   * @param {THREE.Mesh} mesh - 原始网格（可选）
-   * @param {number} faceIndex - 面索引（可选）
-   */
-  hideHoverEffect(mesh: any = null, faceIndex: any = null) {
+  hideHoverEffect(mesh: THREE.Mesh | null = null, faceIndex: number | null = null) {
     if (mesh !== null && faceIndex !== null) {
       this.removeHighlight(mesh, faceIndex, true);
-    } else {
-      // 清除所有悬停效果
-      this.hoverMeshes.forEach((highlightMesh, id) => {
-        this.removeHighlightById(id, true);
-      });
+      return;
     }
+    Array.from(this.hoverMeshes.keys()).forEach((id) => this.removeHighlightById(id, true));
   }
 
-  /**
-   * 创建面高亮网格
-   * @param {THREE.Mesh} originalMesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Mesh|null} 高亮网格或null
-   */
-  createFaceHighlightMesh(originalMesh: any, faceIndex: number, color: any, isHover: boolean) {
+  createFaceHighlightMesh(
+    originalMesh: THREE.Mesh,
+    faceIndex: number,
+    color: number | null,
+    isHover: boolean
+  ) {
     const geometry = originalMesh.geometry;
-
-    if (geometry.isBufferGeometry) {
-      return this.createBufferGeometryHighlight(originalMesh, faceIndex, color, isHover);
-    } else if (geometry.isGeometry) {
-      return this.createGeometryHighlight(originalMesh, faceIndex, color, isHover);
-    }
-
-    console.warn('不支持的几何体类型');
-    return null;
+    if (!geometry || !geometry.isBufferGeometry) return null;
+    return this.createBufferGeometryHighlight(originalMesh, geometry, faceIndex, color, isHover);
   }
 
-  /**
-   * 为BufferGeometry创建面高亮
-   * @param {THREE.Mesh} originalMesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Mesh|null} 高亮网格
-   */
-  createBufferGeometryHighlight(originalMesh, faceIndex, color, isHover) {
-    const originalGeometry = originalMesh.geometry;
-    const positionAttribute = originalGeometry.getAttribute('position');
-    const normalAttribute = originalGeometry.getAttribute('normal');
-    const uvAttribute = originalGeometry.getAttribute('uv');
-    const indexAttribute = originalGeometry.getIndex();
+  private createBufferGeometryHighlight(
+    originalMesh: THREE.Mesh,
+    geometry: THREE.BufferGeometry,
+    faceIndex: number,
+    color: number | null,
+    isHover: boolean
+  ) {
+    const position = geometry.getAttribute('position');
+    if (!position) return null;
 
-    if (!positionAttribute) {
-      console.warn('几何体缺少位置属性');
+    const index = geometry.getIndex();
+    const start = faceIndex * 3;
+
+    const vertexIndices = index
+      ? [index.getX(start), index.getX(start + 1), index.getX(start + 2)]
+      : [start, start + 1, start + 2];
+
+    if (vertexIndices.some((vertexIndex) => vertexIndex < 0 || vertexIndex >= position.count)) {
       return null;
     }
 
-    // 创建新的几何体，只包含选中的面
-    const highlightGeometry = new THREE.BufferGeometry();
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const normal = geometry.getAttribute('normal');
+    const uv = geometry.getAttribute('uv');
+    const uvs: number[] = [];
 
-    // 获取面的顶点索引
-    let vertexIndices = [];
-
-    if (indexAttribute) {
-      // 有索引的几何体
-      const startIndex = faceIndex * 3;
-      for (let i = 0; i < 3; i++) {
-        vertexIndices.push(indexAttribute.getX(startIndex + i));
+    vertexIndices.forEach((vertexIndex) => {
+      positions.push(position.getX(vertexIndex), position.getY(vertexIndex), position.getZ(vertexIndex));
+      if (normal) {
+        normals.push(normal.getX(vertexIndex), normal.getY(vertexIndex), normal.getZ(vertexIndex));
       }
-    } else {
-      // 无索引的几何体
-      const startIndex = faceIndex * 3;
-      for (let i = 0; i < 3; i++) {
-        vertexIndices.push(startIndex + i);
-      }
-    }
-
-    // 提取面的顶点数据
-    const positions = [];
-    const normals = [];
-    const uvs = [];
-
-    vertexIndices.forEach((index) => {
-      // 位置
-      positions.push(
-        positionAttribute.getX(index),
-        positionAttribute.getY(index),
-        positionAttribute.getZ(index)
-      );
-
-      // 法向量
-      if (normalAttribute) {
-        normals.push(
-          normalAttribute.getX(index),
-          normalAttribute.getY(index),
-          normalAttribute.getZ(index)
-        );
-      }
-
-      // UV坐标
-      if (uvAttribute) {
-        uvs.push(uvAttribute.getX(index), uvAttribute.getY(index));
+      if (uv) {
+        uvs.push(uv.getX(vertexIndex), uv.getY(vertexIndex));
       }
     });
 
-    // 设置几何体属性
+    const highlightGeometry = new THREE.BufferGeometry();
     highlightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-
     if (normals.length > 0) {
       highlightGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     } else {
       highlightGeometry.computeVertexNormals();
     }
-
     if (uvs.length > 0) {
       highlightGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     }
 
-    // 创建高亮材质
-    const highlightMaterial = this.createHighlightMaterial(originalMesh.material, color, isHover);
+    const sourceMaterial = Array.isArray(originalMesh.material)
+      ? originalMesh.material[0]
+      : originalMesh.material;
+    const highlightMaterial = this.createHighlightMaterial(sourceMaterial, color, isHover);
 
-    // 创建高亮网格
     const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
-
-    // 复制原始网格的变换
     highlightMesh.matrix.copy(originalMesh.matrix);
     highlightMesh.matrixAutoUpdate = false;
-
-    // 设置渲染顺序，确保高亮在原始网格之上
     highlightMesh.renderOrder = originalMesh.renderOrder + (isHover ? 2 : 1);
-
     return highlightMesh;
   }
 
-  /**
-   * 为传统Geometry创建面高亮
-   * @param {THREE.Mesh} originalMesh - 原始网格
-   * @param {number} faceIndex - 面索引
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Mesh|null} 高亮网格
-   */
-  createGeometryHighlight(originalMesh, faceIndex, color, isHover) {
-    const originalGeometry = originalMesh.geometry;
-
-    if (!originalGeometry.faces || faceIndex >= originalGeometry.faces.length) {
-      console.warn('无效的面索引');
-      return null;
-    }
-
-    const face = originalGeometry.faces[faceIndex];
-    const vertices = originalGeometry.vertices;
-
-    // 创建新的几何体
-    const highlightGeometry = new (THREE as any).Geometry();
-
-    // 添加面的顶点
-    highlightGeometry.vertices.push(
-      vertices[face.a].clone(),
-      vertices[face.b].clone(),
-      vertices[face.c].clone()
-    );
-
-    // 添加面
-    const newFace = new (THREE as any).Face3(0, 1, 2);
-    newFace.normal.copy(face.normal);
-    newFace.vertexNormals = face.vertexNormals.slice();
-    highlightGeometry.faces.push(newFace);
-
-    // 复制UV坐标（如果存在）
-    if (originalGeometry.faceVertexUvs && originalGeometry.faceVertexUvs[0]) {
-      const faceUvs = originalGeometry.faceVertexUvs[0][faceIndex];
-      if (faceUvs) {
-        highlightGeometry.faceVertexUvs[0] = [faceUvs.slice()];
-      }
-    }
-
-    // 创建高亮材质
-    const highlightMaterial = this.createHighlightMaterial(originalMesh.material, color, isHover);
-
-    // 创建高亮网格
-    const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
-
-    // 复制原始网格的变换
-    highlightMesh.matrix.copy(originalMesh.matrix);
-    highlightMesh.matrixAutoUpdate = false;
-
-    // 设置渲染顺序
-    highlightMesh.renderOrder = originalMesh.renderOrder + (isHover ? 2 : 1);
-
-    return highlightMesh;
-  }
-
-  /**
-   * 创建高亮材质
-   * @param {THREE.Material} originalMaterial - 原始材质
-   * @param {number} color - 高亮颜色
-   * @param {boolean} isHover - 是否为悬停效果
-   * @returns {THREE.Material} 高亮材质
-   */
-  createHighlightMaterial(originalMaterial: any, color: any, isHover: boolean) {
-    // 确定高亮颜色
-    const highlightColor = color || (isHover ? this.colors.hover : this.colors.selection);
-
-    // 生成材质缓存键
+  createHighlightMaterial(
+    originalMaterial: THREE.Material | undefined,
+    color: number | null,
+    isHover: boolean
+  ) {
+    const highlightColor = color ?? (isHover ? this.colors.hover : this.colors.selection);
     const cacheKey = `${highlightColor}_${isHover ? 'hover' : 'selection'}`;
+    const cached = this.materialCache.get(cacheKey);
+    if (cached) return cached;
 
-    // 检查缓存
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey);
-    }
+    const isLit = originalMaterial ? getColorMaterial(originalMaterial).isLit : false;
+    const material: THREE.Material = isLit
+      ? new THREE.MeshStandardMaterial({
+          color: highlightColor,
+          emissive: highlightColor,
+          emissiveIntensity: isHover ? 0.3 : 0.5,
+          transparent: true,
+          opacity: isHover ? 0.6 : 0.8,
+          side: THREE.DoubleSide,
+          depthTest: true,
+          depthWrite: false,
+        })
+      : new THREE.MeshBasicMaterial({
+          color: highlightColor,
+          transparent: true,
+          opacity: isHover ? 0.4 : 0.7,
+          side: THREE.DoubleSide,
+          depthTest: true,
+          depthWrite: false,
+        });
 
-    // 创建高亮材质
-    let highlightMaterial;
-
-    if (originalMaterial.isMeshStandardMaterial || originalMaterial.isMeshPhongMaterial) {
-      // 对于标准材质，创建发光效果
-      highlightMaterial = new THREE.MeshStandardMaterial({
-        color: highlightColor,
-        emissive: highlightColor,
-        emissiveIntensity: isHover ? 0.3 : 0.5,
-        transparent: true,
-        opacity: isHover ? 0.6 : 0.8,
-        side: THREE.DoubleSide,
-        depthTest: true,
-        depthWrite: false,
-      });
-    } else {
-      // 对于其他材质，使用基础材质
-      highlightMaterial = new THREE.MeshBasicMaterial({
-        color: highlightColor,
-        transparent: true,
-        opacity: isHover ? 0.4 : 0.7,
-        side: THREE.DoubleSide,
-        depthTest: true,
-        depthWrite: false,
-      });
-    }
-
-    // 缓存材质
-    this.materialCache.set(cacheKey, highlightMaterial);
-
-    return highlightMaterial;
+    this.materialCache.set(cacheKey, material);
+    return material;
   }
 
-  /**
-   * 生成高亮ID
-   * @param {THREE.Mesh} mesh - 网格对象
-   * @param {number} faceIndex - 面索引
-   * @returns {string} 高亮ID
-   */
-  generateHighlightId(mesh: any, faceIndex: number) {
+  generateHighlightId(mesh: THREE.Mesh, faceIndex: number) {
     return `${mesh.uuid}_face_${faceIndex}`;
   }
 
-  /**
-   * 更新高亮颜色配置
-   * @param {Object} colors - 颜色配置对象
-   */
-  updateColors(colors: Record<string, any>) {
+  updateColors(colors: Partial<HighlightColors>) {
     Object.assign(this.colors, colors);
-
-    // 清除材质缓存，强制重新创建
     this.materialCache.forEach((material) => material.dispose());
     this.materialCache.clear();
   }
 
-  /**
-   * 获取高亮统计信息
-   * @returns {Object} 统计信息
-   */
-  getHighlightStats() {
+  getHighlightStats(): HighlightStats {
     return {
       selectionHighlights: this.highlightMeshes.size,
       hoverHighlights: this.hoverMeshes.size,
@@ -425,22 +234,12 @@ export class HighlightRenderer {
     };
   }
 
-  /**
-   * 销毁高亮渲染器，清理所有资源
-   */
   destroy() {
-    // 清除所有高亮
     this.clearAllHighlights(true);
-
-    // 移除高亮组
     this.scene.remove(this.highlightGroup);
     this.scene.remove(this.hoverGroup);
-
-    // 清理材质缓存
     this.materialCache.forEach((material) => material.dispose());
     this.materialCache.clear();
-
-    // 清理引用
     this.highlightMeshes.clear();
     this.hoverMeshes.clear();
   }

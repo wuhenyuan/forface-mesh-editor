@@ -1,7 +1,7 @@
 import mitt, { Emitter, Handler } from 'mitt';
 
-export type CoreEventHandler<T = any> = (event: T) => void;
-export type CoreAnyHandler = (event: string, payload?: any) => void;
+export type CoreEventHandler<T = unknown> = (event: T) => void;
+export type CoreAnyHandler = (event: string, payload?: unknown) => void;
 
 export class CoreEmitter<Events extends Record<string, any> = Record<string, any>> {
   private _emitter: Emitter<Events>;
@@ -26,14 +26,7 @@ export class CoreEmitter<Events extends Record<string, any> = Record<string, any
   }
 
   off<Key extends keyof Events>(type: Key, handler?: Handler<Events[Key]>) {
-    if (handler) {
-      this._emitter.off(type, handler);
-      return;
-    }
-
-    const listeners = this._emitter.all.get(type);
-    if (!listeners) return;
-    listeners.clear();
+    this._emitter.off(type, handler);
   }
 
   emit<Key extends keyof Events>(type: Key, event?: Events[Key]) {

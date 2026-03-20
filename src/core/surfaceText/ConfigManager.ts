@@ -7,7 +7,7 @@ import { surfaceIdentifier } from './SurfaceIdentifier';
 import { normalizeConfig, serializeConfig } from '../../../config/config';
 
 export class ConfigManager {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor(surfaceTextManager) {
     this.surfaceTextManager = surfaceTextManager;
   }

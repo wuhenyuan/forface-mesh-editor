@@ -6,7 +6,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
  * 负责显示和处理物体的变换操作（移动、旋转、缩放）
  */
 export class ObjectTransformControls {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor(scene, camera, renderer, domElement) {
     this.scene = scene;
     this.camera = camera;
@@ -411,7 +411,7 @@ export class ObjectTransformControls {
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
-   * @param {...any} args - 事件参数
+   * @param {...unknown} args - 事件参数
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;

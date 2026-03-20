@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 export class SimpleCylinderDetector {
-  [key: string]: any;
+  [key: string]: unknown;
   /**
    * 简单直接的圆柱检测
    * @param {THREE.BufferGeometry} geometry - 几何体

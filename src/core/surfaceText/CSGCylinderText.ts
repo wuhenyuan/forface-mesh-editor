@@ -19,7 +19,7 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { Brush, Evaluator, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 
 export class CSGCylinderText {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor() {
     this.evaluator = new Evaluator();
     this.evaluator.useGroups = false; // 不需要材质组

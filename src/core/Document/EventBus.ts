@@ -1,8 +1,8 @@
 export interface DocumentEventBus {
-  on: (event: string, callback: (...args: any[]) => void) => () => void;
-  once: (event: string, callback: (...args: any[]) => void) => () => void;
-  off: (event: string, callback?: (...args: any[]) => void) => void;
-  emit: (event: string, data?: any) => void;
-  onAny: (callback: (event: string, data?: any) => void) => () => void;
+  on: (event: string, callback: (...args: unknown[]) => void) => () => void;
+  once: (event: string, callback: (...args: unknown[]) => void) => () => void;
+  off: (event: string, callback?: (...args: unknown[]) => void) => void;
+  emit: (event: string, data?: unknown) => void;
+  onAny: (callback: (event: string, data?: unknown) => void) => () => void;
   clear: () => void;
 }

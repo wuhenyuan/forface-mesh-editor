@@ -5,7 +5,7 @@ import * as THREE from 'three';
  * 负责整个物体的选择和高亮
  */
 export class ObjectSelector {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor(scene, camera, renderer, domElement) {
     this.scene = scene;
     this.camera = camera;
@@ -111,7 +111,7 @@ export class ObjectSelector {
    */
   handleClick(event) {
     if (!this.enabled) return;
-    if ((event as any)?.__surfaceTextHandled) {
+    if ((event as unknown)?.__surfaceTextHandled) {
       this.clearSelection();
       return;
     }
@@ -356,7 +356,7 @@ export class ObjectSelector {
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
-   * @param {...any} args - 事件参数
+   * @param {...unknown} args - 事件参数
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;

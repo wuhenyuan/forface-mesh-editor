@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 export class CylinderSurfaceHelper {
-  [key: string]: any;
+  [key: string]: unknown;
   constructor() {
     this.tolerance = 0.001; // 几何体检测容差
   }

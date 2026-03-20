@@ -12,12 +12,12 @@ interface ProjectInfo {
   version: number;
 }
 
-type ProjectManagerCallback = ((event: any) => void) | null;
+type ProjectManagerCallback = ((event: unknown) => void) | null;
 
 type PackageObjectUrlEntry = string | { url: string; file?: File | Blob };
 
 export class ProjectManager {
-  config: any;
+  config: unknown;
   projectInfo: ProjectInfo;
   _isDirty: boolean;
   onChange: ProjectManagerCallback;
@@ -91,7 +91,7 @@ export class ProjectManager {
     };
   }
 
-  _getPersistedProjectData(configOverride?: any) {
+  _getPersistedProjectData(configOverride?: unknown) {
     return {
       projectInfo: { ...this.projectInfo },
       config: serializeConfig(configOverride || this.config),
@@ -156,7 +156,7 @@ export class ProjectManager {
    * @param {Object} data - 项目数据
    * @returns {Object} 加载后的项目数据
    */
-  loadProject(data: any, options: Record<string, any> = {}) {
+  loadProject(data: unknown, options: Record<string, any> = {}) {
     const source = data && typeof data === 'object' ? data : null;
     if (!source) throw new Error('无效的项目数据');
 
@@ -221,7 +221,7 @@ export class ProjectManager {
 
       reader.onload = (e) => {
         try {
-          const result = (e as any)?.target?.result;
+          const result = (e as unknown)?.target?.result;
           if (typeof result !== 'string') throw new Error('无效的项目文件');
           const data = JSON.parse(result);
           const inferredName = file?.name ? this._stripExt(file.name) : undefined;
@@ -751,7 +751,7 @@ export class ProjectManager {
   _buildConfig2ForPackage({
     packageConfig,
     packagedPathByKey,
-  }: { packageConfig?: any; packagedPathByKey?: Map<string, string> } = {}) {
+  }: { packageConfig?: unknown; packagedPathByKey?: Map<string, string> } = {}) {
     const cfg = packageConfig && typeof packageConfig === 'object' ? packageConfig : {};
     const metadata = cfg.metadata && typeof cfg.metadata === 'object' ? cfg.metadata : {};
 
