@@ -6,9 +6,9 @@
  */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { IndexedOBJLoader } from './loaders/IndexedOBJLoader';
 // import JSZip from 'jszip'  // 需要时再引�?
 /**
  * @typedef {Object} LoadResult
@@ -26,7 +26,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 
 export class LoaderManager {
   stlLoader: any;
-  objLoader: any;
+  indexedObjLoader: any;
   gltfLoader: any;
   mtlLoader: any;
   featureDetector: any;
@@ -38,7 +38,7 @@ export class LoaderManager {
   constructor() {
     // Loaders
     this.stlLoader = new STLLoader();
-    this.objLoader = new OBJLoader();
+    this.indexedObjLoader = new IndexedOBJLoader();
     this.gltfLoader = new GLTFLoader();
     this.mtlLoader = new MTLLoader();
 
@@ -175,31 +175,6 @@ export class LoaderManager {
    * @private
    */
   async _loadOBJ(source: any, material: any, options: Record<string, any> = {}) {
-    const applyMaterialOverride = (group: any) => {
-      if (!material) return;
-      group.traverse((child: any) => {
-        if (child.isMesh) {
-          child.material = material;
-        }
-      });
-    };
-
-    const loadFromText = (objText: string) => {
-      const group = this.objLoader.parse(objText);
-      applyMaterialOverride(group);
-      return group;
-    };
-
-    const loadFromUrl = () => {
-      return new Promise((resolve, reject) => {
-        const onLoad = (group: any) => {
-          applyMaterialOverride(group);
-          resolve(group);
-        };
-        this.objLoader.load(source, onLoad, this.onProgress, reject);
-      });
-    };
-
     const splitUrl = (value: string) => {
       const match = value.match(/^[^?#]+/);
       const base = match ? match[0] : value;
@@ -244,31 +219,43 @@ export class LoaderManager {
       resolvedMtlUrl = inferMtlUrl(source);
     }
 
-    if (resolvedMtlUrl && !material) {
+    let resolvedMaterial = material;
+    if (resolvedMtlUrl && !resolvedMaterial) {
       try {
         const materials = await loadMtl(resolvedMtlUrl);
-        this.objLoader.setMaterials(materials as any);
+        resolvedMaterial = this._pickFirstMaterial(materials);
       } catch (error) {
-        this.objLoader.setMaterials(null as any);
+        resolvedMaterial = null;
       }
-    } else {
-      this.objLoader.setMaterials(null as any);
     }
+
+    const parseFromText = (objText: string) =>
+      this.indexedObjLoader.parse(objText, {
+        material: resolvedMaterial,
+      });
 
     if (source instanceof Blob || source instanceof File) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
-          const group = this.objLoader.parse((e as any)?.target?.result);
-          applyMaterialOverride(group);
-          resolve(group);
+          try {
+            const objText = String((e as any)?.target?.result || '');
+            resolve(parseFromText(objText));
+          } catch (error) {
+            reject(error);
+          }
         };
         reader.onerror = reject;
         reader.readAsText(source);
       });
     }
 
-    return await loadFromUrl();
+    if (typeof source === 'string') {
+      const objText = await this._fetchText(source);
+      return parseFromText(objText);
+    }
+
+    throw new Error('Unsupported OBJ source type');
   }
 
   /**
@@ -324,7 +311,8 @@ export class LoaderManager {
    * @private
    */
   async _loadZipOBJ(source: string) {
-    const { default: JSZip } = await import('jszip');
+    const JSZipModule: any = await import('jszip');
+    const JSZip = JSZipModule?.default || JSZipModule;
 
     const zipInput = await this._fetchArrayBuffer(source);
 
@@ -462,6 +450,8 @@ export class LoaderManager {
       mtlEntryName = fallback || null;
     }
 
+    let resolvedMaterial: THREE.Material | null = null;
+
     if (mtlEntryName) {
       const mtlText = await zip.file(mtlEntryName).async('text');
       const textureUrlMap = await buildTextureUrlMap();
@@ -471,13 +461,36 @@ export class LoaderManager {
       const basePath = getBasePath(mtlEntryName);
       const materials = mtlLoader.parse(mtlText, basePath);
       materials.preload();
-      this.objLoader.setMaterials(materials as any);
-    } else {
-      this.objLoader.setMaterials(null as any);
+      resolvedMaterial = this._pickFirstMaterial(materials);
     }
 
-    const group = this.objLoader.parse(objText);
-    return group;
+    return this.indexedObjLoader.parse(objText, {
+      material: resolvedMaterial,
+    });
+  }
+
+  _pickFirstMaterial(materialCreator: any) {
+    if (!materialCreator) return null;
+
+    const existingMaterials = materialCreator.materials;
+    if (existingMaterials && typeof existingMaterials === 'object') {
+      const firstName = Object.keys(existingMaterials).find((name) => !!existingMaterials[name]);
+      if (firstName) {
+        return existingMaterials[firstName] as THREE.Material;
+      }
+    }
+
+    if (typeof materialCreator.create === 'function') {
+      const infos = materialCreator.materialsInfo;
+      if (infos && typeof infos === 'object') {
+        const firstName = Object.keys(infos)[0];
+        if (firstName) {
+          return materialCreator.create(firstName) as THREE.Material;
+        }
+      }
+    }
+
+    return null;
   }
 
   async _fetchText(url: string) {
