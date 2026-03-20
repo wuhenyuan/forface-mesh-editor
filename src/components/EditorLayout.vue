@@ -303,6 +303,10 @@ export default {
   display: grid;
   grid-template-rows: var(--header-height) 1fr;
   height: 100vh;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 .editor-body {
   display: grid;
@@ -325,5 +329,16 @@ export default {
   --aside1-width: 120px;
   --aside2-width: 300px;
   --right-width: 320px;
+}
+
+.editor-root :deep(input),
+.editor-root :deep(textarea),
+.editor-root :deep(select),
+.editor-root :deep([contenteditable='true']),
+.editor-root :deep(.allow-select) {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
 }
 </style>
