@@ -156,6 +156,12 @@ export function bindTextSystemEvents(bindings: TextSystemEventBindings) {
     setTextModeEnabled(false);
     events.emit('textModeDisabled');
   });
+  manager.on('booleanProgress', (payload) => {
+    events.emit('booleanProgress', payload);
+  });
+  manager.on('booleanError', (payload) => {
+    events.emit('booleanError', payload);
+  });
 
   bindTextTransformDragging(manager, setControlsEnabled);
 }

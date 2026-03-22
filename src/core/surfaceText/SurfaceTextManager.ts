@@ -47,7 +47,14 @@ export class SurfaceTextManager {
     // 初始化子系统
     this.geometryGenerator = new TextGeometryGenerator();
     this.inputOverlay = new TextInputOverlay(domElement);
-    this.booleanService = new EntityBooleanService();
+    this.booleanService = new EntityBooleanService({
+      onProgress: (progress) => {
+        this.emit('booleanProgress', progress);
+      },
+      onError: (error) => {
+        this.emit('booleanError', { error });
+      },
+    });
     this.entitySelectionBridge = null;
     this.eventHub = new SurfaceTextEventHub();
     this.meshRegistry = new SurfaceTextMeshRegistry({

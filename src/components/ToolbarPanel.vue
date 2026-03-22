@@ -39,7 +39,6 @@ export default {
   setup() {
     const store = useEditorStore();
     const projectName = ref('人物模型编辑器');
-    const exportingOBJ = ref(false);
     const exportingSTL = ref(false);
 
     const isBusy = computed(() => store.isHistoryBusy?.() || false);
@@ -50,6 +49,8 @@ export default {
     const viewModeLabel = computed(() =>
       store.state.viewMode === 'result' ? '进入编辑' : '查看结果'
     );
+
+    const exportingOBJ = computed(() => store.state.exportTask.active);
 
     const handleUndo = async () => {
       try {
@@ -88,14 +89,11 @@ export default {
         return;
       }
 
-      exportingOBJ.value = true;
       try {
         await core.exportScene?.('obj-zip', 'model');
         console.log('OBJ 导出成功');
       } catch (error) {
         console.error('导出 OBJ 失败:', error);
-      } finally {
-        exportingOBJ.value = false;
       }
     };
 

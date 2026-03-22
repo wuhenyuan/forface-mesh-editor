@@ -1,16 +1,22 @@
 import * as THREE from 'three';
-import { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
+import EditorTaskWorkerBridge from '../tasks/EditorTaskWorkerBridge';
 import {
-  createBrushFromObject,
+  collectBooleanSourceTransferables,
+  serializeObjectSourceForBoolean,
+} from '../tasks/sceneSerialization';
+import { hydrateBufferGeometry, hydrateMaterialDescriptor } from '../tasks/serialization';
+import {
   normalizeModelBooleanOp,
-  type ModelBooleanOp,
   type ModelBooleanOpInput,
 } from './ModelCSG';
+import type { WorkerTaskProgress } from '../tasks/types';
 
 type BooleanSource = {
   key: string;
   object: THREE.Object3D;
   op?: ModelBooleanOpInput;
+  version?: string | number;
+  cacheKey?: string;
 };
 
 type ModelBooleanControllerOptions = {
@@ -23,6 +29,7 @@ type ModelBooleanControllerOptions = {
   isBlocked?: () => boolean;
   isDisposed?: () => boolean;
   onError?: (error: Error) => void;
+  onProgress?: (progress: WorkerTaskProgress) => void;
 };
 
 export class ModelBooleanController {
@@ -35,10 +42,13 @@ export class ModelBooleanController {
   private _isBlocked?: () => boolean;
   private _isDisposed?: () => boolean;
   private _onError?: (error: Error) => void;
+  private _onProgress?: (progress: WorkerTaskProgress) => void;
   private _resultMesh: THREE.Mesh | null;
   private _updateToken: number;
   private _scheduledToken: ReturnType<typeof setTimeout> | null;
   private _busy: boolean;
+  private _bridge: EditorTaskWorkerBridge;
+  private _activeTaskId: string | null;
 
   constructor(options: ModelBooleanControllerOptions) {
     this._csgGroup = options.csgGroup || null;
@@ -50,10 +60,13 @@ export class ModelBooleanController {
     this._isBlocked = options.isBlocked;
     this._isDisposed = options.isDisposed;
     this._onError = options.onError;
+    this._onProgress = options.onProgress;
     this._resultMesh = null;
     this._updateToken = 0;
     this._scheduledToken = null;
     this._busy = false;
+    this._bridge = EditorTaskWorkerBridge.getShared();
+    this._activeTaskId = null;
   }
 
   scheduleUpdate() {
@@ -62,10 +75,16 @@ export class ModelBooleanController {
       clearTimeout(this._scheduledToken);
       this._scheduledToken = null;
     }
+    if (this._busy && this._activeTaskId) {
+      this._bridge.cancelTask(this._activeTaskId);
+    }
     const token = ++this._updateToken;
     this._scheduledToken = setTimeout(() => {
       this._scheduledToken = null;
       this._update(token).catch((error) => {
+        if (error instanceof Error && error.message === 'cancelled') {
+          return;
+        }
         this._onError?.(this._toError(error));
       });
     }, 0);
@@ -123,6 +142,10 @@ export class ModelBooleanController {
       clearTimeout(this._scheduledToken);
       this._scheduledToken = null;
     }
+    if (this._activeTaskId) {
+      this._bridge.cancelTask(this._activeTaskId);
+      this._activeTaskId = null;
+    }
     this.clearResult();
     this._busy = false;
   }
@@ -133,62 +156,62 @@ export class ModelBooleanController {
     if (this._busy) return;
 
     this._busy = true;
+    const taskId = this._bridge.createTaskId('boolean');
+    this._activeTaskId = taskId;
+
     try {
       if (token !== this._updateToken) return;
 
       const sources = this._getSources();
-      const brushes: Array<{ key: string; brush: Brush; op: ModelBooleanOp }> = [];
-
-      for (const source of sources) {
-        if (!source?.object) continue;
-        const brush = createBrushFromObject(source.object);
-        if (!brush) continue;
+      const serializedSources = [];
+      sources.forEach((source) => {
         const op = normalizeModelBooleanOp(source.op) || 'union';
-        brushes.push({ key: source.key, brush, op });
-      }
+        const serialized = serializeObjectSourceForBoolean(source.key, source.object, op, {
+          version: source.version,
+          cacheKey: source.cacheKey,
+        });
+        if (serialized) {
+          serializedSources.push(serialized);
+        }
+      });
 
-      if (brushes.length < 2) {
-        brushes.forEach((b) => b.brush?.geometry?.dispose?.());
+      if (serializedSources.length < 2) {
         this.clearResult();
         return;
       }
 
-      const evaluator = new Evaluator();
-      evaluator.useGroups = true;
-      evaluator.consolidateMaterials = true;
-
-      let current = brushes[0].brush;
-      for (let i = 1; i < brushes.length; i++) {
-        const next = brushes[i].brush;
-        const op = brushes[i].op;
-        const operation =
-          op === 'subtract'
-            ? SUBTRACTION
-            : op === 'intersect'
-              ? INTERSECTION
-              : op === 'difference'
-                ? DIFFERENCE
-                : ADDITION;
-
-        const result = evaluator.evaluate(current, next, operation);
-        if (current && current !== brushes[0].brush) {
-          current.geometry?.dispose?.();
+      const transferables = collectBooleanSourceTransferables(serializedSources);
+      const result = await this._bridge.runBooleanTask(
+        {
+          sources: serializedSources,
+        },
+        {
+          taskId,
+          transferables,
+          onProgress: (progress) => {
+            this._onProgress?.(progress);
+          },
         }
-        current = result;
+      );
+
+      if (token !== this._updateToken || this._isDisposed?.()) {
+        return;
       }
 
-      for (const b of brushes) {
-        if (b.brush && b.brush !== current) {
-          b.brush.geometry?.dispose?.();
-        }
-      }
+      const geometry = hydrateBufferGeometry(result.geometry);
+      geometry.computeVertexNormals();
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
 
-      const rawMaterials = current.material;
-      const clonedMaterials = Array.isArray(rawMaterials)
-        ? rawMaterials.map((material) => material?.clone?.() || new THREE.MeshStandardMaterial())
-        : rawMaterials?.clone?.() || new THREE.MeshStandardMaterial();
+      const materialList =
+        result.materials?.length > 0
+          ? result.materials.map((material) => hydrateMaterialDescriptor(material))
+          : [new THREE.MeshStandardMaterial()];
 
-      const resultMesh = new THREE.Mesh(current.geometry, clonedMaterials);
+      const resultMesh = new THREE.Mesh(
+        geometry,
+        materialList.length <= 1 ? materialList[0] : materialList
+      );
       resultMesh.name = 'csgResult';
       resultMesh.castShadow = true;
       resultMesh.receiveShadow = true;
@@ -196,15 +219,20 @@ export class ModelBooleanController {
         ...(resultMesh.userData || {}),
         isCSGResult: true,
       };
-      resultMesh.geometry?.computeVertexNormals?.();
-      resultMesh.geometry?.computeBoundingBox?.();
-      resultMesh.geometry?.computeBoundingSphere?.();
 
       this.clearResult();
       this._csgGroup?.add?.(resultMesh);
       this._resultMesh = resultMesh;
       this.syncVisibilityAndSelection();
+    } catch (error) {
+      const normalized = this._toError(error);
+      if (normalized.message !== 'cancelled') {
+        this._onError?.(normalized);
+      }
     } finally {
+      if (this._activeTaskId === taskId) {
+        this._activeTaskId = null;
+      }
       this._busy = false;
       if (!this._isDisposed?.() && token !== this._updateToken) {
         this.scheduleUpdate();
@@ -212,7 +240,7 @@ export class ModelBooleanController {
     }
   }
 
-  private _toError(error: Error | string): Error {
+  private _toError(error: Error | string) {
     if (error instanceof Error) return error;
     return new Error(typeof error === 'string' ? error : 'CSG update failed');
   }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { annotateEntityMaterial, resolveEntityKeyFromObject } from '../entities/EntityHitUtils';
 import { BooleanOperator } from './BooleanOperator';
+import type { WorkerTaskProgress } from '../tasks/types';
 
 export type EntityBooleanMetadata = {
   targetEntityKey?: string | null;
@@ -17,6 +18,8 @@ type EntityBooleanServiceOptions = {
    * 但它已经不再归属于 surfaceText 模块。
    */
   operator?: BooleanOperator;
+  onProgress?: (progress: WorkerTaskProgress) => void;
+  onError?: (error: Error) => void;
 };
 
 type EntityBooleanSubtractOptions = EntityBooleanMetadata & {
@@ -37,9 +40,54 @@ type EntityBooleanSubtractOptions = EntityBooleanMetadata & {
  */
 export class EntityBooleanService {
   private _operator: BooleanOperator;
+  private _onProgress: ((progress: WorkerTaskProgress) => void) | null;
+  private _onError: ((error: Error) => void) | null;
 
   constructor(options: EntityBooleanServiceOptions = {}) {
-    this._operator = options.operator || new BooleanOperator();
+    this._onProgress = options.onProgress || null;
+    this._onError = options.onError || null;
+    this._operator =
+      options.operator ||
+      new BooleanOperator({
+        onProgress: (progress) => {
+          this._onProgress?.(progress);
+        },
+        onError: (error) => {
+          this._onError?.(error);
+        },
+      });
+    this._operator.setCallbacks({
+      onProgress: (progress) => {
+        this._onProgress?.(progress);
+      },
+      onError: (error) => {
+        this._onError?.(error);
+      },
+    });
+  }
+
+  setProgressReporter(callback: ((progress: WorkerTaskProgress) => void) | null = null) {
+    this._onProgress = callback;
+    this._operator.setCallbacks({
+      onProgress: (progress) => {
+        this._onProgress?.(progress);
+      },
+      onError: (error) => {
+        this._onError?.(error);
+      },
+    });
+  }
+
+  setErrorReporter(callback: ((error: Error) => void) | null = null) {
+    this._onError = callback;
+    this._operator.setCallbacks({
+      onProgress: (progress) => {
+        this._onProgress?.(progress);
+      },
+      onError: (error) => {
+        this._onError?.(error);
+      },
+    });
   }
 
   /**

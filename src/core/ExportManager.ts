@@ -6,11 +6,16 @@ import * as THREE from 'three';
 import { STLExporter, type STLExporterOptions } from 'three/examples/jsm/exporters/STLExporter.js';
 // import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { OBJExporter } from './export/ObjExport';
-import { collectMaterialsAndTextures, generateMTL } from './export/ObjMtl';
 import {
   GLTFExporter,
   type GLTFExporterOptions,
 } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import EditorTaskWorkerBridge from './tasks/EditorTaskWorkerBridge';
+import {
+  collectExportPayloadTransferables,
+  serializeObjectTreeToMeshes,
+  serializeTextureFilesFromObject,
+} from './tasks/sceneSerialization';
 
 type ExportFormat = 'stl' | 'obj' | 'obj-zip' | 'gltf' | 'glb';
 
@@ -37,6 +42,7 @@ export class ExportManager {
   stlExporter: STLExporter;
   objExporter: OBJExporter;
   gltfExporter: GLTFExporter;
+  workerBridge: EditorTaskWorkerBridge;
   config: ExportConfig;
   onProgress: ((...args: CoreValue[]) => void) | null;
   onError: ((error: CoreValue) => void) | null;
@@ -46,6 +52,7 @@ export class ExportManager {
     this.stlExporter = new STLExporter();
     this.objExporter = new OBJExporter();
     this.gltfExporter = new GLTFExporter();
+    this.workerBridge = EditorTaskWorkerBridge.getShared();
 
     // 导出配置
     this.config = {
@@ -174,26 +181,31 @@ export class ExportManager {
     objects: THREE.Object3D[],
     filename: string = 'model'
   ): Promise<Blob> {
-    const { default: JSZip } = await import('jszip');
-    const zip = new JSZip();
-
     const exportScene = this._createExportScene(objects);
 
     try {
-      const { materials, textures } = collectMaterialsAndTextures(exportScene);
+      const meshes = serializeObjectTreeToMeshes(exportScene);
+      const textureFiles = await serializeTextureFilesFromObject(exportScene);
+      const transferables = collectExportPayloadTransferables(meshes, textureFiles);
+      const taskId = this.workerBridge.createTaskId('exportZip');
 
-      const objContent = this.objExporter.parse(exportScene);
-      const objWithMtl = `mtllib ${filename}.mtl\n${objContent}`;
-      zip.file(`${filename}.obj`, objWithMtl);
+      const result = await this.workerBridge.runExportZipTask(
+        {
+          filename,
+          objects: meshes,
+          textureFiles,
+          compressionLevel: 6,
+        },
+        {
+          taskId,
+          transferables,
+          onProgress: (progress) => {
+            this.onProgress?.(progress);
+          },
+        }
+      );
 
-      const mtlContent = generateMTL(materials);
-      zip.file(`${filename}.mtl`, mtlContent);
-
-      for (const [textureName, textureData] of textures) {
-        zip.file(textureName, textureData);
-      }
-
-      return await zip.generateAsync({ type: 'blob' });
+      return new Blob([result.buffer], { type: result.mimeType || 'application/zip' });
     } finally {
       this._disposeExportScene(exportScene);
     }

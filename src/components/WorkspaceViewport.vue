@@ -1,5 +1,24 @@
 <template>
   <div class="viewport" ref="container">
+    <div v-if="activeTaskState" class="task-overlay" :class="`task-overlay--${activeTaskState.type}`">
+      <div class="task-overlay__title">{{ activeTaskTitle }}</div>
+      <div class="task-overlay__meta">
+        <span>{{ activeTaskPhaseLabel }}</span>
+        <span>{{ activeTaskPercent }}%</span>
+      </div>
+      <div v-if="activeTaskState.cacheHit !== null" class="task-overlay__hint">
+        缓存：{{ activeTaskState.cacheHit ? '命中' : '未命中' }}
+      </div>
+      <div v-if="activeTaskState.currentFile" class="task-overlay__hint">
+        当前文件：{{ activeTaskState.currentFile }}
+      </div>
+      <div v-if="activeTaskState.error" class="task-overlay__error">
+        {{ activeTaskState.error }}
+      </div>
+      <div class="task-overlay__bar">
+        <div class="task-overlay__fill" :style="{ width: `${activeTaskPercent}%` }"></div>
+      </div>
+    </div>
     <!-- Floating UI -->
     <context-menu @select="handleContextMenuSelect" />
     <color-picker @confirm="handleColorConfirm" />
@@ -13,7 +32,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { EditorCore, TransformCommand } from '../core';
 import { EntityEvent } from '../types/events';
 import { useEditorStore } from '../store';
@@ -54,6 +73,32 @@ export default {
     const store = useEditorStore();
     let core = null;
     let transformMode = 'translate';
+
+    const phaseLabels = {
+      prepare: '正在准备布尔运算…',
+      'build-cache': '正在构建缓存…',
+      'csg-core': '正在执行布尔运算…',
+      'rebuild-result': '正在重建结果…',
+      transfer: '正在回传结果…',
+      collect: '正在统计导出对象…',
+      estimate: '正在估算导出任务…',
+      'export-obj': '正在导出 OBJ…',
+      zip: '正在压缩文件…',
+      finalize: '正在完成导出…',
+    };
+
+    const activeTaskState = computed(() => store.activeTaskState?.() || null);
+    const activeTaskTitle = computed(() => {
+      if (!activeTaskState.value) return '';
+      return activeTaskState.value.type === 'boolean' ? '布尔任务' : '导出任务';
+    });
+    const activeTaskPhaseLabel = computed(() => {
+      const phase = activeTaskState.value?.phase || '';
+      return phaseLabels[phase] || activeTaskState.value?.message || '';
+    });
+    const activeTaskPercent = computed(() =>
+      Math.round(Math.max(0, Math.min(activeTaskState.value?.progress || 0, 1)) * 100)
+    );
 
     const snapshotTransform = (object) => {
       if (!object) return null;
@@ -259,6 +304,38 @@ export default {
 
       emitter.on('historyChanged', (snapshot) => {
         store.setHistorySnapshot(snapshot);
+      });
+
+      emitter.on('exportProgress', (payload) => {
+        store.syncExportProgress?.(payload || {});
+      });
+
+      emitter.on('exportError', (payload) => {
+        store.syncExportError?.(payload || {});
+      });
+
+      emitter.on('sceneExported', () => {
+        store.clearExportTask?.();
+      });
+
+      emitter.on('selectedExported', () => {
+        store.clearExportTask?.();
+      });
+
+      emitter.on('mergedExported', () => {
+        store.clearExportTask?.();
+      });
+
+      emitter.on('modelExported', () => {
+        store.clearExportTask?.();
+      });
+
+      emitter.on('booleanProgress', (payload) => {
+        store.syncBooleanProgress?.(payload || {});
+      });
+
+      emitter.on('booleanError', (payload) => {
+        store.syncBooleanError?.(payload || {});
       });
 
       emitter.on('textCreated', ({ textObject }) => {
@@ -537,6 +614,10 @@ export default {
 
     return {
       container,
+      activeTaskState,
+      activeTaskTitle,
+      activeTaskPhaseLabel,
+      activeTaskPercent,
       handleContextMenuSelect,
       handleColorConfirm,
       handleTransformModeChange,
@@ -560,6 +641,72 @@ export default {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+.task-overlay {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 12;
+  min-width: 260px;
+  max-width: 340px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(18, 25, 38, 0.9);
+  color: #f7fafc;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.task-overlay--export {
+  border: 1px solid rgba(102, 194, 255, 0.25);
+}
+
+.task-overlay--boolean {
+  border: 1px solid rgba(255, 170, 92, 0.28);
+}
+
+.task-overlay__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.task-overlay__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.task-overlay__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(203, 213, 225, 0.86);
+  word-break: break-all;
+}
+
+.task-overlay__error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #fecaca;
+  word-break: break-word;
+}
+
+.task-overlay__bar {
+  margin-top: 12px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+  overflow: hidden;
+}
+
+.task-overlay__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #60a5fa, #f59e0b);
+  transition: width 120ms linear;
 }
 </style>
 

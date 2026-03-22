@@ -229,8 +229,15 @@ export class EntityVisualController {
         this._options.getObjectSelectionManager()?.setSelectableObjects?.(objects),
       isBlocked: () => this._loadTokens.size > 0,
       isDisposed: () => this._options.isDisposed(),
+      onProgress: (progress) => {
+        this._events().emit('booleanProgress', progress as unknown as ControllerValue);
+      },
       onError: (error) => {
         console.warn('[CSG] update failed:', error);
+        this._events().emit(
+          'booleanError',
+          { error: error?.message || String(error) } as unknown as ControllerValue
+        );
       },
     });
 

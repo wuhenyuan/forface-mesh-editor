@@ -19,6 +19,7 @@ export { default as ModelEntityObject } from './entities/ModelEntityObject';
 export { default as TextEntityObject } from './entities/TextEntityObject';
 export { default as ModelBooleanController } from './csg/ModelBooleanController';
 export { default as EntityVisualController } from './controllers/EntityVisualController';
+export { default as EditorTaskWorkerBridge } from './tasks/EditorTaskWorkerBridge';
 
 // 子模块
 export * from './boolean';
@@ -26,3 +27,4 @@ export * from './facePicking';
 export * from './surfaceText';
 export * from './objectSelection';
 export * from './history';
+export * from './tasks';

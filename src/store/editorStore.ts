@@ -12,6 +12,18 @@ type StoreEntity = {
   [key: string]: unknown;
 };
 
+const createTaskState = () => ({
+  active: false,
+  taskId: null,
+  phase: '',
+  progress: 0,
+  message: '',
+  currentFile: '',
+  cacheHit: null,
+  error: '',
+  detail: null,
+});
+
 const state = Vue.observable({
   currentFeature: 'base',
   viewMode: 'result', // 'result' | 'construct'
@@ -39,6 +51,9 @@ const state = Vue.observable({
     transactionName: null,
     lastError: null,
   },
+
+  exportTask: createTaskState(),
+  booleanTask: createTaskState(),
 
   workspaceRef: null,
 
@@ -224,6 +239,33 @@ const getters = {
         content: typeof entity.content === 'string' ? entity.content : '',
         displayName: entity.displayName,
       })),
+  activeTaskState: () => {
+    if (state.exportTask.active) {
+      return {
+        ...state.exportTask,
+        type: 'export',
+      };
+    }
+    if (state.booleanTask.active) {
+      return {
+        ...state.booleanTask,
+        type: 'boolean',
+      };
+    }
+    if (state.exportTask.error) {
+      return {
+        ...state.exportTask,
+        type: 'export',
+      };
+    }
+    if (state.booleanTask.error) {
+      return {
+        ...state.booleanTask,
+        type: 'boolean',
+      };
+    }
+    return null;
+  },
 };
 
 // ==================== Actions ====================
@@ -239,6 +281,70 @@ const actions = {
   setHistorySnapshot(snapshot: Record<string, any> | null) {
     if (!snapshot) return;
     Object.assign(state.history, snapshot);
+  },
+
+  _resetTaskState(target: 'exportTask' | 'booleanTask') {
+    Object.assign(state[target], createTaskState());
+  },
+
+  _applyTaskProgress(target: 'exportTask' | 'booleanTask', payload: Record<string, any> = {}) {
+    const detail = payload?.detail && typeof payload.detail === 'object' ? payload.detail : null;
+    const progress =
+      typeof payload.progress === 'number' && Number.isFinite(payload.progress)
+        ? Math.max(0, Math.min(payload.progress, 1))
+        : 0;
+
+    Object.assign(state[target], {
+      active: progress < 1,
+      taskId: typeof payload.taskId === 'string' ? payload.taskId : state[target].taskId,
+      phase: typeof payload.phase === 'string' ? payload.phase : state[target].phase,
+      progress,
+      message: typeof payload.message === 'string' ? payload.message : '',
+      currentFile:
+        typeof detail?.currentFile === 'string' ? detail.currentFile : state[target].currentFile,
+      cacheHit:
+        typeof detail?.cacheHit === 'boolean' ? detail.cacheHit : state[target].cacheHit,
+      error: '',
+      detail,
+    });
+  },
+
+  _applyTaskError(target: 'exportTask' | 'booleanTask', payload: Record<string, any> = {}) {
+    const message =
+      typeof payload.error === 'string'
+        ? payload.error
+        : typeof payload.error?.message === 'string'
+          ? payload.error.message
+          : 'Task failed';
+
+    Object.assign(state[target], {
+      active: false,
+      error: message,
+    });
+  },
+
+  syncExportProgress(payload: Record<string, any> = {}) {
+    this._applyTaskProgress('exportTask', payload);
+  },
+
+  syncExportError(payload: Record<string, any> = {}) {
+    this._applyTaskError('exportTask', payload);
+  },
+
+  clearExportTask() {
+    this._resetTaskState('exportTask');
+  },
+
+  syncBooleanProgress(payload: Record<string, any> = {}) {
+    this._applyTaskProgress('booleanTask', payload);
+  },
+
+  syncBooleanError(payload: Record<string, any> = {}) {
+    this._applyTaskError('booleanTask', payload);
+  },
+
+  clearBooleanTask() {
+    this._resetTaskState('booleanTask');
   },
 
   setFeature(key: string) {
