@@ -111,6 +111,10 @@ type TextObjectLike = {
   config?: TextConfigLike;
   mode?: TextMode;
   content?: string;
+  entityObject?: TextMeshLike & {
+    markBoxDirty?: () => void;
+    refreshWorldBox?: (force?: boolean) => THREE.Box3;
+  };
   mesh?: TextMeshLike;
   material?: { color?: { getHex?: () => number } };
 };
@@ -750,24 +754,31 @@ export class EntityVisualController {
       }
 
       if (patch.position || patch.rotation || patch.rotate || patch.scale) {
-        const mesh = textObject.mesh;
-        if (mesh && patch.position) {
+        const transformTarget = (textObject.entityObject || textObject.mesh) as
+          | (TextMeshLike & {
+              markBoxDirty?: () => void;
+              refreshWorldBox?: (force?: boolean) => THREE.Box3;
+            })
+          | undefined;
+        if (transformTarget && patch.position) {
           const [x = 0, y = 0, z = 0] = patch.position;
-          mesh.position.set(x, y, z);
+          transformTarget.position.set(x, y, z);
         }
         const nextRotation = patch.rotation ?? patch.rotate;
-        if (mesh && Array.isArray(nextRotation)) {
+        if (transformTarget && Array.isArray(nextRotation)) {
           const [x = 0, y = 0, z = 0, order] = nextRotation;
           if (typeof order === 'string' && isEulerOrder(order)) {
-            mesh.rotation.order = order;
+            transformTarget.rotation.order = order;
           }
-          mesh.rotation.set(x, y, z);
+          transformTarget.rotation.set(x, y, z);
         }
-        if (mesh && patch.scale) {
+        if (transformTarget && patch.scale) {
           const [x = 1, y = 1, z = 1] = patch.scale;
-          mesh.scale.set(x, y, z);
+          transformTarget.scale.set(x, y, z);
         }
-        mesh?.updateMatrixWorld?.(true);
+        transformTarget?.updateMatrixWorld?.(true);
+        transformTarget?.markBoxDirty?.();
+        transformTarget?.refreshWorldBox?.(true);
       }
     });
   }
@@ -929,12 +940,20 @@ export class EntityVisualController {
   }
 
   private _getTextTransform(textObject: TextObjectLike) {
-    const mesh = textObject?.mesh;
-    if (!mesh) return {};
+    const transformTarget = textObject?.entityObject || textObject?.mesh;
+    if (!transformTarget) return {};
     return {
-      position: [mesh.position.x, mesh.position.y, mesh.position.z],
-      rotation: [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z],
-      scale: [mesh.scale.x, mesh.scale.y, mesh.scale.z],
+      position: [
+        transformTarget.position.x,
+        transformTarget.position.y,
+        transformTarget.position.z,
+      ],
+      rotation: [
+        transformTarget.rotation.x,
+        transformTarget.rotation.y,
+        transformTarget.rotation.z,
+      ],
+      scale: [transformTarget.scale.x, transformTarget.scale.y, transformTarget.scale.z],
     };
   }
 

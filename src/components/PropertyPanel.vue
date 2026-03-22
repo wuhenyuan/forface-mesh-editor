@@ -391,17 +391,17 @@ export default {
           textForm.letterSpacing = obj.config?.letterSpacing || 0.1;
           textForm.curvingStrength = obj.config?.curvingStrength || 1.0;
           textForm.startAngle = obj.config?.startAngle || 0;
-          const mesh = obj.mesh;
-          if (mesh) {
-            textForm.position.x = mesh.position.x;
-            textForm.position.y = mesh.position.y;
-            textForm.position.z = mesh.position.z;
-            textForm.rotation.x = mesh.rotation.x;
-            textForm.rotation.y = mesh.rotation.y;
-            textForm.rotation.z = mesh.rotation.z;
-            textForm.scale.x = mesh.scale.x;
-            textForm.scale.y = mesh.scale.y;
-            textForm.scale.z = mesh.scale.z;
+          const transformTarget = obj.entityObject || obj.mesh;
+          if (transformTarget) {
+            textForm.position.x = transformTarget.position.x;
+            textForm.position.y = transformTarget.position.y;
+            textForm.position.z = transformTarget.position.z;
+            textForm.rotation.x = transformTarget.rotation.x;
+            textForm.rotation.y = transformTarget.rotation.y;
+            textForm.rotation.z = transformTarget.rotation.z;
+            textForm.scale.x = transformTarget.scale.x;
+            textForm.scale.y = transformTarget.scale.y;
+            textForm.scale.z = transformTarget.scale.z;
           }
         }
       },

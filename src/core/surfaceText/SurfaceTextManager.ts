@@ -7,6 +7,7 @@ import { TextGeometryGenerator } from './TextGeometryGenerator';
 import { TextInputOverlay } from './TextInputOverlay';
 import { TextTransformControls } from './TextTransformControls';
 import TransformSession from '../objectSelection/TransformSession';
+import TextEntityObject from '../entities/TextEntityObject';
 
 /**
  * 表面文字管理器主控制器
@@ -28,6 +29,7 @@ export class SurfaceTextManager {
     this.booleanOperator = new BooleanOperator();
     this.transformSession = new TransformSession(scene as THREE.Scene);
     this.textSelectionBoxHelper = null;
+    this.entitySelectionBridge = null;
 
     // 射线投射器（用于独立的点击检测）
     this.raycaster = new THREE.Raycaster();
@@ -77,6 +79,47 @@ export class SurfaceTextManager {
     });
 
     console.log('已设置目标网格数量:', this.targetMeshes.length);
+  }
+
+  setEntitySelectionBridge(bridge = null) {
+    this.entitySelectionBridge = bridge || null;
+    const useEntityBridge = !!this.entitySelectionBridge;
+    this.transformControls?.setEnabled?.(!useEntityBridge);
+    if (useEntityBridge) {
+      this.transformControls?.detach?.();
+      this.transformSession?.end?.();
+      this.removeTextSelectionBoxHelper();
+    }
+  }
+
+  getTextSelectionTarget(textObject) {
+    return textObject?.entityObject || textObject?.mesh || null;
+  }
+
+  getTextTransformTarget(textObject) {
+    return this.getTextSelectionTarget(textObject);
+  }
+
+  applyTransformToTextTarget(textObject, transform) {
+    const target = this.getTextTransformTarget(textObject);
+    if (!target || !transform) return;
+
+    const { position, rotation, scale } = transform;
+    if (position) {
+      target.position.set(position.x, position.y, position.z);
+    }
+    if (rotation) {
+      if (typeof rotation.order === 'string') {
+        target.rotation.order = rotation.order;
+      }
+      target.rotation.set(rotation.x, rotation.y, rotation.z);
+    }
+    if (scale) {
+      target.scale.set(scale.x, scale.y, scale.z);
+    }
+    target.updateMatrixWorld?.(true);
+    target.markBoxDirty?.();
+    target.refreshWorldBox?.(true);
   }
 
   /**
@@ -640,6 +683,27 @@ export class SurfaceTextManager {
         this.positionTextOnSurface(mesh, faceInfo);
       }
 
+      const entityObject = new TextEntityObject(textId, {
+        id: textId,
+        type: 'text',
+      });
+      entityObject.userData = {
+        ...(entityObject.userData || {}),
+        isTextObject: true,
+        textId,
+        type: 'text',
+      };
+
+      // 文字实际变换主体统一为 TextEntityObject，mesh 仅作为内容节点
+      entityObject.position.copy(mesh.position);
+      entityObject.quaternion.copy(mesh.quaternion);
+      entityObject.scale.copy(mesh.scale);
+      mesh.position.set(0, 0, 0);
+      mesh.rotation.set(0, 0, 0);
+      mesh.scale.set(1, 1, 1);
+      entityObject.attachNode(mesh);
+      entityObject.updateMatrixWorld(true);
+
       // 生成表面标识
       const surfaceId = surfaceIdentifier.generateSurfaceId(faceInfo);
 
@@ -647,6 +711,7 @@ export class SurfaceTextManager {
       const textObject = {
         id: textId,
         content: content,
+        entityObject,
         mesh: mesh,
         geometry: geometry,
         material: material,
@@ -664,7 +729,11 @@ export class SurfaceTextManager {
       };
 
       // 添加到场景和管理器
-      this.scene.add(mesh);
+      if (typeof this.entitySelectionBridge?.addEntityObject === 'function') {
+        this.entitySelectionBridge.addEntityObject(entityObject);
+      } else {
+        this.scene.add(entityObject);
+      }
       this.textObjects.set(textId, textObject);
 
       // 建立目标网格与文字的映射关系
@@ -1166,11 +1235,13 @@ export class SurfaceTextManager {
    * 选中文字对象
    * @param {string} textId - 文字ID
    */
-  selectText(textId) {
+  selectText(textId, options: Record<string, CoreValue> = {}) {
     if (!this.textObjects.has(textId)) {
       console.warn(`文字对象不存在: ${textId}`);
       return;
     }
+
+    const syncEntitySelection = options?.syncEntitySelection !== false;
 
     // 取消之前的选择
     if (this.selectedTextId) {
@@ -1180,13 +1251,22 @@ export class SurfaceTextManager {
     this.selectedTextId = textId;
     const textObject = this.textObjects.get(textId);
 
-    // 变换中心默认使用文字 bbox center（不改文字原点）
-    this.refreshTextTransformSession(textObject);
-
-    // 添加选择高亮效果
-    this.addSelectionHighlight(textObject.mesh);
-    this.createTextSelectionBoxHelper(textObject.mesh);
-    this.refreshSelectedTextBoxHelper();
+    const selectionTarget = this.getTextSelectionTarget(textObject);
+    const hasEntityBridge = typeof this.entitySelectionBridge?.selectEntityObject === 'function';
+    if (hasEntityBridge) {
+      this.transformControls.detach();
+      this.transformSession?.end?.();
+      this.removeTextSelectionBoxHelper();
+      if (syncEntitySelection) {
+        this.entitySelectionBridge.selectEntityObject(selectionTarget);
+      }
+    } else {
+      // 兼容旧模式：无外部 Entity 选择桥接时，使用文字内部变换控制
+      this.refreshTextTransformSession(textObject);
+      this.addSelectionHighlight(textObject.mesh);
+      this.createTextSelectionBoxHelper(textObject.mesh);
+      this.refreshSelectedTextBoxHelper();
+    }
 
     console.log(`文字对象已选中: ${textId}`);
     this.emit('textSelected', textObject);
@@ -1196,8 +1276,9 @@ export class SurfaceTextManager {
    * 取消选中文字对象
    * @param {boolean} applyChanges - 是否应用更改（仅对编辑模式有效）
    */
-  async deselectText(applyChanges = true) {
+  async deselectText(applyChanges = true, options: Record<string, CoreValue> = {}) {
     if (!this.selectedTextId) return;
+    const syncEntitySelection = options?.syncEntitySelection !== false;
 
     const textObject = this.textObjects.get(this.selectedTextId);
 
@@ -1206,12 +1287,20 @@ export class SurfaceTextManager {
       await this.exitEditMode(applyChanges);
     }
 
-    // 隐藏变换控制器
-    this.transformControls.detach();
-    this.transformSession?.end?.();
+    const selectionTarget = this.getTextSelectionTarget(textObject);
+    if (
+      syncEntitySelection &&
+      typeof this.entitySelectionBridge?.clearEntitySelection === 'function'
+    ) {
+      this.entitySelectionBridge.clearEntitySelection(selectionTarget);
+    } else {
+      // 隐藏变换控制器
+      this.transformControls.detach();
+      this.transformSession?.end?.();
 
-    // 移除选择高亮效果
-    this.removeSelectionHighlight(textObject.mesh);
+      // 移除选择高亮效果
+      this.removeSelectionHighlight(textObject.mesh);
+    }
     this.removeTextSelectionBoxHelper();
 
     console.log(`文字对象已取消选中: ${this.selectedTextId}`);
@@ -1264,18 +1353,18 @@ export class SurfaceTextManager {
   refreshTextTransformSession(textObject = null) {
     const selectedText =
       textObject || (this.selectedTextId ? this.textObjects.get(this.selectedTextId) : null);
-    const mesh = selectedText?.mesh;
-    if (!mesh?.parent) {
+    const target = this.getTextSelectionTarget(selectedText);
+    if (!target?.parent) {
       this.transformSession?.end?.();
       this.transformControls.detach();
       return null;
     }
 
-    const result = this.transformSession.begin([mesh], {
+    const result = this.transformSession.begin([target], {
       mode: this.getCurrentTransformMode(),
     });
     if (!result?.pivotHandle) {
-      this.transformControls.attach(mesh);
+      this.transformControls.attach(target);
       return null;
     }
 
@@ -1455,7 +1544,14 @@ export class SurfaceTextManager {
     }
 
     // 从场景中移除
-    this.scene.remove(textObject.mesh);
+    const selectionTarget = this.getTextSelectionTarget(textObject);
+    if (selectionTarget && typeof this.entitySelectionBridge?.removeEntityObject === 'function') {
+      this.entitySelectionBridge.removeEntityObject(selectionTarget);
+    } else if (textObject.entityObject?.parent) {
+      textObject.entityObject.parent.remove(textObject.entityObject);
+    } else {
+      this.scene.remove(textObject.mesh);
+    }
 
     // 清理几何体和材质
     textObject.geometry.dispose();
@@ -1497,9 +1593,15 @@ export class SurfaceTextManager {
       textObject.content = newContent;
       textObject.modified = Date.now();
       if (this.selectedTextId === textId) {
-        this.refreshTextTransformSession(textObject);
-        this.createTextSelectionBoxHelper(textObject.mesh);
-        this.refreshSelectedTextBoxHelper();
+        if (typeof this.entitySelectionBridge?.refreshEntityObjectSession === 'function') {
+          this.entitySelectionBridge.refreshEntityObjectSession(
+            this.getTextSelectionTarget(textObject)
+          );
+        } else {
+          this.refreshTextTransformSession(textObject);
+          this.createTextSelectionBoxHelper(textObject.mesh);
+          this.refreshSelectedTextBoxHelper();
+        }
       }
 
       console.log(`文字内容已更新: ${textId}`, { oldContent, newContent });
@@ -1541,9 +1643,15 @@ export class SurfaceTextManager {
       textObject.geometry = newGeometry;
       textObject.modified = Date.now();
       if (this.selectedTextId === textId) {
-        this.refreshTextTransformSession(textObject);
-        this.createTextSelectionBoxHelper(textObject.mesh);
-        this.refreshSelectedTextBoxHelper();
+        if (typeof this.entitySelectionBridge?.refreshEntityObjectSession === 'function') {
+          this.entitySelectionBridge.refreshEntityObjectSession(
+            this.getTextSelectionTarget(textObject)
+          );
+        } else {
+          this.refreshTextTransformSession(textObject);
+          this.createTextSelectionBoxHelper(textObject.mesh);
+          this.refreshSelectedTextBoxHelper();
+        }
       }
 
       console.log(`文字配置已更新: ${textId}`, { oldConfig, newConfig: textObject.config });
@@ -2101,7 +2209,7 @@ export class SurfaceTextManager {
     const point = faceInfo.point;
     const uv = faceInfo.uv;
 
-    const mesh = textObject.mesh;
+    const transformTarget = this.getTextTransformTarget(textObject);
 
     return {
       version: 1,
@@ -2121,16 +2229,24 @@ export class SurfaceTextManager {
       normal: normal ? { x: normal.x, y: normal.y, z: normal.z } : null,
       uv: uv ? { x: uv.x, y: uv.y } : null,
 
-      meshTransform: mesh
+      meshTransform: transformTarget
         ? {
-            position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
-            rotation: {
-              x: mesh.rotation.x,
-              y: mesh.rotation.y,
-              z: mesh.rotation.z,
-              order: mesh.rotation.order,
+            position: {
+              x: transformTarget.position.x,
+              y: transformTarget.position.y,
+              z: transformTarget.position.z,
             },
-            scale: { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z },
+            rotation: {
+              x: transformTarget.rotation.x,
+              y: transformTarget.rotation.y,
+              z: transformTarget.rotation.z,
+              order: transformTarget.rotation.order,
+            },
+            scale: {
+              x: transformTarget.scale.x,
+              y: transformTarget.scale.y,
+              z: transformTarget.scale.z,
+            },
           }
         : null,
     };
@@ -2193,18 +2309,7 @@ export class SurfaceTextManager {
 
     // 恢复变换
     if (snapshot.meshTransform) {
-      const { position, rotation, scale } = snapshot.meshTransform;
-      if (position) {
-        textObject.mesh.position.set(position.x, position.y, position.z);
-      }
-      if (rotation) {
-        textObject.mesh.rotation.order = rotation.order || textObject.mesh.rotation.order;
-        textObject.mesh.rotation.set(rotation.x, rotation.y, rotation.z);
-      }
-      if (scale) {
-        textObject.mesh.scale.set(scale.x, scale.y, scale.z);
-      }
-      textObject.mesh.updateMatrixWorld(true);
+      this.applyTransformToTextTarget(textObject, snapshot.meshTransform);
     }
 
     // 恢复模式（成功态重跑一次，失败态只恢复失败标记）
@@ -2370,6 +2475,7 @@ export class SurfaceTextManager {
     const texts = [];
 
     this.textObjects.forEach((textObject, textId) => {
+      const transformTarget = this.getTextTransformTarget(textObject) || textObject.mesh;
       const config = {
         // id
         id: textObject.content,
@@ -2388,9 +2494,9 @@ export class SurfaceTextManager {
         // 字体颜色
         color: `#${textObject.material.color.getHexString()}`,
         // 字体坐标
-        position: textObject.mesh.position.toArray(),
+        position: transformTarget.position.toArray(),
         // 字体旋转
-        rotate: textObject.mesh.rotation.toArray(),
+        rotate: transformTarget.rotation.toArray(),
         // 文字贴合方式
         wrap: 'surface Project',
         // 在那个表面上添加文字
@@ -2436,12 +2542,16 @@ export class SurfaceTextManager {
 
         if (textObject) {
           // 应用位置和旋转
+          const transformTarget = this.getTextTransformTarget(textObject) || textObject.mesh;
           if (textConfig.position) {
-            textObject.mesh.position.fromArray(textConfig.position);
+            transformTarget.position.fromArray(textConfig.position);
           }
           if (textConfig.rotate) {
-            textObject.mesh.rotation.fromArray(textConfig.rotate);
+            transformTarget.rotation.fromArray(textConfig.rotate);
           }
+          transformTarget.updateMatrixWorld?.(true);
+          transformTarget.markBoxDirty?.();
+          transformTarget.refreshWorldBox?.(true);
 
           // 应用效果模式
           if (textConfig.effect === 'Engraved') {
@@ -2498,6 +2608,7 @@ export class SurfaceTextManager {
 
     // 清理事件监听器
     this.eventListeners.clear();
+    this.entitySelectionBridge = null;
 
     console.log('表面文字管理器已销毁');
   }

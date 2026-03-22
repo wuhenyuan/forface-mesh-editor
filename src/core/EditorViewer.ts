@@ -138,6 +138,10 @@ type EditorTextObject = {
   content?: string;
   config?: TextObjectConfig;
   mode?: TextMode;
+  entityObject?: {
+    position?: { toArray?: () => number[] };
+    rotation?: { toArray?: () => number[] };
+  };
   material?: {
     color?: {
       getHexString?: () => string;
@@ -605,7 +609,7 @@ export class EditorViewer extends Viewer {
    */
   _syncStateToProject() {
     // 同步模型配置
-    const meshes = this._meshes.filter((m) => !m.userData.isHelper);
+    const meshes = this._meshes.filter((m) => !m.userData.isHelper && !m.userData.isTextObject);
     if (meshes.length > 0) {
       const mainMesh = meshes[0];
       const box = new THREE.Box3().setFromObject(mainMesh);
@@ -624,6 +628,7 @@ export class EditorViewer extends Viewer {
     projectConfig.texts = [];
     this._textObjects.forEach((textObj) => {
       const textColor = textObj.material?.color?.getHexString?.();
+      const transformSource = textObj.entityObject || textObj.mesh;
       this._projectManager.addTextConfig({
         id: textObj.id,
         displayName: textObj.displayName,
@@ -633,8 +638,8 @@ export class EditorViewer extends Viewer {
         thickness: textObj.config?.thickness,
         mode: textObj.mode,
         color: textColor ? `#${textColor}` : '#333333',
-        position: textObj.mesh?.position?.toArray() || [0, 0, 0],
-        rotation: textObj.mesh?.rotation?.toArray() || [0, 0, 0],
+        position: transformSource?.position?.toArray?.() || [0, 0, 0],
+        rotation: transformSource?.rotation?.toArray?.() || [0, 0, 0],
         featureName: textObj.featureName,
       });
     });
@@ -698,7 +703,7 @@ export class EditorViewer extends Viewer {
     this._textObjects = [];
 
     // 清理网格（保留辅助对象）
-    const meshesToRemove = this._meshes.filter((m) => !m.userData.isHelper);
+    const meshesToRemove = this._meshes.filter((m) => !m.userData.isHelper && !m.userData.isTextObject);
     meshesToRemove.forEach((mesh) => this.removeMesh(mesh));
 
     // 清理特征缓存
@@ -878,6 +883,36 @@ export class EditorViewer extends Viewer {
       );
 
       this._surfaceTextManager.setTargetMeshes(this._getTextTargetMeshes());
+      this._surfaceTextManager.setEntitySelectionBridge?.({
+        addEntityObject: (entityObject: THREE.Object3D) => {
+          this.addMesh(entityObject as EditorViewerMesh, {
+            selectable: true,
+            castShadow: false,
+            receiveShadow: false,
+          });
+        },
+        removeEntityObject: (entityObject: THREE.Object3D) => {
+          this.removeMesh(entityObject as EditorViewerMesh);
+        },
+        selectEntityObject: (entityObject: THREE.Object3D | null) => {
+          if (!entityObject) return;
+          if (!this._objectSelectionManager) {
+            this.initObjectSelection();
+          }
+          if (!this._objectSelectionEnabled) {
+            this.enableObjectSelection();
+          }
+          this._objectSelectionManager?.selectObject?.(entityObject);
+        },
+        clearEntitySelection: () => {
+          this._objectSelectionManager?.clearSelection?.();
+        },
+        refreshEntityObjectSession: (entityObject: THREE.Object3D | null) => {
+          if (!entityObject || !this._objectSelectionManager) return;
+          if (this._objectSelectionManager.getSelectedObject?.() !== entityObject) return;
+          this._objectSelectionManager.beginTransformSession?.([entityObject]);
+        },
+      });
 
       this._setupTextSystemEvents();
 
@@ -1112,6 +1147,24 @@ export class EditorViewer extends Viewer {
     }
   }
 
+  _resolveTextIdFromObject(target: THREE.Object3D | null) {
+    if (!target) return null;
+    const directTextId = target.userData?.textId;
+    if (typeof directTextId === 'string' && directTextId) {
+      return directTextId;
+    }
+
+    let matchedTextId: string | null = null;
+    target.traverse?.((child: THREE.Object3D) => {
+      if (matchedTextId) return;
+      const childTextId = child.userData?.textId;
+      if (typeof childTextId === 'string' && childTextId) {
+        matchedTextId = childTextId;
+      }
+    });
+    return matchedTextId;
+  }
+
   _setupObjectSelectionEvents() {
     if (!this._objectSelectionManager) return;
     const outlineHelpers = this as {
@@ -1120,6 +1173,13 @@ export class EditorViewer extends Viewer {
     };
 
     this._objectSelectionManager.on('objectSelected', (object) => {
+      const textId = this._resolveTextIdFromObject(object);
+      if (textId && this._selectedTextId !== textId) {
+        this._surfaceTextManager?.selectText?.(textId, { syncEntitySelection: false });
+      } else if (!textId && this._selectedTextId) {
+        this._surfaceTextManager?.deselectText?.(true, { syncEntitySelection: false });
+      }
+
       this.events.emit('objectSelected', { object });
       outlineHelpers.setOutlineSelection?.(object);
     });
