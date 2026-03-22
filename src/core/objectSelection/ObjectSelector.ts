@@ -1,4 +1,17 @@
 import * as THREE from 'three';
+import {
+  findSelectableObjectByEntityKey,
+  findSelectableRoot,
+  resolveSelectableObjectFromIntersection,
+} from '../entities/EntityHitResolver';
+
+type HighlightType = 'selection' | 'hover';
+
+type HighlightableMaterial = THREE.Material & {
+  color?: THREE.Color;
+  emissive?: THREE.Color;
+  emissiveIntensity?: number;
+};
 
 /**
  * 物体选择器
@@ -125,12 +138,9 @@ export class ObjectSelector {
 
     if (intersects.length > 0) {
       // 找到最顶层的可选择物体
-      let targetObject = intersects[0].object;
-      while (targetObject.parent && !this.selectableObjects.includes(targetObject)) {
-        targetObject = targetObject.parent;
-      }
+      const targetObject = this.resolveSelectableObjectFromIntersection(intersects[0]);
 
-      if (this.selectableObjects.includes(targetObject)) {
+      if (targetObject) {
         this.selectObject(targetObject);
       }
     } else {
@@ -158,12 +168,9 @@ export class ObjectSelector {
 
     if (intersects.length > 0) {
       // 找到最顶层的可选择物体
-      let targetObject = intersects[0].object;
-      while (targetObject.parent && !this.selectableObjects.includes(targetObject)) {
-        targetObject = targetObject.parent;
-      }
+      const targetObject = this.resolveSelectableObjectFromIntersection(intersects[0]);
 
-      if (this.selectableObjects.includes(targetObject) && targetObject !== this.selectedObject) {
+      if (targetObject && targetObject !== this.selectedObject) {
         this.addHoverHighlight(targetObject);
         this.domElement.style.cursor = 'pointer';
       } else {
@@ -276,18 +283,7 @@ export class ObjectSelector {
         }
 
         // 创建高亮材质
-        const highlightMaterial = child.material.clone();
-
-        if (type === 'selection') {
-          highlightMaterial.color.setHex(this.highlightConfig.color);
-          highlightMaterial.emissive.setHex(this.highlightConfig.emissive);
-          highlightMaterial.emissiveIntensity = this.highlightConfig.emissiveIntensity;
-        } else if (type === 'hover') {
-          highlightMaterial.emissive.setHex(0x222222);
-          highlightMaterial.emissiveIntensity = 0.1;
-        }
-
-        child.material = highlightMaterial;
+        child.material = this.createHighlightMaterial(child.material, type);
       }
     });
   }
@@ -374,6 +370,47 @@ export class ObjectSelector {
   /**
    * 销毁选择器
    */
+  resolveSelectableObjectFromIntersection(intersection) {
+    return resolveSelectableObjectFromIntersection(intersection, this.selectableObjects);
+  }
+
+  findSelectableRoot(object) {
+    return findSelectableRoot(object, this.selectableObjects);
+  }
+
+  findSelectableObjectByEntityKey(entityKey) {
+    return findSelectableObjectByEntityKey(this.selectableObjects, entityKey);
+  }
+
+  createHighlightMaterial(material, type: HighlightType) {
+    if (Array.isArray(material)) {
+      return material.map((entry) => this.createHighlightMaterial(entry, type));
+    }
+
+    const source = material as HighlightableMaterial | null | undefined;
+    const highlightMaterial =
+      source && typeof source.clone === 'function' ? source.clone() : source;
+
+    if (!highlightMaterial) {
+      return material;
+    }
+
+    if (type === 'selection') {
+      highlightMaterial.color?.setHex?.(this.highlightConfig.color);
+      highlightMaterial.emissive?.setHex?.(this.highlightConfig.emissive);
+      if (typeof highlightMaterial.emissiveIntensity === 'number') {
+        highlightMaterial.emissiveIntensity = this.highlightConfig.emissiveIntensity;
+      }
+      return highlightMaterial;
+    }
+
+    highlightMaterial.emissive?.setHex?.(0x222222);
+    if (typeof highlightMaterial.emissiveIntensity === 'number') {
+      highlightMaterial.emissiveIntensity = 0.1;
+    }
+    return highlightMaterial;
+  }
+
   destroy() {
     this.disable();
     this.clearAllHighlights();

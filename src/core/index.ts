@@ -21,6 +21,7 @@ export { default as ModelBooleanController } from './csg/ModelBooleanController'
 export { default as EntityVisualController } from './controllers/EntityVisualController';
 
 // 子模块
+export * from './boolean';
 export * from './facePicking';
 export * from './surfaceText';
 export * from './objectSelection';

@@ -3,153 +3,171 @@
     <div class="title">工艺信息</div>
     <div class="panel-body">
       <el-collapse v-model="activeNames">
-        <!-- 文字列表面板 -->
-        <el-collapse-item title="文字属性" name="text">
-          <div class="text-list" v-if="textList.length > 0">
+        <el-collapse-item title="实体信息" name="entity">
+          <div class="entity-list" v-if="entityList.length > 0">
             <div
-              v-for="text in textList"
-              :key="text.id"
-              class="text-item"
-              :class="{ active: selectedTextObject && selectedTextObject.id === text.id }"
-              @click="selectTextItem(text)"
+              v-for="entity in entityList"
+              :key="entity.id"
+              class="entity-item"
+              :class="{ active: selectedEntityId === entity.id }"
+              @click="selectEntityItem(entity)"
             >
-              <span class="text-name">{{ text.displayName }}</span>
-              <span class="text-content">{{ text.content }}</span>
-              <el-button
-                type="text"
-                size="mini"
-                icon="el-icon-delete"
-                @click.stop="deleteTextItem(text.id)"
-              ></el-button>
+              <div class="entity-item-main">
+                <span class="entity-type" :class="entity.type">{{ entity.typeLabel }}</span>
+                <span class="entity-name">{{ entity.displayName }}</span>
+              </div>
+              <span class="entity-summary">{{ entity.summary }}</span>
             </div>
           </div>
-          <div v-else class="empty-text">
-            <span>暂无文字，点击模型表面添加</span>
+          <div v-else class="empty-state">
+            <span>暂无模型或文字</span>
           </div>
 
-          <!-- 选中文字的属性编辑 -->
-          <div v-if="selectedTextObject" class="text-properties">
-            <div class="properties-title">{{ selectedTextName }} 属性</div>
+          <div v-if="selectedEntity" class="entity-properties">
+            <div class="properties-title">{{ selectedEntityName }} 属性</div>
+
             <div class="row">
-              <span>文字内容</span>
-              <el-input
-                size="mini"
-                v-model="textForm.content"
-                @change="updateTextContent"
-                placeholder="输入文字内容"
-              ></el-input>
-            </div>
-            <div class="row">
-              <span>文字颜色</span>
-              <el-color-picker
-                v-model="textForm.color"
-                size="small"
-                @change="updateTextColor"
-              ></el-color-picker>
-            </div>
-            <div class="row">
-              <span>雕刻模式</span>
-              <el-select v-model="textForm.mode" size="mini" @change="updateTextMode">
-                <el-option label="凸起" value="raised"></el-option>
-                <el-option label="内嵌" value="engraved"></el-option>
-              </el-select>
+              <span>类型</span>
+              <el-input size="mini" :value="selectedEntityTypeLabel" disabled></el-input>
             </div>
 
-            <!-- 圆柱面特有属性 -->
-            <div v-if="isOnCylinder" class="cylinder-properties">
-              <div class="properties-subtitle">圆柱面属性</div>
+            <template v-if="isTextEntity">
               <div class="row">
-                <span>环绕方向</span>
-                <el-select v-model="textForm.direction" size="mini" @change="updateTextDirection">
-                  <el-option label="顺时针" :value="1"></el-option>
-                  <el-option label="逆时针" :value="-1"></el-option>
+                <span>文字内容</span>
+                <el-input
+                  size="mini"
+                  v-model="textForm.content"
+                  @change="updateTextContent"
+                  placeholder="输入文字内容"
+                ></el-input>
+              </div>
+              <div class="row">
+                <span>文字颜色</span>
+                <el-color-picker
+                  v-model="textForm.color"
+                  size="small"
+                  @change="updateTextColor"
+                ></el-color-picker>
+              </div>
+              <div class="row">
+                <span>雕刻模式</span>
+                <el-select v-model="textForm.mode" size="mini" @change="updateTextMode">
+                  <el-option label="凸起" value="raised"></el-option>
+                  <el-option label="内嵌" value="engraved"></el-option>
+                </el-select>
+              </div>
+
+              <div v-if="isOnCylinder" class="cylinder-properties">
+                <div class="properties-subtitle">圆柱面属性</div>
+                <div class="row">
+                  <span>环绕方向</span>
+                  <el-select v-model="textForm.direction" size="mini" @change="updateTextDirection">
+                    <el-option label="顺时针" :value="1"></el-option>
+                    <el-option label="逆时针" :value="-1"></el-option>
+                  </el-select>
+                </div>
+                <div class="row">
+                  <span>字符间距</span>
+                  <editor-input-number
+                    v-model="textForm.letterSpacing"
+                    :min="0"
+                    :max="2"
+                    :step="0.1"
+                    size="mini"
+                    @change="updateLetterSpacing"
+                  ></editor-input-number>
+                </div>
+                <div class="row">
+                  <span>弯曲强度</span>
+                  <editor-input-number
+                    v-model="textForm.curvingStrength"
+                    :min="0"
+                    :max="2"
+                    :step="0.1"
+                    size="mini"
+                    @change="updateCurvingStrength"
+                  ></editor-input-number>
+                </div>
+                <div class="row">
+                  <span>起始角度</span>
+                  <editor-input-number
+                    v-model="textForm.startAngle"
+                    :min="-180"
+                    :max="180"
+                    :step="5"
+                    size="mini"
+                    @change="updateStartAngle"
+                  ></editor-input-number>
+                </div>
+              </div>
+
+              <div class="row">
+                <span>字体</span>
+                <el-select v-model="textForm.font" size="mini" @change="updateTextFont">
+                  <el-option label="Helvetiker" value="helvetiker"></el-option>
+                  <el-option label="Helvetiker Bold" value="helvetiker_bold"></el-option>
                 </el-select>
               </div>
               <div class="row">
-                <span>字符间距</span>
+                <span>大小</span>
                 <editor-input-number
-                  v-model="textForm.letterSpacing"
-                  :min="0"
-                  :max="2"
+                  v-model="textForm.size"
+                  :min="0.1"
+                  :max="10"
                   :step="0.1"
                   size="mini"
-                  @change="updateLetterSpacing"
+                  @change="updateTextSize"
                 ></editor-input-number>
               </div>
               <div class="row">
-                <span>弯曲强度</span>
+                <span>厚度</span>
                 <editor-input-number
-                  v-model="textForm.curvingStrength"
-                  :min="0"
+                  v-model="textForm.thickness"
+                  :min="0.01"
                   :max="2"
-                  :step="0.1"
+                  :step="0.01"
                   size="mini"
-                  @change="updateCurvingStrength"
+                  @change="updateTextThickness"
                 ></editor-input-number>
               </div>
-              <div class="row">
-                <span>起始角度</span>
-                <editor-input-number
-                  v-model="textForm.startAngle"
-                  :min="-180"
-                  :max="180"
-                  :step="5"
-                  size="mini"
-                  @change="updateStartAngle"
-                ></editor-input-number>
-              </div>
-            </div>
+            </template>
 
-            <div class="row">
-              <span>字体</span>
-              <el-select v-model="textForm.font" size="mini" @change="updateTextFont">
-                <el-option label="Helvetiker" value="helvetiker"></el-option>
-                <el-option label="Helvetiker Bold" value="helvetiker_bold"></el-option>
-              </el-select>
-            </div>
-            <div class="row">
-              <span>大小</span>
-              <editor-input-number
-                v-model="textForm.size"
-                :min="0.1"
-                :max="10"
-                :step="0.1"
-                size="mini"
-                @change="updateTextSize"
-              ></editor-input-number>
-            </div>
-            <div class="row">
-              <span>厚度</span>
-              <editor-input-number
-                v-model="textForm.thickness"
-                :min="0.01"
-                :max="2"
-                :step="0.01"
-                size="mini"
-                @change="updateTextThickness"
-              ></editor-input-number>
-            </div>
+            <template v-else>
+              <div class="row">
+                <span>资源</span>
+                <el-input size="mini" :value="selectedModelResource" disabled></el-input>
+              </div>
+              <div class="row">
+                <span>布尔</span>
+                <el-input size="mini" :value="selectedModelBoolean" disabled></el-input>
+              </div>
+              <div class="row">
+                <span>颜色</span>
+                <el-input size="mini" :value="selectedModelColor" disabled></el-input>
+              </div>
+            </template>
+
             <div class="properties-subtitle">变换</div>
             <div class="row">
               <span>位置</span>
               <div class="axis-inputs">
                 <editor-input-number
-                  v-model="textForm.position.x"
+                  v-model="transformForm.position.x"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
                 <editor-input-number
-                  v-model="textForm.position.y"
+                  v-model="transformForm.position.y"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
                 <editor-input-number
-                  v-model="textForm.position.z"
+                  v-model="transformForm.position.z"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
               </div>
             </div>
@@ -157,22 +175,22 @@
               <span>旋转(弧度)</span>
               <div class="axis-inputs">
                 <editor-input-number
-                  v-model="textForm.rotation.x"
+                  v-model="transformForm.rotation.x"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
                 <editor-input-number
-                  v-model="textForm.rotation.y"
+                  v-model="transformForm.rotation.y"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
                 <editor-input-number
-                  v-model="textForm.rotation.z"
+                  v-model="transformForm.rotation.z"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
               </div>
             </div>
@@ -180,111 +198,32 @@
               <span>缩放</span>
               <div class="axis-inputs">
                 <editor-input-number
-                  v-model="textForm.scale.x"
+                  v-model="transformForm.scale.x"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
                 <editor-input-number
-                  v-model="textForm.scale.y"
+                  v-model="transformForm.scale.y"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
                 <editor-input-number
-                  v-model="textForm.scale.z"
+                  v-model="transformForm.scale.z"
                   :min="0.01"
                   :step="0.1"
                   size="mini"
-                  @change="updateTextTransform"
+                  @change="updateSelectedEntityTransform"
                 ></editor-input-number>
               </div>
             </div>
-            <div class="text-actions">
+
+            <div class="text-actions" v-if="isTextEntity">
               <el-button size="mini" @click="deleteSelectedText" type="danger">删除文字</el-button>
             </div>
-          </div>
-        </el-collapse-item>
-
-        <el-collapse-item title="对象变换" name="object">
-          <div v-if="selectedObject" class="object-properties">
-            <div class="row">
-              <span>位置</span>
-              <div class="axis-inputs">
-                <editor-input-number
-                  v-model="objectForm.position.x"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-                <editor-input-number
-                  v-model="objectForm.position.y"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-                <editor-input-number
-                  v-model="objectForm.position.z"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-              </div>
-            </div>
-            <div class="row">
-              <span>旋转(弧度)</span>
-              <div class="axis-inputs">
-                <editor-input-number
-                  v-model="objectForm.rotation.x"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-                <editor-input-number
-                  v-model="objectForm.rotation.y"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-                <editor-input-number
-                  v-model="objectForm.rotation.z"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-              </div>
-            </div>
-            <div class="row">
-              <span>缩放</span>
-              <div class="axis-inputs">
-                <editor-input-number
-                  v-model="objectForm.scale.x"
-                  :min="0.01"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-                <editor-input-number
-                  v-model="objectForm.scale.y"
-                  :min="0.01"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-                <editor-input-number
-                  v-model="objectForm.scale.z"
-                  :min="0.01"
-                  :step="0.1"
-                  size="mini"
-                  @change="updateObjectTransform"
-                ></editor-input-number>
-              </div>
-            </div>
-          </div>
-          <div v-else class="empty-text">
-            <span>未选中对象</span>
           </div>
         </el-collapse-item>
 
@@ -311,7 +250,7 @@
 
     <div class="price">
       <div class="text">预计价格</div>
-      <div class="value">￥{{ price }}</div>
+      <div class="value">¥{{ price }}</div>
     </div>
     <div class="actions">
       <el-button type="default">设计交流</el-button>
@@ -321,9 +260,83 @@
 </template>
 
 <script>
-import { ref, computed, watch, reactive } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useEditorStore } from '../store';
 import EditorInputNumber from './common/SmartInputNumber.vue';
+
+const createTransformForm = () => ({
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+});
+
+const resetTransformForm = (target) => {
+  target.position.x = 0;
+  target.position.y = 0;
+  target.position.z = 0;
+  target.rotation.x = 0;
+  target.rotation.y = 0;
+  target.rotation.z = 0;
+  target.scale.x = 1;
+  target.scale.y = 1;
+  target.scale.z = 1;
+};
+
+const applyTransformToAxisForm = (formTarget, transform) => {
+  if (!formTarget || !transform) return;
+  const [px = 0, py = 0, pz = 0] = transform.position || [];
+  const [rx = 0, ry = 0, rz = 0] = transform.rotation || [];
+  const [sx = 1, sy = 1, sz = 1] = transform.scale || [];
+  formTarget.position.x = px;
+  formTarget.position.y = py;
+  formTarget.position.z = pz;
+  formTarget.rotation.x = rx;
+  formTarget.rotation.y = ry;
+  formTarget.rotation.z = rz;
+  formTarget.scale.x = sx;
+  formTarget.scale.y = sy;
+  formTarget.scale.z = sz;
+};
+
+const normalizeColorValue = (value, fallback = '#333333') => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `#${Math.max(0, value).toString(16).padStart(6, '0').slice(-6)}`;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.startsWith('#') ? value : `#${value.replace(/^#/, '')}`;
+  }
+  return fallback;
+};
+
+const resolveResourceLabel = (resource) => {
+  if (typeof resource === 'string' && resource) {
+    const segments = resource.split(/[\\/]/).filter(Boolean);
+    return segments[segments.length - 1] || resource;
+  }
+  if (resource) return 'Binary asset';
+  return '-';
+};
+
+const toVector3 = (value, fallback) => {
+  if (!Array.isArray(value)) return [...fallback];
+  const [x = fallback[0], y = fallback[1], z = fallback[2]] = value;
+  return [x, y, z];
+};
+
+const buildTransformFromEntity = (entity) => {
+  if (!entity || typeof entity !== 'object') return null;
+  const transform = entity.transform && typeof entity.transform === 'object' ? entity.transform : {};
+  const rotationSource = Array.isArray(entity.rotation)
+    ? entity.rotation
+    : Array.isArray(entity.rotate)
+      ? entity.rotate
+      : transform.rotation;
+  return {
+    position: toVector3(entity.position || transform.position, [0, 0, 0]),
+    rotation: toVector3(rotationSource, [0, 0, 0]),
+    scale: toVector3(entity.scale || transform.scale, [1, 1, 1]),
+  };
+};
 
 export default {
   name: 'PropertyPanel',
@@ -332,17 +345,27 @@ export default {
   },
   setup() {
     const store = useEditorStore();
-    const activeNames = ref(['text', 'object', 'base', 'color']);
+    const activeNames = ref(['entity', 'base', 'color']);
 
-    // 从 store 获取数据
-    const selectedTextObject = computed(() => store.state.selectedTextObject);
-    const selectedObject = computed(() => store.state.selectedObject);
+    const selectedEntityId = computed(() => store.selectedEntityId?.() || null);
     const selectedObjectTransform = computed(() => store.state.selectedObjectTransform);
-    const textList = computed(() => store.getTextList());
-    const selectedTextName = computed(() => store.selectedTextName());
+    const entityList = computed(() => store.getEntityList?.() || []);
+    const selectedEntity = computed(() => store.selectedEntity?.() || null);
+    const selectedEntityName = computed(() => selectedEntity.value?.displayName || '');
+    const selectedEntityTypeLabel = computed(
+      () => selectedEntity.value?.typeLabel || selectedEntity.value?.type || '-'
+    );
+    const isTextEntity = computed(() => selectedEntity.value?.type === 'text');
     const isOnCylinder = computed(() => store.isSelectedTextOnCylinder());
+    const selectedModelResource = computed(() =>
+      resolveResourceLabel(selectedEntity.value?.resource)
+    );
+    const selectedModelBoolean = computed(() => {
+      const booleanValue = selectedEntity.value?.boolean;
+      return typeof booleanValue === 'string' && booleanValue ? booleanValue : '-';
+    });
+    const selectedModelColor = computed(() => normalizeColorValue(selectedEntity.value?.color, '-'));
 
-    // 基本表单
     const form = reactive({
       volume: '36531.36mm³',
       size: '120×120×180.00mm',
@@ -351,7 +374,6 @@ export default {
       color3: '#e6a23c',
     });
 
-    // 文字表单
     const textForm = reactive({
       content: '',
       color: '#333333',
@@ -363,314 +385,206 @@ export default {
       letterSpacing: 0.1,
       curvingStrength: 1.0,
       startAngle: 0,
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 1 },
     });
 
-    const objectForm = reactive({
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 1 },
-    });
+    const transformForm = reactive(createTransformForm());
+
+    const resetTextForm = () => {
+      textForm.content = '';
+      textForm.color = '#333333';
+      textForm.mode = 'raised';
+      textForm.font = 'helvetiker';
+      textForm.size = 1;
+      textForm.thickness = 0.1;
+      textForm.direction = 1;
+      textForm.letterSpacing = 0.1;
+      textForm.curvingStrength = 1.0;
+      textForm.startAngle = 0;
+    };
 
     const price = computed(() => '128.00');
 
-    // 同步选中文字到表单
     watch(
-      selectedTextObject,
-      (obj) => {
-        if (obj) {
-          textForm.content = obj.content || '';
-          textForm.color = '#' + (obj.material?.color?.getHexString?.() || '333333');
-          textForm.mode = obj.mode || 'raised';
-          textForm.font = obj.config?.font || 'helvetiker';
-          textForm.size = obj.config?.size || 1;
-          textForm.thickness = obj.config?.thickness || 0.1;
-          textForm.direction = obj.config?.direction || 1;
-          textForm.letterSpacing = obj.config?.letterSpacing || 0.1;
-          textForm.curvingStrength = obj.config?.curvingStrength || 1.0;
-          textForm.startAngle = obj.config?.startAngle || 0;
-          const transformTarget = obj.entityObject || obj.mesh;
-          if (transformTarget) {
-            textForm.position.x = transformTarget.position.x;
-            textForm.position.y = transformTarget.position.y;
-            textForm.position.z = transformTarget.position.z;
-            textForm.rotation.x = transformTarget.rotation.x;
-            textForm.rotation.y = transformTarget.rotation.y;
-            textForm.rotation.z = transformTarget.rotation.z;
-            textForm.scale.x = transformTarget.scale.x;
-            textForm.scale.y = transformTarget.scale.y;
-            textForm.scale.z = transformTarget.scale.z;
-          }
-        }
-      },
-      { immediate: true }
-    );
-
-    watch(
-      selectedObject,
-      (obj) => {
-        if (!obj) {
-          objectForm.position.x = 0;
-          objectForm.position.y = 0;
-          objectForm.position.z = 0;
-          objectForm.rotation.x = 0;
-          objectForm.rotation.y = 0;
-          objectForm.rotation.z = 0;
-          objectForm.scale.x = 1;
-          objectForm.scale.y = 1;
-          objectForm.scale.z = 1;
+      selectedEntity,
+      (entity) => {
+        if (!entity) {
+          resetTextForm();
+          resetTransformForm(transformForm);
           return;
         }
-        objectForm.position.x = obj.position.x;
-        objectForm.position.y = obj.position.y;
-        objectForm.position.z = obj.position.z;
-        objectForm.rotation.x = obj.rotation.x;
-        objectForm.rotation.y = obj.rotation.y;
-        objectForm.rotation.z = obj.rotation.z;
-        objectForm.scale.x = obj.scale.x;
-        objectForm.scale.y = obj.scale.y;
-        objectForm.scale.z = obj.scale.z;
-      },
-      { immediate: true }
-    );
 
-    watch(
-      selectedObjectTransform,
-      (transform) => {
-        if (!transform) return;
-        const [px = 0, py = 0, pz = 0] = transform.position || [];
-        const [rx = 0, ry = 0, rz = 0] = transform.rotation || [];
-        const [sx = 1, sy = 1, sz = 1] = transform.scale || [];
-        objectForm.position.x = px;
-        objectForm.position.y = py;
-        objectForm.position.z = pz;
-        objectForm.rotation.x = rx;
-        objectForm.rotation.y = ry;
-        objectForm.rotation.z = rz;
-        objectForm.scale.x = sx;
-        objectForm.scale.y = sy;
-        objectForm.scale.z = sz;
+        if (entity.type === 'text') {
+          textForm.content = typeof entity.content === 'string' ? entity.content : '';
+          textForm.color = normalizeColorValue(entity.color, '#333333');
+          textForm.mode = entity.textType || 'raised';
+          textForm.font = typeof entity.resource === 'string' ? entity.resource : 'helvetiker';
+          textForm.size = entity.size || 1;
+          textForm.thickness = entity.depth || 0.1;
+          textForm.direction = entity.direction || 1;
+          textForm.letterSpacing = entity.letterSpacing || 0.1;
+          textForm.curvingStrength = entity.curvingStrength || 1.0;
+          textForm.startAngle = entity.startAngle || 0;
+        } else {
+          resetTextForm();
+        }
       },
       { immediate: true, deep: true }
     );
 
-    // 获取 core 引用
+    watch(
+      [selectedEntity, selectedObjectTransform],
+      ([entity, runtimeTransform]) => {
+        const nextTransform = runtimeTransform || buildTransformFromEntity(entity);
+        if (!nextTransform) {
+          resetTransformForm(transformForm);
+          return;
+        }
+        applyTransformToAxisForm(transformForm, nextTransform);
+      },
+      { immediate: true, deep: true }
+    );
+
     const getCore = () => store.getCore?.() || store.state.workspaceRef?.value?.getCore?.();
 
-    // 选择文字
-    const selectTextItem = (text) => {
-      getCore()?.selectText?.(text.id);
-    };
+    const selectEntityItem = (entity) => {
+      if (!entity?.id) return;
 
-    // 删除文字
-    const deleteTextItem = (textId) => {
-      store.delEntity(textId, { description: '删除文字' }).catch((err) => {
-        console.error('删除文字失败:', err);
-      });
+      const core = getCore();
+      if (!core) return;
+
+      if (entity.type === 'text') {
+        core.selectText?.(entity.id);
+        return;
+      }
+
+      const target = core.getModelById?.(entity.id);
+      if (target) {
+        core.selectObject?.(target);
+      }
     };
 
     const deleteSelectedText = () => {
-      const id = selectedTextObject.value?.id;
+      const id = isTextEntity.value ? selectedEntityId.value : null;
       if (!id) return;
       store.delEntity(id, { description: '删除文字' }).catch((err) => {
         console.error('删除文字失败:', err);
       });
     };
 
-    // 更新方法
     const updateTextContent = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { content: textForm.content },
-            { description: '更新文字内容' }
-          )
-          .catch((err) => {
-            console.error('更新文字内容失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { content: textForm.content }, { description: '更新文字内容' }).catch((err) => {
+        console.error('更新文字内容失败:', err);
+      });
     };
 
     const updateTextColor = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { color: textForm.color },
-            { description: '更新文字颜色' }
-          )
-          .catch((err) => {
-            console.error('更新文字颜色失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { color: textForm.color }, { description: '更新文字颜色' }).catch((err) => {
+        console.error('更新文字颜色失败:', err);
+      });
     };
 
     const updateTextMode = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { textType: textForm.mode },
-            { description: '更新文字模式' }
-          )
-          .catch((err) => {
-            console.error('切换文字模式失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { textType: textForm.mode }, { description: '更新文字模式' }).catch((err) => {
+        console.error('切换文字模式失败:', err);
+      });
     };
 
     const updateTextFont = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { resource: textForm.font },
-            { description: '更新文字配置' }
-          )
-          .catch((err) => {
-            console.error('更新文字配置失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { resource: textForm.font }, { description: '更新文字配置' }).catch((err) => {
+        console.error('更新文字配置失败:', err);
+      });
     };
 
     const updateTextSize = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { size: textForm.size },
-            { description: '更新文字配置' }
-          )
-          .catch((err) => {
-            console.error('更新文字配置失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { size: textForm.size }, { description: '更新文字配置' }).catch((err) => {
+        console.error('更新文字配置失败:', err);
+      });
     };
 
     const updateTextThickness = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { depth: textForm.thickness },
-            { description: '更新文字配置' }
-          )
-          .catch((err) => {
-            console.error('更新文字配置失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { depth: textForm.thickness }, { description: '更新文字配置' }).catch((err) => {
+        console.error('更新文字配置失败:', err);
+      });
     };
 
     const updateTextDirection = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { direction: textForm.direction },
-            { description: '更新文字配置' }
-          )
-          .catch((err) => {
-            console.error('更新文字配置失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { direction: textForm.direction }, { description: '更新文字配置' }).catch((err) => {
+        console.error('更新文字配置失败:', err);
+      });
     };
 
     const updateLetterSpacing = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { letterSpacing: textForm.letterSpacing },
-            { description: '更新文字配置' }
-          )
-          .catch((err) => {
-            console.error('更新文字配置失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store
+        .updateEntity(id, { letterSpacing: textForm.letterSpacing }, { description: '更新文字配置' })
+        .catch((err) => {
+          console.error('更新文字配置失败:', err);
+        });
     };
 
     const updateCurvingStrength = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { curvingStrength: textForm.curvingStrength },
-            { description: '更新文字配置' }
-          )
-          .catch((err) => {
-            console.error('更新文字配置失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store
+        .updateEntity(id, { curvingStrength: textForm.curvingStrength }, { description: '更新文字配置' })
+        .catch((err) => {
+          console.error('更新文字配置失败:', err);
+        });
     };
 
     const updateStartAngle = () => {
-      if (selectedTextObject.value) {
-        store
-          .updateEntity(
-            selectedTextObject.value.id,
-            { startAngle: textForm.startAngle },
-            { description: '更新文字配置' }
-          )
-          .catch((err) => {
-            console.error('更新文字配置失败:', err);
-          });
-      }
+      const id = isTextEntity.value ? selectedEntityId.value : null;
+      if (!id) return;
+      store.updateEntity(id, { startAngle: textForm.startAngle }, { description: '更新文字配置' }).catch((err) => {
+        console.error('更新文字配置失败:', err);
+      });
     };
 
-    const updateTextTransform = () => {
-      const textId = selectedTextObject.value?.id;
-      if (!textId) return;
-      store
-        .updateEntity(
-          textId,
-          {
-            position: [textForm.position.x, textForm.position.y, textForm.position.z],
-            rotation: [textForm.rotation.x, textForm.rotation.y, textForm.rotation.z],
-            scale: [textForm.scale.x, textForm.scale.y, textForm.scale.z],
-          },
-          { description: '更新文字变换' }
-        )
-        .catch((err) => {
-          console.error('更新文字变换失败:', err);
-        });
-    };
-
-    const updateObjectTransform = () => {
-      const obj = selectedObject.value;
-      const entityKey = obj?.userData?.entityKey;
-      if (!entityKey) return;
+    const updateSelectedEntityTransform = () => {
+      const entityId = selectedEntityId.value;
+      if (!entityId) return;
       const transformPayload = {
-        position: [objectForm.position.x, objectForm.position.y, objectForm.position.z],
-        rotation: [objectForm.rotation.x, objectForm.rotation.y, objectForm.rotation.z],
-        scale: [objectForm.scale.x, objectForm.scale.y, objectForm.scale.z],
+        position: [transformForm.position.x, transformForm.position.y, transformForm.position.z],
+        rotation: [transformForm.rotation.x, transformForm.rotation.y, transformForm.rotation.z],
+        scale: [transformForm.scale.x, transformForm.scale.y, transformForm.scale.z],
       };
-      store.setSelectedObjectTransform?.(transformPayload);
-      store
-        .updateEntity(
-          entityKey,
-          transformPayload,
-          { description: '更新对象变换' }
-        )
-        .catch((err) => {
-          console.error('更新对象变换失败:', err);
-        });
+      store.updateEntity(entityId, transformPayload, { description: '更新实体变换' }).catch((err) => {
+        console.error('更新实体变换失败:', err);
+      });
     };
 
     return {
       activeNames,
+      entityList,
+      selectedEntity,
+      selectedEntityId,
+      selectedEntityName,
+      selectedEntityTypeLabel,
+      selectedModelResource,
+      selectedModelBoolean,
+      selectedModelColor,
+      isTextEntity,
+      isOnCylinder,
       form,
       textForm,
+      transformForm,
       price,
-      selectedTextObject,
-      selectedObject,
-      textList,
-      selectedTextName,
-      isOnCylinder,
-      selectTextItem,
-      deleteTextItem,
+      selectEntityItem,
       deleteSelectedText,
       updateTextContent,
       updateTextColor,
@@ -682,9 +596,7 @@ export default {
       updateLetterSpacing,
       updateCurvingStrength,
       updateStartAngle,
-      updateTextTransform,
-      updateObjectTransform,
-      objectForm,
+      updateSelectedEntityTransform,
     };
   },
 };
@@ -700,17 +612,20 @@ export default {
   flex-direction: column;
   overflow: hidden;
 }
+
 .panel-body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
 }
+
 .title {
   padding: 10px 12px;
   font-weight: 600;
   border-bottom: 1px solid #ebeef5;
 }
+
 .row {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr);
@@ -718,20 +633,24 @@ export default {
   gap: 8px;
   padding: 6px 0;
 }
+
 .axis-inputs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
 }
+
 .axis-inputs :deep(.el-input-number) {
   width: 100%;
   min-width: 0;
 }
+
 .colors {
   display: flex;
   gap: 8px;
 }
+
 .price {
   margin-top: auto;
   padding: 12px;
@@ -740,10 +659,12 @@ export default {
   justify-content: space-between;
   align-items: center;
 }
+
 .value {
   color: #f56c6c;
   font-weight: 600;
 }
+
 .actions {
   padding: 12px;
   display: flex;
@@ -751,73 +672,104 @@ export default {
   border-top: 1px solid #ebeef5;
 }
 
-/* 文字列表 */
-.text-list {
+.entity-list {
   margin-bottom: 12px;
 }
-.text-item {
+
+.entity-item {
   display: flex;
-  align-items: center;
-  padding: 8px 10px;
-  margin-bottom: 4px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  margin-bottom: 6px;
   background: #f5f7fa;
-  border-radius: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
-.text-item:hover {
+
+.entity-item:hover {
+  background: #eef5ff;
+  border-color: #c6e2ff;
+}
+
+.entity-item.active {
   background: #e6f0ff;
+  border-color: #409eff;
 }
-.text-item.active {
-  background: #409eff;
-  color: #fff;
+
+.entity-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
-.text-item.active .text-content {
-  color: rgba(255, 255, 255, 0.8);
-}
-.text-name {
-  font-weight: 500;
-  margin-right: 8px;
+
+.entity-type {
   flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #409eff;
+  background: #ecf5ff;
 }
-.text-content {
-  flex: 1;
+
+.entity-type.model {
+  color: #67c23a;
+  background: #f0f9eb;
+}
+
+.entity-name {
+  font-weight: 600;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-summary {
   color: #909399;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.empty-text {
+
+.empty-state {
   padding: 20px;
   text-align: center;
   color: #909399;
   font-size: 12px;
 }
 
-/* 文字属性 */
-.text-properties {
+.entity-properties {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px dashed #ebeef5;
 }
+
 .properties-title {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 12px;
   color: #303133;
 }
+
 .properties-subtitle {
   font-size: 12px;
   color: #909399;
   margin-bottom: 8px;
   font-weight: 500;
 }
+
 .cylinder-properties {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px dashed #e4e7ed;
 }
+
 .text-actions {
   display: flex;
   gap: 6px;

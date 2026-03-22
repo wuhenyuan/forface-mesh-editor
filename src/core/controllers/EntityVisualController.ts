@@ -5,8 +5,8 @@ import type { DocumentModelSource } from '../Document';
 import type { EntityProps } from '../Document/Entity';
 import type { EntityLike as BaseEntityLike } from '../entities/EntityObject';
 import ModelEntityObject from '../entities/ModelEntityObject';
-import TextEntityObject from '../entities/TextEntityObject';
 import ModelBooleanController from '../csg/ModelBooleanController';
+import TextEntityProjector from './runtime/TextEntityProjector';
 type PrimitiveValue = string | number | boolean | null | undefined;
 type ControllerObject = { [key: string]: ControllerValue };
 type ControllerValue =
@@ -80,7 +80,6 @@ type EntityLike = BaseEntityLike &
 
 type MaybePromise<T> = T | Promise<T>;
 type EntityOperationResult = EntityLike | EntityProps | object | boolean | void;
-type TextSyncResult = EntityOperationResult | string | null;
 type EntityActionOptions = {
   description?: string;
   silent?: boolean;
@@ -92,12 +91,6 @@ type MeshAddOptions = {
   receiveShadow?: boolean;
   group?: 'entity' | 'scene' | 'csg';
 };
-
-const EULER_ORDERS: THREE.EulerOrder[] = ['XYZ', 'YZX', 'ZXY', 'XZY', 'YXZ', 'ZYX'];
-
-function isEulerOrder(value: string): value is THREE.EulerOrder {
-  return EULER_ORDERS.includes(value as THREE.EulerOrder);
-}
 
 type TextMeshLike = {
   position: THREE.Vector3;
@@ -198,10 +191,7 @@ export class EntityVisualController {
   private _loadTokens: Map<string, number>;
   private _loadTokenCounter: number;
   private _documentSubscriptions: Array<() => void>;
-  private _textEntitySubscriptions: Array<() => void>;
-  private _textEntityBound: boolean;
-  private _textEntitySyncDepth: number;
-  private _textAnchorMesh: THREE.Mesh | null;
+  private _textEntityProjector: TextEntityProjector;
   private _booleanController: ModelBooleanController;
   private _entityHandler: EntityHandler;
 
@@ -212,10 +202,22 @@ export class EntityVisualController {
     this._loadTokens = new Map();
     this._loadTokenCounter = 0;
     this._documentSubscriptions = [];
-    this._textEntitySubscriptions = [];
-    this._textEntityBound = false;
-    this._textEntitySyncDepth = 0;
-    this._textAnchorMesh = null;
+    this._textEntityProjector = new TextEntityProjector({
+      scene: this._options.scene,
+      ensureTextSystem: () => this._options.ensureTextSystem(),
+      getTextManager: () => this._options.getTextManager(),
+      getTextObjects: () => this._options.getTextObjects(),
+      restoreText: (snapshot) => this._options.restoreText(snapshot),
+      deleteText: (textId) => this._options.deleteText(textId),
+      updateTextConfig: (textId, patch) => this._options.updateTextConfig(textId, patch),
+      updateTextColor: (textId, color) => this._options.updateTextColor(textId, color),
+      updateTextContent: (textId, content) => this._options.updateTextContent(textId, content),
+      switchTextMode: (textId, mode) => this._options.switchTextMode(textId, mode),
+      addEntity: (entity, options = {}) => this._emitEntityAdd(entity as EntityLike, options),
+      updateEntity: (id, patch, options = {}) =>
+        this._emitEntityUpdate(id, patch as EntityPatchLike, options),
+      removeEntity: (id, options = {}) => this._emitEntityRemove(id, options),
+    });
     this._booleanController = new ModelBooleanController({
       csgGroup: this._options.csgGroup,
       entityGroup: this._options.entityGroup,
@@ -247,31 +249,6 @@ export class EntityVisualController {
     return this._doc().entityManager as EntityManagerBridge;
   }
 
-  private _toPromise(result?: MaybePromise<TextSyncResult>) {
-    if (!result) return null;
-    const maybePromise = result as Promise<TextSyncResult>;
-    if (typeof maybePromise.then !== 'function') return null;
-    return maybePromise;
-  }
-
-  private _asTextObject(value?: ControllerValue | null): TextObjectLike | null {
-    if (!value || typeof value !== 'object') return null;
-    return value as TextObjectLike;
-  }
-
-  private _asRecord(value?: ControllerValue | null): ControllerObject | null {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || value instanceof Map) {
-      return null;
-    }
-    return value as ControllerObject;
-  }
-
-  private _asTextConfig(value?: ControllerValue | null): TextConfigLike | null {
-    const record = this._asRecord(value);
-    if (!record) return null;
-    return record as TextConfigLike;
-  }
-
   private _asString(value?: ControllerValue | null, allowEmpty = false) {
     if (typeof value !== 'string') return null;
     if (!allowEmpty && value.length === 0) return null;
@@ -279,118 +256,7 @@ export class EntityVisualController {
   }
 
   bindTextEntityEvents(manager: TextManagerLike | null) {
-    if (this._textEntityBound || !manager) return;
-    this._textEntityBound = true;
-
-    const bind = (event: string, handler: (payload?: ControllerValue) => void) => {
-      manager.on(event, handler);
-      this._textEntitySubscriptions.push(() => manager.off(event, handler));
-    };
-
-    bind('textCreated', (value: ControllerValue) => {
-      if (this._isTextEntitySyncSuppressed()) return;
-      const textObject = this._asTextObject(value);
-      const textId = this._asString(textObject?.id);
-      if (!textObject || !textId) return;
-      this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityAdd(this._buildTextEntity(textObject), {
-          description: '????',
-        });
-        this._trackTextEntitySync(result);
-      });
-    });
-
-    bind('textDeleted', (value?: ControllerValue) => {
-      if (this._isTextEntitySyncSuppressed()) return;
-      const payload = this._asRecord(value);
-      const textObject = this._asTextObject(payload?.textObject);
-      const textId = this._asString(payload?.id) || this._asString(textObject?.id);
-      if (!textId) return;
-      this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityRemove(textId, { description: '????' });
-        this._trackTextEntitySync(result);
-      });
-    });
-
-    bind('textContentUpdated', (value?: ControllerValue) => {
-      if (this._isTextEntitySyncSuppressed()) return;
-      const payload = this._asRecord(value);
-      const textObject = this._asTextObject(payload?.textObject);
-      const textId = this._asString(textObject?.id);
-      const newContent = this._asString(payload?.newContent, true);
-      if (!textId || newContent === null) return;
-      this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityUpdate(
-          textId,
-          { content: newContent },
-          { description: '??????' }
-        );
-        this._trackTextEntitySync(result);
-      });
-    });
-
-    bind('textConfigUpdated', (value?: ControllerValue) => {
-      if (this._isTextEntitySyncSuppressed()) return;
-      const payload = this._asRecord(value);
-      const textObject = this._asTextObject(payload?.textObject);
-      const newConfig = this._asTextConfig(payload?.newConfig);
-      const textId = this._asString(textObject?.id);
-      if (!textId || !newConfig) return;
-      const patch = this._buildTextPatchFromConfig(newConfig, textObject);
-      if (!patch) return;
-      this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityUpdate(textId, patch, { description: '??????' });
-        this._trackTextEntitySync(result);
-      });
-    });
-
-    bind('textColorUpdated', (value?: ControllerValue) => {
-      if (this._isTextEntitySyncSuppressed()) return;
-      const payload = this._asRecord(value);
-      const textObject = this._asTextObject(payload?.textObject);
-      const nextColor = payload?.newColor;
-      const newColor =
-        typeof nextColor === 'string' || typeof nextColor === 'number' ? nextColor : undefined;
-      const textId = this._asString(textObject?.id);
-      if (!textId) return;
-      const color = this._getTextColor(textObject, newColor);
-      if (color === undefined) return;
-      this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityUpdate(textId, { color }, { description: '??????' });
-        this._trackTextEntitySync(result);
-      });
-    });
-
-    bind('textModeChanged', (value?: ControllerValue) => {
-      if (this._isTextEntitySyncSuppressed()) return;
-      const payload = this._asRecord(value);
-      const textObject = this._asTextObject(payload?.textObject);
-      const nextMode = this._asString(payload?.newMode);
-      const textId = this._asString(textObject?.id);
-      if (!textId || !nextMode) return;
-      this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityUpdate(
-          textId,
-          { textType: nextMode },
-          { description: '??????' }
-        );
-        this._trackTextEntitySync(result);
-      });
-    });
-
-    bind('dragEnd', (value: ControllerValue) => {
-      if (this._isTextEntitySyncSuppressed()) return;
-      const textObject = this._asTextObject(value);
-      const textId = this._asString(textObject?.id);
-      if (!textObject || !textId) return;
-      const transformPatch = this._getTextTransform(textObject);
-      this._withTextEntitySyncSuppressed(() => {
-        const result = this._emitEntityUpdate(textId, transformPatch, {
-          description: '??????',
-        });
-        this._trackTextEntitySync(result);
-      });
-    });
+    this._textEntityProjector.bind(manager);
   }
 
   syncCSGVisibilityAndSelection() {
@@ -404,18 +270,7 @@ export class EntityVisualController {
   dispose() {
     this._documentSubscriptions.forEach((off) => off());
     this._documentSubscriptions = [];
-    this._textEntitySubscriptions.forEach((off) => off());
-    this._textEntitySubscriptions = [];
-    this._textEntityBound = false;
-    if (this._textAnchorMesh) {
-      this._textAnchorMesh.parent?.remove?.(this._textAnchorMesh);
-      this._textAnchorMesh.geometry?.dispose?.();
-      const materials = Array.isArray(this._textAnchorMesh.material)
-        ? this._textAnchorMesh.material
-        : [this._textAnchorMesh.material];
-      materials.forEach((material) => material?.dispose?.());
-      this._textAnchorMesh = null;
-    }
+    this._textEntityProjector.dispose();
     this._clearLoadedModels();
     this._booleanController.dispose();
   }
@@ -648,225 +503,19 @@ export class EntityVisualController {
   }
 
   private _handleTextEntityAdded(payload: { key?: string; id?: string; entity?: EntityLike } = {}) {
-    if (this._isTextEntitySyncSuppressed()) return;
-    const entity = payload.entity;
-    const textId = payload.key || payload.id || this._asString(entity?.id);
-    if (!textId || !entity) return;
-
-    this._options.ensureTextSystem();
-
-    const existing = this._getTextObjectById(textId);
-    if (existing) {
-      this._applyTextEntityPatch(textId, entity);
-      return;
-    }
-
-    const snapshot = this._getTextSnapshotFromEntity(entity);
-    if (snapshot) {
-      this._withTextEntitySyncSuppressed(() => {
-        const promise = this._options
-          .restoreText(snapshot)
-          .then((restoredId: string) => {
-            if (!restoredId) return;
-            const patch = this._buildTextTransformPatch(entity);
-            if (patch) {
-              this._applyTextEntityPatch(restoredId, patch);
-            }
-          })
-          .catch(() => this._createTextObjectFromEntity(entity));
-        this._trackTextEntitySync(promise);
-      });
-      return;
-    }
-
-    this._withTextEntitySyncSuppressed(() => {
-      const promise = this._createTextObjectFromEntity(entity).catch(() => {});
-      this._trackTextEntitySync(promise);
-    });
+    this._textEntityProjector.handleEntityAdded(payload);
   }
 
   private _handleTextEntityUpdated(
     payload: { key?: string; id?: string; entity?: EntityLike; patch?: EntityPatchLike } = {}
   ) {
-    if (this._isTextEntitySyncSuppressed()) return;
-    const entity = payload.entity;
-    const textId = payload.key || payload.id || this._asString(entity?.id);
-    if (!textId) return;
-
-    const patch = payload.patch && Object.keys(payload.patch).length > 0 ? payload.patch : entity;
-    if (!patch) return;
-
-    this._applyTextEntityPatch(textId, patch);
+    this._textEntityProjector.handleEntityUpdated(payload);
   }
 
   private _handleTextEntityRemoved(
     payload: { key?: string; id?: string; entity?: EntityLike } = {}
   ) {
-    if (this._isTextEntitySyncSuppressed()) return;
-    const entity = payload.entity;
-    const textId = payload.key || payload.id || this._asString(entity?.id);
-    if (!textId) return;
-
-    const existing = this._getTextObjectById(textId);
-    if (!existing) return;
-
-    this._withTextEntitySyncSuppressed(() => {
-      const promise = this._options.deleteText(textId).catch(() => {});
-      this._trackTextEntitySync(promise);
-    });
-  }
-
-  private _applyTextEntityPatch(textId: string, patch: EntityPatchLike) {
-    const textObject = this._getTextObjectById(textId);
-    if (!textObject) return;
-
-    const configPatch: TextConfigLike = {};
-    const resourceFont = this._asFontPath(patch.resource);
-    if (resourceFont !== undefined) configPatch.font = resourceFont;
-    const fontPath = this._asFontPath(patch.font);
-    if (fontPath !== undefined) configPatch.font = fontPath;
-    if (patch.size !== undefined) configPatch.size = patch.size;
-    if (patch.depth !== undefined) configPatch.thickness = patch.depth;
-    if (patch.thickness !== undefined) configPatch.thickness = patch.thickness;
-    if (patch.direction !== undefined) configPatch.direction = patch.direction;
-    if (patch.letterSpacing !== undefined) configPatch.letterSpacing = patch.letterSpacing;
-    if (patch.curvingStrength !== undefined) configPatch.curvingStrength = patch.curvingStrength;
-    if (patch.startAngle !== undefined) configPatch.startAngle = patch.startAngle;
-
-    this._withTextEntitySyncSuppressed(() => {
-      if (Object.keys(configPatch).length > 0) {
-        const promise = this._options.updateTextConfig(textId, configPatch).catch(() => {});
-        this._trackTextEntitySync(promise);
-      }
-
-      if (patch.color !== undefined) {
-        this._options.updateTextColor(textId, patch.color);
-      }
-
-      if (patch.content !== undefined) {
-        const promise = this._options.updateTextContent(textId, patch.content).catch(() => {});
-        this._trackTextEntitySync(promise);
-      }
-
-      if (patch.textType !== undefined) {
-        const promise = this._options.switchTextMode(textId, patch.textType).catch(() => {});
-        this._trackTextEntitySync(promise);
-      }
-
-      if (patch.position || patch.rotation || patch.rotate || patch.scale) {
-        const transformTarget = (textObject.entityObject || textObject.mesh) as
-          | (TextMeshLike & {
-              markBoxDirty?: () => void;
-              refreshWorldBox?: (force?: boolean) => THREE.Box3;
-            })
-          | undefined;
-        if (transformTarget && patch.position) {
-          const [x = 0, y = 0, z = 0] = patch.position;
-          transformTarget.position.set(x, y, z);
-        }
-        const nextRotation = patch.rotation ?? patch.rotate;
-        if (transformTarget && Array.isArray(nextRotation)) {
-          const [x = 0, y = 0, z = 0, order] = nextRotation;
-          if (typeof order === 'string' && isEulerOrder(order)) {
-            transformTarget.rotation.order = order;
-          }
-          transformTarget.rotation.set(x, y, z);
-        }
-        if (transformTarget && patch.scale) {
-          const [x = 1, y = 1, z = 1] = patch.scale;
-          transformTarget.scale.set(x, y, z);
-        }
-        transformTarget?.updateMatrixWorld?.(true);
-        transformTarget?.markBoxDirty?.();
-        transformTarget?.refreshWorldBox?.(true);
-      }
-    });
-  }
-
-  private _getTextObjectById(textId: string) {
-    const manager = this._options.getTextManager();
-    const fromManager = manager?.textObjects?.get?.(textId);
-    if (fromManager) return fromManager;
-    const list = this._options.getTextObjects() || [];
-    return list.find((item) => item?.id === textId) || null;
-  }
-
-  private _getTextSnapshotFromEntity(entity: EntityLike | null | undefined) {
-    if (entity?.snapshot?.id) return entity.snapshot;
-    return null;
-  }
-
-  private _buildTextTransformPatch(entity: EntityLike | null | undefined) {
-    if (!entity) return null;
-    const textEntityObject = new TextEntityObject(entity.id || 'text_entity', entity);
-    return textEntityObject.buildTransformPatch();
-  }
-
-  private async _createTextObjectFromEntity(entity: EntityLike | null | undefined) {
-    if (!entity) return null;
-
-    const textEntityObject = new TextEntityObject(entity.id || 'text_entity', entity);
-    const content = textEntityObject.getContent();
-    if (!content) return null;
-
-    const manager = this._options.ensureTextSystem();
-    if (!manager?.createTextObject) return null;
-
-    const options = textEntityObject.buildCreateOptions();
-    const faceInfo = this._buildTextAnchorFaceInfo();
-    const textId = await manager.createTextObject(content, faceInfo, options);
-    if (!textId) return null;
-
-    const patch = textEntityObject.buildTransformPatch();
-    if (patch) {
-      this._applyTextEntityPatch(textId, patch);
-    }
-
-    return textId;
-  }
-
-  private _getTextAnchorMesh() {
-    if (this._textAnchorMesh) return this._textAnchorMesh;
-    const geometry = new THREE.PlaneGeometry(1, 1);
-    const material = new THREE.MeshBasicMaterial({ visible: false });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.visible = false;
-    mesh.name = '__text_anchor__';
-    mesh.userData.isHelper = true;
-    this._options.scene.add(mesh);
-    mesh.updateMatrixWorld?.(true);
-    this._textAnchorMesh = mesh;
-    return mesh;
-  }
-
-  private _buildTextAnchorFaceInfo() {
-    const mesh = this._getTextAnchorMesh();
-    return {
-      mesh,
-      faceIndex: 0,
-      face: { normal: new THREE.Vector3(0, 1, 0) },
-      point: new THREE.Vector3(0, 0, 0),
-      distance: 0,
-      uv: new THREE.Vector2(0, 0),
-    };
-  }
-
-  private _withTextEntitySyncSuppressed(callback: () => void) {
-    this._pushTextEntitySyncSuppression();
-    try {
-      callback();
-    } finally {
-      this._popTextEntitySyncSuppression();
-    }
-  }
-
-  private _trackTextEntitySync(result?: MaybePromise<TextSyncResult>) {
-    const promise = this._toPromise(result);
-    if (!promise) return;
-    this._pushTextEntitySyncSuppression();
-    promise.finally(() => {
-      this._popTextEntitySyncSuppression();
-    });
+    this._textEntityProjector.handleEntityRemoved(payload);
   }
 
   private _emitEntityAdd(entity: EntityLike, options: EntityActionOptions = {}) {
@@ -892,81 +541,6 @@ export class EntityVisualController {
     }
     const result = this._entityManager().removeEntity(id, { silent: options.silent });
     return typeof result === 'boolean' ? result : true;
-  }
-
-  private _pushTextEntitySyncSuppression() {
-    this._textEntitySyncDepth += 1;
-  }
-
-  private _popTextEntitySyncSuppression() {
-    this._textEntitySyncDepth = Math.max(0, this._textEntitySyncDepth - 1);
-  }
-
-  private _isTextEntitySyncSuppressed() {
-    return this._textEntitySyncDepth > 0;
-  }
-
-  private _buildTextEntity(textObject: TextObjectLike): EntityLike {
-    const config = textObject?.config || {};
-    return {
-      id: textObject.id,
-      type: 'text',
-      resource: config.font,
-      textType: textObject.mode,
-      content: typeof textObject.content === 'string' ? textObject.content : '',
-      size: config.size,
-      depth: config.thickness,
-      direction: config.direction,
-      letterSpacing: config.letterSpacing,
-      curvingStrength: config.curvingStrength,
-      startAngle: config.startAngle,
-      color: this._getTextColor(textObject),
-      ...this._getTextTransform(textObject),
-    };
-  }
-
-  private _buildTextPatchFromConfig(config: TextConfigLike, textObject?: TextObjectLike) {
-    if (!config) return null;
-    const patch: EntityPatchLike = {};
-    if (config.font !== undefined) patch.resource = config.font;
-    if (config.size !== undefined) patch.size = config.size;
-    if (config.thickness !== undefined) patch.depth = config.thickness;
-    if (config.color !== undefined) patch.color = this._getTextColor(textObject, config.color);
-    if (config.direction !== undefined) patch.direction = config.direction;
-    if (config.letterSpacing !== undefined) patch.letterSpacing = config.letterSpacing;
-    if (config.curvingStrength !== undefined) patch.curvingStrength = config.curvingStrength;
-    if (config.startAngle !== undefined) patch.startAngle = config.startAngle;
-    return Object.keys(patch).length > 0 ? patch : null;
-  }
-
-  private _getTextTransform(textObject: TextObjectLike) {
-    const transformTarget = textObject?.entityObject || textObject?.mesh;
-    if (!transformTarget) return {};
-    return {
-      position: [
-        transformTarget.position.x,
-        transformTarget.position.y,
-        transformTarget.position.z,
-      ],
-      rotation: [
-        transformTarget.rotation.x,
-        transformTarget.rotation.y,
-        transformTarget.rotation.z,
-      ],
-      scale: [transformTarget.scale.x, transformTarget.scale.y, transformTarget.scale.z],
-    };
-  }
-
-  private _getTextColor(
-    textObject?: TextObjectLike,
-    override?: string | number
-  ): string | number | undefined {
-    if (typeof override === 'string' || typeof override === 'number') return override;
-    const materialColor = textObject?.material?.color?.getHex?.();
-    if (typeof materialColor === 'number') return materialColor;
-    const configColor = textObject?.config?.color;
-    if (typeof configColor === 'string' || typeof configColor === 'number') return configColor;
-    return undefined;
   }
 
   private _toVector3Tuple(value?: EntityVector | EntityRotation) {
@@ -1026,11 +600,6 @@ export class EntityVisualController {
             ? entity.thickness
             : undefined,
     };
-  }
-
-  private _asFontPath(value: EntityPatchLike['resource'] | EntityPatchLike['font']) {
-    if (typeof value === 'string' && value.length > 0) return value;
-    return undefined;
   }
 
   private _getBooleanSources() {

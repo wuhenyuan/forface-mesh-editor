@@ -53,8 +53,6 @@ export default {
     const container = ref(null);
     const store = useEditorStore();
     let core = null;
-
-    let selectedObject = null;
     let transformMode = 'translate';
 
     const snapshotTransform = (object) => {
@@ -77,7 +75,10 @@ export default {
       );
     };
 
+    const getSelectedRuntimeObject = () => store.selectedRuntimeObject?.() || null;
+
     const syncSelectedTransformToStore = () => {
+      const selectedObject = getSelectedRuntimeObject();
       if (!selectedObject) {
         store.clearSelectedObjectTransform?.();
         return;
@@ -87,6 +88,7 @@ export default {
 
     const getPrimarySnapshot = (snapshots = []) => {
       if (!Array.isArray(snapshots) || snapshots.length === 0) return null;
+      const selectedObject = getSelectedRuntimeObject();
       const entityKey = selectedObject?.userData?.entityKey;
       if (entityKey) {
         const matched = snapshots.find((item) => item?.id === entityKey);
@@ -120,6 +122,12 @@ export default {
       if (isEditableElement(event.target)) return;
 
       const key = String(event.key || '').toLowerCase();
+      if (key === 'w') {
+        core?.setTransformMode?.('translate');
+        event.preventDefault();
+        return;
+      }
+
       if (key === 'e') {
         core?.setTransformMode?.('rotate');
         event.preventDefault();
@@ -263,7 +271,7 @@ export default {
       });
 
       emitter.on('textDeselected', ({ textObject }) => {
-        store.deselectText();
+        store.deselectText(textObject);
         emit('textDeselected', textObject);
       });
 
@@ -272,23 +280,18 @@ export default {
       });
 
       emitter.on('objectSelected', ({ object }) => {
-        selectedObject = object;
         store.selectObject(object);
         syncSelectedTransformToStore();
         emit('objectSelected', object);
       });
 
       emitter.on('objectDeselected', ({ object }) => {
-        if (selectedObject?.uuid === object?.uuid) {
-          selectedObject = null;
-        }
-        store.deselectObject();
+        store.deselectObject(object);
         store.clearSelectedObjectTransform?.();
         emit('objectDeselected', object);
       });
 
       emitter.on('objectSelectionCleared', () => {
-        selectedObject = null;
         store.deselectObject();
         store.clearSelectedObjectTransform?.();
       });
@@ -317,6 +320,7 @@ export default {
         const afterSnapshot = getPrimarySnapshot(payload?.after);
         if (!afterSnapshot) return;
 
+        const selectedObject = getSelectedRuntimeObject();
         const beforeSnapshot = getPrimarySnapshot(payload?.before);
         const beforeState = toCommandState(beforeSnapshot, selectedObject);
         const afterState = toCommandState(afterSnapshot, selectedObject);
@@ -357,11 +361,6 @@ export default {
             });
         }
 
-        store.setSelectedObjectTransform?.({
-          position: [...(afterState?.position || [0, 0, 0])],
-          rotation: [...(afterState?.rotation || [0, 0, 0])],
-          scale: [...(afterState?.scale || [1, 1, 1])],
-        });
       });
 
       emitter.on('transform:cancel', () => {

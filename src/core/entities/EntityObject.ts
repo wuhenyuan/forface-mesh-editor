@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { annotateEntityMaterials } from './EntityHitUtils';
 
 export type EntityTransform = {
   position?: number[];
@@ -231,6 +232,16 @@ export class EntityObject extends THREE.Object3D {
     this.traverse((object: THREE.Object3D) => {
       object.userData = object.userData || {};
       object.userData.entityKey = key;
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      annotateEntityMaterials(
+        mesh.material,
+        {
+          entityKey: key,
+          sourceEntityId: key,
+        },
+        { overwrite: false }
+      );
     });
   }
 }

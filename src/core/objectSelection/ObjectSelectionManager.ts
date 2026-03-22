@@ -300,6 +300,21 @@ export class ObjectSelectionManager {
 
   setTransformMode(mode: TransformMode) {
     this.transformControls.setMode(mode);
+
+    if (!this.selectedObject) {
+      return;
+    }
+
+    if (!this.enabled || !this.config.enableTransformControls) {
+      return;
+    }
+
+    if (this.transformSession.hasInteraction()) {
+      return;
+    }
+
+    this.beginTransformSession([this.selectedObject]);
+    this.boundsHelper?.update?.(this.selectedObject);
   }
 
   getTransformMode() {

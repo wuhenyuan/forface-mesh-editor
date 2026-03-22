@@ -9,159 +9,35 @@ import { ObjectSelectionManager } from './objectSelection';
 import { LoaderManager } from './LoaderManager';
 import { ExportManager } from './ExportManager';
 import { ProjectManager } from './ProjectManager';
-import { FeatureDetector } from './facePicking/FeatureDetector';
-
-type PrimitiveValue = string | number | boolean | null | undefined;
-type OptionValue = PrimitiveValue | PrimitiveValue[] | THREE.Material;
-type LooseRecord = Record<string, OptionValue>;
-type TextMode = 'raised' | 'engraved' | string;
-type ModelSource = string | File | Blob;
-
-type ProjectConfigLike = {
-  models?: {
-    origin?: { path?: string };
-    base?: { path?: string };
-  };
-  originModelPath?: string;
-  baseModelPath?: string;
-  texts?: Array<Record<string, PrimitiveValue | number[]>>;
-};
-
-type ProjectDataLike = {
-  config?: ProjectConfigLike;
-};
-
-type ViewerEventPayload =
-  | PrimitiveValue
-  | THREE.Object3D
-  | THREE.Vector2
-  | THREE.Vector3
-  | THREE.Euler
-  | THREE.Intersection
-  | Record<string, PrimitiveValue | number[] | THREE.Object3D | object | null>
-  | Array<Record<string, PrimitiveValue | number[]>>;
-
-type DetectFeatureOptions = Record<string, PrimitiveValue>;
-
-type FeatureLike = {
-  id?: string;
-  type?: string;
-  [key: string]: PrimitiveValue | number[] | object | null | undefined;
-};
-
-type FeatureDetectionResult = {
-  meshId?: string;
-  triangleCount?: number;
-  planes?: FeatureLike[];
-  cylinders?: FeatureLike[];
-  namedFeatures?: FeatureLike[];
-  [key: string]:
-    | PrimitiveValue
-    | FeatureLike[]
-    | Map<number, FeatureLike>
-    | Record<string, PrimitiveValue>
-    | undefined;
-};
-
-type LoadModelOptions = {
-  addToScene?: boolean;
-  detectFeatures?: boolean;
-  modelId?: string;
-  centerModel?: boolean;
-  material?: THREE.Material | null;
-  mtlUrl?: string;
-  name?: string;
-};
-
-type AddMeshOptions = {
-  selectable?: boolean;
-  castShadow?: boolean;
-  receiveShadow?: boolean;
-  group?: 'entity' | 'scene' | 'csg';
-};
-
-type ExportOptions = Parameters<ExportManager['export']>[2];
-
-type CreateProjectOptions = {
-  name?: string;
-  originModelPath?: string;
-};
-
-type ProjectPackageOptions = {
-  includeModels?: boolean | string[];
-  format?: 'v3' | 'config2';
-  projectFileName?: string;
-  fetchOptions?: RequestInit;
-};
-
-type EditorViewerOptions = {
-  backgroundColor?: number;
-  enableShadow?: boolean;
-  enableGrid?: boolean;
-  events?: ViewerEventBus;
-  [key: string]: PrimitiveValue | PrimitiveValue[] | object | undefined;
-};
-
-type ViewerEventBus = {
-  emit: (event: string, payload?: ViewerEventPayload) => void;
-  on: (event: string, callback: (payload?: ViewerEventPayload) => void) => () => void;
-};
-
-type FeatureDetectorLike = FeatureDetector & {
-  detect?: (
-    model: THREE.Object3D,
-    modelId?: string,
-    options?: DetectFeatureOptions
-  ) => Promise<FeatureDetectionResult | null>;
-  getFeatureAtIntersection?: (
-    modelId: string,
-    intersection: THREE.Intersection
-  ) => FeatureLike | null;
-  getModelFeatures?: (modelId: string) => FeatureDetectionResult | null;
-  getTextableSurfaces?: (modelId: string, options?: DetectFeatureOptions) => FeatureLike[];
-};
-
-type TextObjectConfig = {
-  font?: string;
-  size?: number;
-  thickness?: number;
-  direction?: string;
-  letterSpacing?: number;
-  curvingStrength?: number;
-  startAngle?: number;
-  color?: string | number;
-};
-
-type EditorTextObject = {
-  id?: string;
-  displayName?: string;
-  content?: string;
-  config?: TextObjectConfig;
-  mode?: TextMode;
-  entityObject?: {
-    position?: { toArray?: () => number[] };
-    rotation?: { toArray?: () => number[] };
-  };
-  material?: {
-    color?: {
-      getHexString?: () => string;
-    };
-  };
-  mesh?: {
-    position?: { toArray?: () => number[] };
-    rotation?: { toArray?: () => number[] };
-  };
-  featureName?: string;
-};
-
-type EditorViewerMesh = THREE.Object3D & {
-  userData: Record<string, PrimitiveValue | number[] | object> & { isHelper?: boolean };
-};
-
-type ViewerClickPayload = {
-  event?: MouseEvent;
-  [key: string]: PrimitiveValue | number[] | object | null | undefined;
-};
+import { bindViewerClickRouting } from './editor/runtime/clickRouting';
+import { createEditorCoreSubsystems } from './editor/runtime/coreSubsystems';
+import {
+  bindObjectSelectionManagerEvents,
+  disableObjectSelectorNativeClick,
+  resolveTextIdFromObject,
+} from './editor/runtime/objectSelection';
+import {
+  bindTextSystemEvents,
+  collectTextTargetMeshes,
+  createSurfaceTextSelectionBridge,
+} from './editor/runtime/textSystem';
+import type {
+  AddMeshOptions,
+  CreateProjectOptions,
+  DetectFeatureOptions,
+  EditorTextObject,
+  EditorViewerMesh,
+  EditorViewerOptions,
+  ExportOptions,
+  FeatureDetectorLike,
+  LoadModelOptions,
+  ModelSource,
+  PrimitiveValue,
+  ProjectDataLike,
+  ProjectPackageOptions,
+  TextMode,
+  TextObjectConfig,
+} from './editor/runtime/types';
 
 export class EditorViewer extends Viewer {
   _loaderManager: LoaderManager | null;
@@ -211,14 +87,11 @@ export class EditorViewer extends Viewer {
    */
   _initCoreSubsystems() {
     // 特征检测器
-    this._featureDetector = new FeatureDetector();
-
-    this._loaderManager = new LoaderManager();
-    this._loaderManager.setFeatureDetector(this._featureDetector);
-
-    this._exportManager = new ExportManager();
-
-    this._projectManager = new ProjectManager();
+    const subsystems = createEditorCoreSubsystems(this.events);
+    this._featureDetector = subsystems.featureDetector;
+    this._loaderManager = subsystems.loaderManager;
+    this._exportManager = subsystems.exportManager;
+    this._projectManager = subsystems.projectManager;
 
     // 设置加载事件
     this._loaderManager.onProgress = (progress) => {
@@ -263,30 +136,15 @@ export class EditorViewer extends Viewer {
       this._viewerClickUnsubscribe();
     }
 
-    this._viewerClickUnsubscribe = this.events.on('click', async (payload?: ViewerEventPayload) => {
-      const clickPayload = (payload || {}) as ViewerClickPayload;
-      const event = clickPayload.event;
-      if (!event) return;
-
-      const surfaceTextManager = this._surfaceTextManager as {
-        _onCanvasClick?: (mouseEvent: MouseEvent) => Promise<void> | void;
-      } | null;
-      try {
-        await Promise.resolve(surfaceTextManager?._onCanvasClick?.(event));
-      } catch (error) {
-        console.error('[EditorViewer] surface text click handling failed', error);
-      }
-
-      if ((event as CoreValue)?.__surfaceTextHandled) {
-        return;
-      }
-
-      const objectSelectionManager = this._objectSelectionManager as {
-        objectSelector?: {
-          handleClick?: (mouseEvent: MouseEvent) => void;
-        };
-      } | null;
-      objectSelectionManager?.objectSelector?.handleClick?.(event);
+    this._viewerClickUnsubscribe = bindViewerClickRouting({
+      events: this.events,
+      getSurfaceTextManager: () => this._surfaceTextManager,
+      getObjectSelectionManager: () =>
+        this._objectSelectionManager as {
+          objectSelector?: {
+            handleClick?: (mouseEvent: MouseEvent) => void;
+          };
+        } | null,
     });
   }
 
@@ -858,16 +716,7 @@ export class EditorViewer extends Viewer {
    * 初始化文字系统
    */
   _getTextTargetMeshes() {
-    const root = this.entityGroup || this.scene;
-    const meshes: THREE.Mesh[] = [];
-    root?.traverse?.((obj: THREE.Object3D) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if (mesh.userData?.isHelper) return;
-      if (mesh.userData?.isTextObject) return;
-      meshes.push(mesh);
-    });
-    return meshes;
+    return collectTextTargetMeshes(this.entityGroup || this.scene);
   }
 
   initTextSystem() {
@@ -883,36 +732,16 @@ export class EditorViewer extends Viewer {
       );
 
       this._surfaceTextManager.setTargetMeshes(this._getTextTargetMeshes());
-      this._surfaceTextManager.setEntitySelectionBridge?.({
-        addEntityObject: (entityObject: THREE.Object3D) => {
-          this.addMesh(entityObject as EditorViewerMesh, {
-            selectable: true,
-            castShadow: false,
-            receiveShadow: false,
-          });
-        },
-        removeEntityObject: (entityObject: THREE.Object3D) => {
-          this.removeMesh(entityObject as EditorViewerMesh);
-        },
-        selectEntityObject: (entityObject: THREE.Object3D | null) => {
-          if (!entityObject) return;
-          if (!this._objectSelectionManager) {
-            this.initObjectSelection();
-          }
-          if (!this._objectSelectionEnabled) {
-            this.enableObjectSelection();
-          }
-          this._objectSelectionManager?.selectObject?.(entityObject);
-        },
-        clearEntitySelection: () => {
-          this._objectSelectionManager?.clearSelection?.();
-        },
-        refreshEntityObjectSession: (entityObject: THREE.Object3D | null) => {
-          if (!entityObject || !this._objectSelectionManager) return;
-          if (this._objectSelectionManager.getSelectedObject?.() !== entityObject) return;
-          this._objectSelectionManager.beginTransformSession?.([entityObject]);
-        },
-      });
+      this._surfaceTextManager.setEntitySelectionBridge?.(
+        createSurfaceTextSelectionBridge({
+          addMesh: (mesh, options = {}) => this.addMesh(mesh, options),
+          removeMesh: (mesh) => this.removeMesh(mesh),
+          ensureObjectSelection: () => this.initObjectSelection(),
+          enableObjectSelection: () => this.enableObjectSelection(),
+          isObjectSelectionEnabled: () => this._objectSelectionEnabled,
+          getObjectSelectionManager: () => this._objectSelectionManager,
+        })
+      );
 
       this._setupTextSystemEvents();
 
@@ -926,84 +755,21 @@ export class EditorViewer extends Viewer {
 
   _setupTextSystemEvents() {
     if (!this._surfaceTextManager) return;
-
-    this._surfaceTextManager.on('textCreated', (textObject) => {
-      this._textObjects.push(textObject);
-      this.events.emit('textCreated', { textObject });
+    bindTextSystemEvents({
+      manager: this._surfaceTextManager,
+      textObjects: this._textObjects,
+      events: this.events,
+      getSelectedTextId: () => this._selectedTextId,
+      setSelectedTextId: (textId) => {
+        this._selectedTextId = textId;
+      },
+      setTextModeEnabled: (enabled) => {
+        this._textModeEnabled = enabled;
+      },
+      setControlsEnabled: (enabled) => {
+        this.setControlsEnabled(enabled);
+      },
     });
-
-    this._surfaceTextManager.on('textSelected', (textObject) => {
-      this._selectedTextId = textObject.id;
-      this.events.emit('textSelected', { textObject });
-    });
-
-    this._surfaceTextManager.on('textDeselected', (textObject) => {
-      this._selectedTextId = null;
-      this.events.emit('textDeselected', { textObject });
-    });
-
-    this._surfaceTextManager.on('textDeleted', ({ id, textObject }) => {
-      const index = this._textObjects.findIndex((obj) => obj.id === id);
-      if (index !== -1) {
-        this._textObjects.splice(index, 1);
-      }
-      if (this._selectedTextId === id) {
-        this._selectedTextId = null;
-      }
-      this.events.emit('textDeleted', { id, textObject });
-    });
-
-    this._surfaceTextManager.on('textContentUpdated', (data) => {
-      this.events.emit('textContentUpdated', data);
-    });
-
-    this._surfaceTextManager.on('textConfigUpdated', (data) => {
-      this.events.emit('textConfigUpdated', data);
-    });
-
-    this._surfaceTextManager.on('textColorUpdated', (data) => {
-      this.events.emit('textColorUpdated', data);
-    });
-
-    this._surfaceTextManager.on('textModeChanged', (data) => {
-      this.events.emit('textModeChanged', data);
-    });
-
-    this._surfaceTextManager.on('textModeEnabled', () => {
-      this._textModeEnabled = true;
-      this.events.emit('textModeEnabled');
-    });
-
-    this._surfaceTextManager.on('textModeDisabled', () => {
-      this._textModeEnabled = false;
-      this.events.emit('textModeDisabled');
-    });
-
-    const transformControls = this._surfaceTextManager.transformControls as {
-      on?: (eventName: string, callback: (isDragging: boolean) => void) => void;
-      addEventListener?: (eventName: string, callback: (event: { value: boolean }) => void) => void;
-      controls?: {
-        addEventListener?: (
-          eventName: string,
-          callback: (event: { value: boolean }) => void
-        ) => void;
-      };
-    } | null;
-    if (transformControls) {
-      if (typeof transformControls.on === 'function') {
-        transformControls.on('dragging-changed', (isDragging) => {
-          this.setControlsEnabled(!isDragging);
-        });
-      } else if (typeof transformControls.addEventListener === 'function') {
-        transformControls.addEventListener('dragging-changed', (event) => {
-          this.setControlsEnabled(!event.value);
-        });
-      } else if (typeof transformControls.controls?.addEventListener === 'function') {
-        transformControls.controls.addEventListener('dragging-changed', (event) => {
-          this.setControlsEnabled(!event.value);
-        });
-      }
-    }
   }
 
   /**
@@ -1148,21 +914,7 @@ export class EditorViewer extends Viewer {
   }
 
   _resolveTextIdFromObject(target: THREE.Object3D | null) {
-    if (!target) return null;
-    const directTextId = target.userData?.textId;
-    if (typeof directTextId === 'string' && directTextId) {
-      return directTextId;
-    }
-
-    let matchedTextId: string | null = null;
-    target.traverse?.((child: THREE.Object3D) => {
-      if (matchedTextId) return;
-      const childTextId = child.userData?.textId;
-      if (typeof childTextId === 'string' && childTextId) {
-        matchedTextId = childTextId;
-      }
-    });
-    return matchedTextId;
+    return resolveTextIdFromObject(target);
   }
 
   _setupObjectSelectionEvents() {
@@ -1171,77 +923,20 @@ export class EditorViewer extends Viewer {
       setOutlineSelection?: (object: THREE.Object3D) => void;
       clearOutlineSelection?: () => void;
     };
-
-    this._objectSelectionManager.on('objectSelected', (object) => {
-      const textId = this._resolveTextIdFromObject(object);
-      if (textId && this._selectedTextId !== textId) {
-        this._surfaceTextManager?.selectText?.(textId, { syncEntitySelection: false });
-      } else if (!textId && this._selectedTextId) {
-        this._surfaceTextManager?.deselectText?.(true, { syncEntitySelection: false });
-      }
-
-      this.events.emit('objectSelected', { object });
-      outlineHelpers.setOutlineSelection?.(object);
-    });
-
-    this._objectSelectionManager.on('objectDeselected', (object) => {
-      this.events.emit('objectDeselected', { object });
-      outlineHelpers.clearOutlineSelection?.();
-    });
-
-    this._objectSelectionManager.on('selectionCleared', () => {
-      this.events.emit('objectSelectionCleared');
-      outlineHelpers.clearOutlineSelection?.();
-    });
-
-    this._objectSelectionManager.on('draggingChanged', (isDragging) => {
-      this.setControlsEnabled(!isDragging);
-      this.events.emit('objectDragging', { isDragging });
-    });
-
-    this._objectSelectionManager.on('objectTransformed', (data) => {
-      this.events.emit('objectTransformed', data);
-    });
-
-    this._objectSelectionManager.on('transformModeChanged', (mode) => {
-      this.events.emit('transformModeChanged', { mode });
-    });
-
-    this._objectSelectionManager.on('transform:start', (payload) => {
-      this.events.emit('transform:start', payload);
-    });
-
-    this._objectSelectionManager.on('transform:preview', (payload) => {
-      this.events.emit('transform:preview', payload);
-    });
-
-    this._objectSelectionManager.on('transform:commit', (payload) => {
-      this.events.emit('transform:commit', payload);
-    });
-
-    this._objectSelectionManager.on('transform:cancel', (payload) => {
-      this.events.emit('transform:cancel', payload);
-    });
-
-    this._objectSelectionManager.on('bbox:updated', (payload) => {
-      this.events.emit('bbox:updated', payload);
+    bindObjectSelectionManagerEvents({
+      manager: this._objectSelectionManager,
+      events: this.events,
+      outlineHelpers,
+      setControlsEnabled: (enabled) => {
+        this.setControlsEnabled(enabled);
+      },
+      getSelectedTextId: () => this._selectedTextId,
+      getTextManager: () => this._surfaceTextManager,
     });
   }
 
   _disableObjectSelectorNativeClick() {
-    const objectSelectionManager = this._objectSelectionManager as {
-      objectSelector?: {
-        domElement?: HTMLElement;
-        handleClick?: (mouseEvent: MouseEvent) => void;
-      };
-    } | null;
-
-    const objectSelector = objectSelectionManager?.objectSelector;
-    const domElement = objectSelector?.domElement;
-    const handleClick = objectSelector?.handleClick;
-    if (domElement && typeof handleClick === 'function') {
-      domElement.removeEventListener('click', handleClick);
-    }
+    disableObjectSelectorNativeClick(this._objectSelectionManager);
   }
 
   /**

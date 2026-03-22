@@ -5,12 +5,18 @@
 
 import { SurfaceTextManager } from './SurfaceTextManager';
 
-export { BooleanOperator } from './BooleanOperator';
+export { BooleanOperator } from '../boolean/BooleanOperator';
 export { SurfaceTextManager } from './SurfaceTextManager';
 export { TextGeometryGenerator } from './TextGeometryGenerator';
 export { TextInputOverlay } from './TextInputOverlay';
 export { TextPropertyPanel } from './TextPropertyPanel';
 export { TextTransformControls } from './TextTransformControls';
+export type {
+  SurfaceTextRuntimeObject,
+  SurfaceTextSelectionBridge,
+  TextTransformSnapshot,
+  TextTransformTarget,
+} from './runtime/types';
 
 // 圆柱面文字相关模块
 export { CurvedTextGeometry, curvedTextGeometry } from './CurvedTextGeometry';

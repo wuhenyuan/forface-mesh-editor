@@ -24,6 +24,7 @@ const state = Vue.observable({
 
   selectedTextObject: null,
   selectedObject: null,
+  selectedEntityId: null,
   selectedObjectTransform: null,
 
   entityMap: {},
@@ -87,6 +88,27 @@ const buildTransformFromObject = (object: any) => {
   };
 };
 
+const resolveEntityIdFromObject = (object: any) => {
+  const entityKey = object?.userData?.entityKey;
+  if (typeof entityKey === 'string' && entityKey.length > 0) {
+    return entityKey;
+  }
+  const textId = object?.userData?.textId;
+  if (typeof textId === 'string' && textId.length > 0) {
+    return textId;
+  }
+  return null;
+};
+
+const isTextSelectionObject = (object: any) => {
+  return (
+    object?.userData?.type === 'text' ||
+    object?.userData?.isText === true ||
+    object?.userData?.isTextObject === true ||
+    object?.userData?.isTextEntityObject === true
+  );
+};
+
 const normalizeTransformPayload = (payload: any) => {
   if (!payload || typeof payload !== 'object') return null;
   const position = Array.isArray(payload.position) ? payload.position : [0, 0, 0];
@@ -109,6 +131,74 @@ const buildTextList = () => {
   });
 };
 
+const getEntityDisplayName = (
+  entity: StoreEntity,
+  counters: { model: number; text: number }
+) => {
+  const directName = typeof entity.displayName === 'string' ? entity.displayName : '';
+  const metaName = typeof entity.meta?.displayName === 'string' ? entity.meta.displayName : '';
+  if (directName) return directName;
+  if (metaName) return metaName;
+
+  if (entity?.type === 'text') {
+    counters.text += 1;
+    return `Text ${counters.text}`;
+  }
+
+  counters.model += 1;
+  return `Model ${counters.model}`;
+};
+
+const getEntitySummary = (entity: StoreEntity) => {
+  if (entity?.type === 'text') {
+    const content = typeof entity.content === 'string' ? entity.content.trim() : '';
+    return content || 'Empty text';
+  }
+
+  if (typeof entity.resource === 'string' && entity.resource) {
+    const segments = entity.resource.split(/[\\/]/).filter(Boolean);
+    return segments[segments.length - 1] || entity.resource;
+  }
+
+  if (typeof entity.boolean === 'string' && entity.boolean) {
+    return `Boolean: ${entity.boolean}`;
+  }
+
+  return 'Model entity';
+};
+
+const buildEntityList = () => {
+  const entities = Object.values(state.entityMap as Record<string, StoreEntity>);
+  const counters = { model: 0, text: 0 };
+  return entities.map((entity) => {
+    const content = typeof entity.content === 'string' ? entity.content : '';
+    return {
+      ...entity,
+      content,
+      displayName: getEntityDisplayName(entity, counters),
+      typeLabel: entity?.type === 'text' ? 'Text' : 'Model',
+      summary: getEntitySummary(entity),
+    };
+  });
+};
+
+const findEntityById = (id?: string | null) => {
+  if (!id) return null;
+  return buildEntityList().find((entity) => entity.id === id) || null;
+};
+
+const getSelectedRuntimeObject = () => {
+  if (!state.selectedEntityId || !state.selectedObject) return null;
+  return resolveEntityIdFromObject(state.selectedObject) === state.selectedEntityId
+    ? state.selectedObject
+    : null;
+};
+
+const getSelectedRuntimeText = () => {
+  if (!state.selectedEntityId || !state.selectedTextObject) return null;
+  return state.selectedTextObject.id === state.selectedEntityId ? state.selectedTextObject : null;
+};
+
 // ==================== Getters ====================
 const getters = {
   shouldShowMenu: () => state.currentFeature === 'base' && state.menuVisible,
@@ -116,15 +206,24 @@ const getters = {
   canRedo: () => state.history.canRedo,
   isHistoryBusy: () => state.history.isBusy,
   isHistoryApplying: () => state.history.isApplying,
+  selectedEntityId: () => state.selectedEntityId,
+  selectedEntity: () => findEntityById(state.selectedEntityId),
+  selectedRuntimeObject: () => getSelectedRuntimeObject(),
+  selectedRuntimeText: () => getSelectedRuntimeText(),
   selectedTextName: () => {
-    if (!state.selectedTextObject) return '';
-    const item = buildTextList().find((t) => t.id === state.selectedTextObject.id);
+    const item = findEntityById(state.selectedEntityId);
     return item?.displayName || '';
   },
-  isSelectedTextOnCylinder: () => {
-    return state.selectedTextObject?.mesh?.userData?.surfaceType === 'cylinder';
-  },
-  getTextList: () => buildTextList(),
+  isSelectedTextOnCylinder: () => getSelectedRuntimeText()?.mesh?.userData?.surfaceType === 'cylinder',
+  getEntityList: () => buildEntityList(),
+  getTextList: () =>
+    buildEntityList()
+      .filter((entity) => entity?.type === 'text')
+      .map((entity) => ({
+        id: entity.id,
+        content: typeof entity.content === 'string' ? entity.content : '',
+        displayName: entity.displayName,
+      })),
 };
 
 // ==================== Actions ====================
@@ -159,13 +258,28 @@ const actions = {
   },
 
   selectObject(object: any) {
+    const nextEntityId = resolveEntityIdFromObject(object);
     state.selectedObject = object || null;
+    state.selectedEntityId = nextEntityId;
     state.selectedObjectTransform = buildTransformFromObject(object);
+    if (!nextEntityId || state.selectedTextObject?.id !== nextEntityId || !isTextSelectionObject(object)) {
+      state.selectedTextObject = null;
+    }
   },
 
-  deselectObject() {
+  deselectObject(object?: any) {
+    const target = object || state.selectedObject;
+    const targetEntityId = resolveEntityIdFromObject(target);
     state.selectedObject = null;
     state.selectedObjectTransform = null;
+    const selectedRuntimeText = getSelectedRuntimeText();
+    if (!selectedRuntimeText) {
+      state.selectedEntityId = null;
+      return;
+    }
+    if (!targetEntityId || selectedRuntimeText.id === targetEntityId) {
+      state.selectedEntityId = selectedRuntimeText.id;
+    }
   },
 
   setSelectedObjectTransform(transform: any) {
@@ -177,16 +291,34 @@ const actions = {
   },
 
   syncSelectedObjectTransformFromObject(object?: any) {
-    const target = object || state.selectedObject;
+    const target = object || getSelectedRuntimeObject();
     state.selectedObjectTransform = buildTransformFromObject(target);
   },
 
   selectText(textObject: any) {
     state.selectedTextObject = textObject || null;
+    const nextEntityId = textObject?.id || null;
+    state.selectedEntityId = nextEntityId || state.selectedEntityId || null;
+    if (!nextEntityId) return;
+    if (resolveEntityIdFromObject(state.selectedObject) !== nextEntityId) {
+      state.selectedObject = null;
+      state.selectedObjectTransform = null;
+    }
   },
 
-  deselectText() {
+  deselectText(textObject?: any) {
+    const targetId = textObject?.id || state.selectedTextObject?.id || null;
     state.selectedTextObject = null;
+    if (!targetId) return;
+    const selectedRuntimeObject = getSelectedRuntimeObject();
+    if (selectedRuntimeObject) {
+      const objectEntityId = resolveEntityIdFromObject(selectedRuntimeObject);
+      state.selectedEntityId = objectEntityId || null;
+      return;
+    }
+    if (state.selectedEntityId === targetId) {
+      state.selectedEntityId = null;
+    }
   },
 
   showContextMenu({ x, y, target, targetType }: Record<string, any>) {
@@ -354,6 +486,10 @@ const actions = {
 
   resetEntities() {
     state.entityMap = {};
+    state.selectedTextObject = null;
+    state.selectedObject = null;
+    state.selectedEntityId = null;
+    state.selectedObjectTransform = null;
   },
 
   syncEntityAdded(payload: Record<string, any> = {}) {
@@ -391,6 +527,13 @@ const actions = {
     Vue.delete(state.entityMap, id);
     if (state.selectedTextObject?.id === id) {
       state.selectedTextObject = null;
+    }
+    if (state.selectedObject && resolveEntityIdFromObject(state.selectedObject) === id) {
+      state.selectedObject = null;
+      state.selectedObjectTransform = null;
+    }
+    if (state.selectedEntityId === id) {
+      state.selectedEntityId = null;
     }
   },
 };

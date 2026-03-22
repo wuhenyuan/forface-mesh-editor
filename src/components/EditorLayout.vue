@@ -142,6 +142,7 @@ export default {
 
     const shouldShowMenu = computed(() => store.shouldShowMenu());
     const currentFeature = computed(() => store.state.currentFeature);
+    const selectedEntity = computed(() => store.selectedEntity?.() || null);
 
     // ==================== 事件处理 ====================
 
@@ -217,13 +218,16 @@ export default {
 
     // 监听选中状态变化
     watch(
-      () => store.state.selectedTextObject,
-      (selected) => {
+      () => [store.selectedEntityId?.() || null, selectedEntity.value],
+      ([selectedEntityId, currentSelectedEntity]) => {
         emit('selection-change', {
-          textId: selected?.id || null,
-          objectId: null,
+          entityId: selectedEntityId || null,
+          entityType: currentSelectedEntity?.type || null,
+          textId: currentSelectedEntity?.type === 'text' ? selectedEntityId || null : null,
+          objectId: currentSelectedEntity?.type === 'model' ? selectedEntityId || null : null,
         });
-      }
+      },
+      { immediate: true, deep: true }
     );
 
     // 监听视图模式变化
