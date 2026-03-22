@@ -41,7 +41,11 @@ export class RaycastManager {
    * @param {Object} options - 检测选项
    * @returns {Object|null} 面信息对象或null
    */
-  intersectFaces(mousePosition: CoreValue, meshes: CoreValue[], options: Record<string, CoreValue> = {}): CoreValue {
+  intersectFaces(
+    mousePosition: CoreValue,
+    meshes: CoreValue[],
+    options: Record<string, CoreValue> = {}
+  ): CoreValue {
     // 输入验证
     if (!this.validateInput(mousePosition, meshes)) {
       return null;

@@ -22,7 +22,11 @@ export class RemoveEntityCommand extends BaseCommand {
   entityId: string | null;
   entitySnapshot: EntityProps | null;
 
-  constructor(document: Document | null, entityId: string, options: Record<string, CoreValue> = {}) {
+  constructor(
+    document: Document | null,
+    entityId: string,
+    options: Record<string, CoreValue> = {}
+  ) {
     const description = options.description || 'Remove Entity';
     super('ENTITY_REMOVE', description);
 

@@ -1,5 +1,6 @@
 ﻿/**
- * 妯″瀷瀵煎嚭绠＄悊鍣? * 鏀寔 STL銆丱BJ銆丟LTF 绛夋牸寮忕殑瀵煎嚭
+ * 模型导出管理器
+ * 支持 STL、OBJ、GLTF 等格式的导出
  */
 import * as THREE from 'three';
 import { STLExporter, type STLExporterOptions } from 'three/examples/jsm/exporters/STLExporter.js';
@@ -41,38 +42,39 @@ export class ExportManager {
   onError: ((error: CoreValue) => void) | null;
 
   constructor() {
-    // 瀵煎嚭鍣ㄥ疄渚?
+    // 导出器实例
     this.stlExporter = new STLExporter();
     this.objExporter = new OBJExporter();
     this.gltfExporter = new GLTFExporter();
 
-    // 瀵煎嚭閰嶇疆
+    // 导出配置
     this.config = {
-      // STL 閰嶇疆
+      // STL 配置
       stl: {
-        binary: true, // 榛樿浣跨敤浜岃繘鍒舵牸寮忥紙鏂囦欢鏇村皬锛?
+        binary: true, // 默认使用二进制格式（文件更小）
       },
-      // GLTF 閰嶇疆
+      // GLTF 配置
       gltf: {
-        binary: true, // 浣跨敤 GLB 鏍煎紡
+        binary: true, // 使用 GLB 格式
         includeCustomExtensions: false,
-        trs: false, // 浣跨敤鐭╅樀鑰岄潪 TRS
-        onlyVisible: true, // 鍙鍑哄彲瑙佸璞?
+        trs: false, // 使用矩阵而非 TRS
+        onlyVisible: true, // 只导出可见对象
         truncateDrawRange: true,
         maxTextureSize: 4096,
       },
     };
 
-    // 浜嬩欢鍥炶皟
+    // 事件回调
     this.onProgress = null;
     this.onError = null;
   }
 
   /**
-   * 瀵煎嚭妯″瀷锛堢粺涓€鍏ュ彛锛?   * @param {THREE.Object3D|THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
-   * @param {string} format - 瀵煎嚭鏍煎紡: 'stl' | 'obj' | 'obj-zip' | 'gltf' | 'glb'
-   * @param {Object} options - 瀵煎嚭閫夐」
-   * @returns {Promise<Blob>} 瀵煎嚭缁撴灉
+   * 导出模型（统一入口）
+   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
+   * @param {string} format - 导出格式: 'stl' | 'obj' | 'obj-zip' | 'gltf' | 'glb'
+   * @param {Object} options - 导出选项
+   * @returns {Promise<Blob>} 导出结果
    */
   public async export(
     objects: THREE.Object3D | THREE.Object3D[],
@@ -120,28 +122,28 @@ export class ExportManager {
   }
 
   /**
-   * 瀵煎嚭涓?STL 鏍煎紡
-   * @param {THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
-   * @param {Object} options - 瀵煎嚭閫夐」
+   * 导出STL 格式
+   * @param {THREE.Object3D[]} objects - 要导出的对象
+   * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} STL Blob
    */
   private async exportSTL(objects: THREE.Object3D[], options: ExportOptions = {}): Promise<Blob> {
     const { binary = this.config.stl.binary } = options;
 
-    // 鍒涘缓涓存椂鍦烘櫙鍖呭惈鎵€鏈夊璞?
+    // 创建临时场景，包含所有对象
     const exportScene = this._createExportScene(objects);
 
     try {
       const result = this.stlExporter.parse(exportScene, { binary } as STLExporterOptions);
 
       if (binary) {
-        // 浜岃繘鍒舵牸寮忚繑鍥?DataView
+        // 二进制格式返DataView
         const view = result as DataView;
         const bytes = new Uint8Array(view.byteLength);
         bytes.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
         return new Blob([bytes], { type: 'application/octet-stream' });
       }
-      // ASCII 鏍煎紡杩斿洖瀛楃涓?
+      // ASCII 格式返回字符串
       return new Blob([result as string], { type: 'text/plain' });
     } finally {
       this._disposeExportScene(exportScene);
@@ -149,9 +151,9 @@ export class ExportManager {
   }
 
   /**
-   * 瀵煎嚭涓?OBJ 鏍煎紡
-   * @param {THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
-   * @param {Object} options - 瀵煎嚭閫夐」
+   * 导出OBJ 格式
+   * @param {THREE.Object3D[]} objects - 要导出的对象
+   * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} OBJ Blob
    */
   private async exportOBJ(objects: THREE.Object3D[], options: ExportOptions = {}): Promise<Blob> {
@@ -166,7 +168,8 @@ export class ExportManager {
   }
 
   /**
-   * 瀵煎嚭 OBJ + MTL + 璐村浘 ZIP 鍖?   */
+   * 导出 OBJ + MTL + 贴图 ZIP
+   */
   private async exportOBJWithMaterials(
     objects: THREE.Object3D[],
     filename: string = 'model'
@@ -197,9 +200,9 @@ export class ExportManager {
   }
 
   /**
-   * 瀵煎嚭涓?GLTF/GLB 鏍煎紡
-   * @param {THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
-   * @param {Object} options - 瀵煎嚭閫夐」
+   * 导出GLTF/GLB 格式
+   * @param {THREE.Object3D[]} objects - 要导出的对象
+   * @param {Object} options - 导出选项
    * @returns {Promise<Blob>} GLTF/GLB Blob
    */
   async exportGLTF(objects: THREE.Object3D[], options: ExportOptions = {}): Promise<Blob> {
@@ -218,10 +221,10 @@ export class ExportManager {
           this._disposeExportScene(exportScene);
 
           if (exportOptions.binary) {
-            // GLB 鏍煎紡
+            // GLB 格式
             resolve(new Blob([result as ArrayBuffer], { type: 'application/octet-stream' }));
           } else {
-            // GLTF 鏍煎紡锛圝SON锛?
+            // GLTF 格式（JSON
             const json = JSON.stringify(result, null, 2);
             resolve(new Blob([json], { type: 'application/json' }));
           }
@@ -236,10 +239,11 @@ export class ExportManager {
   }
 
   /**
-   * 瀵煎嚭骞朵笅杞芥枃浠?   * @param {THREE.Object3D|THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
-   * @param {string} format - 瀵煎嚭鏍煎紡
-   * @param {string} filename - 鏂囦欢鍚嶏紙涓嶅惈鎵╁睍鍚嶏級
-   * @param {Object} options - 瀵煎嚭閫夐」
+   * 导出并下载文件
+   * @param {THREE.Object3D|THREE.Object3D[]} objects - 要导出的对象
+   * @param {string} format - 导出格式
+   * @param {string} filename - 文件名（不含扩展名）
+   * @param {Object} options - 导出选项
    */
   async exportAndDownload(
     objects: THREE.Object3D | THREE.Object3D[],
@@ -258,10 +262,11 @@ export class ExportManager {
   }
 
   /**
-   * 瀵煎嚭鍦烘櫙涓殑鎵€鏈夌綉鏍?   * @param {THREE.Scene} scene - 鍦烘櫙
-   * @param {string} format - 瀵煎嚭鏍煎紡
-   * @param {Object} options - 瀵煎嚭閫夐」
-   * @returns {Promise<Blob>} 瀵煎嚭缁撴灉
+   * 导出场景中的所有网格
+   * @param {THREE.Scene} scene - 场景
+   * @param {string} format - 导出格式
+   * @param {Object} options - 导出选项
+   * @returns {Promise<Blob>} 导出结果
    */
   async exportScene(
     scene: THREE.Scene,
@@ -274,7 +279,7 @@ export class ExportManager {
     scene.traverse((object) => {
       const mesh = object as THREE.Mesh;
       if (mesh.isMesh) {
-        // 杩囨护杈呭姪瀵硅薄
+        // 过滤辅助对象
         if (!includeHelpers && mesh.userData.isHelper) {
           return;
         }
@@ -290,9 +295,11 @@ export class ExportManager {
   }
 
   /**
-   * 瀵煎嚭閫変腑鐨勫璞?   * @param {THREE.Object3D} selectedObject - 閫変腑鐨勫璞?   * @param {string} format - 瀵煎嚭鏍煎紡
-   * @param {Object} options - 瀵煎嚭閫夐」
-   * @returns {Promise<Blob>} 瀵煎嚭缁撴灉
+   * 导出选中的对象
+   * @param {THREE.Object3D} selectedObject - 选中的对象
+   * @param {string} format - 导出格式
+   * @param {Object} options - 导出选项
+   * @returns {Promise<Blob>} 导出结果
    */
   async exportSelected(
     selectedObject: THREE.Object3D | null | undefined,
@@ -307,10 +314,11 @@ export class ExportManager {
   }
 
   /**
-   * 鍚堝苟澶氫釜缃戞牸鍚庡鍑?   * @param {THREE.Mesh[]} meshes - 瑕佸悎骞剁殑缃戞牸
-   * @param {string} format - 瀵煎嚭鏍煎紡
-   * @param {Object} options - 瀵煎嚭閫夐」
-   * @returns {Promise<Blob>} 瀵煎嚭缁撴灉
+   * 合并多个网格后导出
+   * @param {THREE.Mesh[]} meshes - 要合并的网格
+   * @param {string} format - 导出格式
+   * @param {Object} options - 导出选项
+   * @returns {Promise<Blob>} 导出结果
    */
   async exportMerged(
     meshes: THREE.Mesh[],
@@ -321,13 +329,13 @@ export class ExportManager {
       throw new Error('娌℃湁鍙悎骞剁殑缃戞牸');
     }
 
-    // 鍚堝苟鍑犱綍浣?
+    // 合并几何
     const mergedMesh = this._mergeMeshes(meshes);
 
     try {
       return await this.export(mergedMesh, format, options);
     } finally {
-      // 娓呯悊鍚堝苟鍚庣殑涓存椂缃戞牸
+      // 清理合并后的临时网格
       mergedMesh.geometry.dispose();
     }
   }
@@ -342,7 +350,7 @@ export class ExportManager {
   }
 
   /**
-   * 鍒涘缓瀵煎嚭鐢ㄧ殑涓存椂鍦烘櫙
+   * 创建导出用的临时场景
    * @private
    */
   _createExportScene(objects: THREE.Object3D[]): THREE.Scene {
@@ -351,9 +359,9 @@ export class ExportManager {
     const materialNames = new Map<string, string>();
 
     objects.forEach((obj) => {
-      // 鍏嬮殕瀵硅薄浠ラ伩鍏嶄慨鏀瑰師濮嬪璞?
+      // 克隆对象以避免修改原始对象
       const clone = obj.clone();
-      // 涓哄鍑哄璞″厠闅嗘潗璐ㄥ苟琛ラ綈鍚嶇О锛岀‘淇?OBJ/MTL 鍖归厤
+      // 为导出对象克隆材质并补齐名称，确保 OBJ/MTL 匹配
       clone.traverse((child) => {
         const mesh = child as THREE.Mesh;
         if (!mesh.isMesh || !mesh.material) return;
@@ -388,7 +396,7 @@ export class ExportManager {
   }
 
   /**
-   * 娓呯悊瀵煎嚭鍦烘櫙
+   * 清理导出场景
    * @private
    */
   _disposeExportScene(scene: THREE.Scene) {
@@ -403,7 +411,7 @@ export class ExportManager {
   }
 
   /**
-   * 鍚堝苟澶氫釜缃戞牸
+   * 合并多个网格
    * @private
    */
   _mergeMeshes(meshes: THREE.Mesh[]): THREE.Mesh {
@@ -412,7 +420,7 @@ export class ExportManager {
     meshes.forEach((mesh) => {
       if (!mesh.isMesh || !mesh.geometry) return;
 
-      // 鍏嬮殕鍑犱綍浣撳苟搴旂敤涓栫晫鍙樻崲
+      // 克隆几何体并应用世界变换
       const geometry = mesh.geometry.clone();
       geometry.applyMatrix4(mesh.matrixWorld);
       geometries.push(geometry);
@@ -422,9 +430,9 @@ export class ExportManager {
       throw new Error('No valid geometry to merge');
     }
 
-    // 浣跨敤 BufferGeometryUtils 鍚堝苟锛堝鏋滃彲鐢級
-    // 杩欓噷浣跨敤绠€鍗曠殑鏂瑰紡锛氬彧鍙栫涓€涓嚑浣曚綋
-    // 瀹屾暣瀹炵幇闇€瑕?import { mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+    // 使用 BufferGeometryUtils 合并（如果可用）
+    // 这里使用简单的方式：只取第一个几何体
+    // 完整实现可引入：import { mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
     const mergedGeometry = geometries[0];
     const baseMaterial = meshes[0].material;
@@ -438,7 +446,8 @@ export class ExportManager {
   }
 
   /**
-   * 鑾峰彇鏂囦欢鎵╁睍鍚?   * @private
+   * 获取文件扩展
+   * @private
    */
   _getExtension(format: string) {
     const extensions: Record<string, string> = {
@@ -452,7 +461,7 @@ export class ExportManager {
   }
 
   /**
-   * 涓嬭浇 Blob 鏂囦欢
+   * 下载 Blob 文件
    * @private
    */
   _downloadBlob(blob: Blob, filename: string) {
@@ -466,13 +475,14 @@ export class ExportManager {
     link.click();
     document.body.removeChild(link);
 
-    // 寤惰繜閲婃斁 URL
+    // 延迟释放 URL
     setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   /**
-   * 鑾峰彇瀵煎嚭鏍煎紡淇℃伅
-   * @returns {Object[]} 鏀寔鐨勬牸寮忓垪琛?   */
+   * 获取导出格式信息
+   * @returns {Object[]} 支持的格式列
+   */
   getSupportedFormats() {
     return [
       {
@@ -507,10 +517,10 @@ export class ExportManager {
   }
 
   /**
-   * 浼扮畻瀵煎嚭鏂囦欢澶у皬
-   * @param {THREE.Object3D[]} objects - 瑕佸鍑虹殑瀵硅薄
-   * @param {string} format - 瀵煎嚭鏍煎紡
-   * @returns {Object} 浼扮畻淇℃伅
+   * 估算导出文件大小
+   * @param {THREE.Object3D[]} objects - 要导出的对象
+   * @param {string} format - 导出格式
+   * @returns {Object} 估算信息
    */
   estimateExportSize(objects: THREE.Object3D | THREE.Object3D[], format: ExportFormat | string) {
     let vertexCount = 0;
@@ -532,20 +542,20 @@ export class ExportManager {
       });
     });
 
-    // 浼扮畻鏂囦欢澶у皬锛堢矖鐣ワ級
+    // 估算文件大小（粗略）
     let estimatedSize = 0;
     switch (format.toLowerCase()) {
       case 'stl':
-        // 浜岃繘鍒?STL: 84 瀛楄妭澶?+ 姣忎釜涓夎褰?50 瀛楄妭
+        // 二进制 STL: 84 字节 + 每个三角形 50 字节
         estimatedSize = 84 + faceCount * 50;
         break;
       case 'obj':
-        // OBJ: 姣忎釜椤剁偣绾?30 瀛楄妭锛屾瘡涓潰绾?20 瀛楄妭
+        // OBJ: 每个顶点30 字节，每个面20 字节
         estimatedSize = vertexCount * 30 + faceCount * 20;
         break;
       case 'gltf':
       case 'glb':
-        // GLTF: 姣忎釜椤剁偣绾?24 瀛楄妭锛堜綅缃?娉曠嚎锛夛紝鍔犱笂 JSON 寮€閿€
+        // GLTF: 每个顶点 24 字节（位置/法线），加上 JSON 开销
         estimatedSize = vertexCount * 24 + 1000;
         break;
     }
@@ -559,7 +569,8 @@ export class ExportManager {
   }
 
   /**
-   * 鏍煎紡鍖栨枃浠跺ぇ灏?   * @private
+   * 格式化文件大小
+   * @private
    */
   _formatFileSize(bytes: number) {
     if (bytes < 1024) return `${bytes} B`;
@@ -568,8 +579,8 @@ export class ExportManager {
   }
 
   /**
-   * 鏇存柊閰嶇疆
-   * @param {Object} config - 閰嶇疆鏇存柊
+   * 更新配置
+   * @param {Object} config - 配置更新
    */
   updateConfig(config: Partial<ExportConfig>) {
     if (config.stl) {
@@ -581,7 +592,8 @@ export class ExportManager {
   }
 
   /**
-   * 閿€姣?   */
+   * 销毁
+   */
   dispose() {
     this.stlExporter = null;
     this.objExporter = null;

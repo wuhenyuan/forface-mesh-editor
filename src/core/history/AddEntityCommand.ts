@@ -7,7 +7,11 @@ export class AddEntityCommand extends BaseCommand {
   entity: EntityProps | null;
   entityId: string | null;
 
-  constructor(document: Document | null, entity: EntityProps, options: Record<string, CoreValue> = {}) {
+  constructor(
+    document: Document | null,
+    entity: EntityProps,
+    options: Record<string, CoreValue> = {}
+  ) {
     const description = options.description || 'Add Entity';
     super('ENTITY_ADD', description);
 

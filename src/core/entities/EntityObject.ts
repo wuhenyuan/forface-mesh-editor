@@ -68,7 +68,10 @@ export class EntityObject extends THREE.Object3D {
   }
 
   async loadNode(
-    loadModel: (source: CoreValue, options?: Record<string, CoreValue>) => Promise<Record<string, CoreValue>>,
+    loadModel: (
+      source: CoreValue,
+      options?: Record<string, CoreValue>
+    ) => Promise<Record<string, CoreValue>>,
     source: CoreValue,
     options: Record<string, CoreValue> = {}
   ) {

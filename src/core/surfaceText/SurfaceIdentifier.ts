@@ -304,16 +304,18 @@ export class SurfaceIdentifier {
     }
 
     // 导入面数据
-    Object.entries((config.faces || {}) as Record<string, CoreValue>).forEach(([surfaceId, faceData]) => {
-      this.faceRegistry.set(surfaceId, {
-        meshId: (faceData as CoreValue).meshId,
-        faceIndex: (faceData as CoreValue).faceIndex,
-        faceHash: (faceData as CoreValue).faceHash,
-        point: new THREE.Vector3(...((faceData as CoreValue).point || [])),
-        normal: new THREE.Vector3(...((faceData as CoreValue).normal || [])),
-        uv: (faceData as CoreValue).uv ? new THREE.Vector2(...(faceData as CoreValue).uv) : null,
-      });
-    });
+    Object.entries((config.faces || {}) as Record<string, CoreValue>).forEach(
+      ([surfaceId, faceData]) => {
+        this.faceRegistry.set(surfaceId, {
+          meshId: (faceData as CoreValue).meshId,
+          faceIndex: (faceData as CoreValue).faceIndex,
+          faceHash: (faceData as CoreValue).faceHash,
+          point: new THREE.Vector3(...((faceData as CoreValue).point || [])),
+          normal: new THREE.Vector3(...((faceData as CoreValue).normal || [])),
+          uv: (faceData as CoreValue).uv ? new THREE.Vector2(...(faceData as CoreValue).uv) : null,
+        });
+      }
+    );
   }
 }
 

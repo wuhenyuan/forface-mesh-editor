@@ -1,5 +1,6 @@
 ﻿/**
- * 3D 鍦烘櫙鏌ョ湅鍣? * 灏佽 Three.js 鍦烘櫙绠＄悊鍜屾墍鏈?3D 浜や簰閫昏緫
+ * 3D 场景查看器
+ * 封装 Three.js 场景管理和常用 3D 交互逻辑
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -42,6 +43,19 @@ type FacePickerLike = {
   destroy: () => void;
 };
 
+type PointerPosition = {
+  x: number;
+  y: number;
+};
+
+type MouseEventHandlerState = {
+  isPointerDown: boolean;
+  isDragging: boolean;
+  pressedButton: number | null;
+  downPosition: PointerPosition | null;
+  dragThreshold: number;
+};
+
 export class Viewer {
   [key: string]: CoreValue;
   container: HTMLElement;
@@ -61,6 +75,7 @@ export class Viewer {
   _hoveredObject: ViewerMesh | null;
   _raycaster: THREE.Raycaster;
   _mouse: THREE.Vector2;
+  _mouseEventHandler: MouseEventHandlerState;
   _facePicker: FacePickerLike | null;
   _surfaceTextManager: CoreValue;
   _objectSelectionManager: CoreValue;
@@ -80,7 +95,7 @@ export class Viewer {
       ...viewerOptions,
     };
 
-    // 鏍稿績瀵硅薄
+    // 核心对象
     this.scene = null;
     this.camera = null;
     this.renderer = null;
@@ -93,17 +108,24 @@ export class Viewer {
     this._animationId = null;
     this._isDisposed = false;
 
-    // 瀵硅薄绠＄悊
+    // 对象管理
     this._meshes = [];
     this._selectableObjects = [];
     this._selectedObject = null;
     this._hoveredObject = null;
 
-    // 浜や簰
+    // 交互
     this._raycaster = new THREE.Raycaster();
     this._mouse = new THREE.Vector2();
+    this._mouseEventHandler = {
+      isPointerDown: false,
+      isDragging: false,
+      pressedButton: null,
+      downPosition: null,
+      dragThreshold: 5,
+    };
 
-    // 瀛愮郴缁燂紙寤惰繜鍒濆鍖栵級
+    // 子系统（延迟初始化）
     this._facePicker = null;
     this._surfaceTextManager = null;
     this._objectSelectionManager = null;
@@ -118,7 +140,7 @@ export class Viewer {
     this._animate();
   }
 
-  // ==================== 鍒濆鍖?====================
+  // ==================== 初始化 ====================
 
   _init() {
     const rect = this.container.getBoundingClientRect();
@@ -133,7 +155,7 @@ export class Viewer {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.container.appendChild(this.renderer.domElement);
 
-    // 鍦烘櫙
+    // 场景
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(this.options.backgroundColor);
 
@@ -145,14 +167,14 @@ export class Viewer {
     this.csgGroup.name = 'csgGroup';
     this.scene.add(this.csgGroup);
 
-    // 鐩告満
+    // 相机
     this.camera = new THREE.PerspectiveCamera(60, rect.width / rect.height, 0.1, 1000);
     this.camera.position.set(30, 30, 60);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = false;
 
-    // 榛樿鍦烘櫙璁剧疆
+    // 默认场景设置
     this._setupLighting();
     if (this.options.enableGrid) {
       this._setupGrid();
@@ -162,7 +184,8 @@ export class Viewer {
   }
 
   /**
-   * 鍒濆鍖栭潰鎷惧彇鍣?   */
+   * 初始化面拾取
+   */
   _initFacePicker() {
     this._facePicker = new OptimizedFacePicker(
       this.scene,
@@ -209,12 +232,11 @@ export class Viewer {
     this.scene.add(grid);
   }
 
-  // ==================== 浜嬩欢缁戝畾 ====================
+  // ==================== 事件绑定 ====================
 
   _bindEvents() {
     const canvas = this.renderer.domElement;
 
-    this._onClick = this._onClick.bind(this);
     this._onDblClick = this._onDblClick.bind(this);
     this._onContextMenu = this._onContextMenu.bind(this);
     this._onMouseMove = this._onMouseMove.bind(this);
@@ -223,7 +245,6 @@ export class Viewer {
     this._onResize = this._onResize.bind(this);
     this._onKeyDown = this._onKeyDown.bind(this);
 
-    canvas.addEventListener('click', this._onClick);
     canvas.addEventListener('dblclick', this._onDblClick);
     canvas.addEventListener('contextmenu', this._onContextMenu);
     canvas.addEventListener('mousemove', this._onMouseMove);
@@ -237,7 +258,6 @@ export class Viewer {
   _unbindEvents() {
     const canvas = this.renderer.domElement;
 
-    canvas.removeEventListener('click', this._onClick);
     canvas.removeEventListener('dblclick', this._onDblClick);
     canvas.removeEventListener('contextmenu', this._onContextMenu);
     canvas.removeEventListener('mousemove', this._onMouseMove);
@@ -248,7 +268,7 @@ export class Viewer {
     window.removeEventListener('keydown', this._onKeyDown);
   }
 
-  // ==================== 浜嬩欢澶勭悊 ====================
+  // ==================== 事件处理 ====================
 
   _updateMouse(event) {
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -280,7 +300,7 @@ export class Viewer {
     return object;
   }
 
-  _onClick(event) {
+  _emitClickEvent(event: MouseEvent) {
     this._updateMouse(event);
     const intersects = this._raycast();
 
@@ -315,6 +335,17 @@ export class Viewer {
     } else {
       this.events.emit('click', { target: null, targetType: 'empty', event });
     }
+  }
+
+  _onClick(event) {
+    this._emitClickEvent(event);
+  }
+
+  _resetMouseEventHandler() {
+    this._mouseEventHandler.isPointerDown = false;
+    this._mouseEventHandler.isDragging = false;
+    this._mouseEventHandler.pressedButton = null;
+    this._mouseEventHandler.downPosition = null;
   }
 
   _onDblClick(event) {
@@ -366,6 +397,30 @@ export class Viewer {
   }
 
   _onMouseMove(event) {
+    const mouseState = this._mouseEventHandler;
+    if (mouseState.isPointerDown && mouseState.downPosition) {
+      const deltaX = event.clientX - mouseState.downPosition.x;
+      const deltaY = event.clientY - mouseState.downPosition.y;
+      const distance = Math.hypot(deltaX, deltaY);
+
+      if (!mouseState.isDragging && distance > mouseState.dragThreshold) {
+        mouseState.isDragging = true;
+        this.events.emit('dragStart', {
+          event,
+          startPosition: { ...mouseState.downPosition },
+        });
+      }
+
+      if (mouseState.isDragging) {
+        this.events.emit('drag', {
+          event,
+          startPosition: { ...mouseState.downPosition },
+          delta: { x: deltaX, y: deltaY },
+          distance,
+        });
+      }
+    }
+
     this._updateMouse(event);
     const intersects = this._raycast();
 
@@ -393,11 +448,44 @@ export class Viewer {
   }
 
   _onMouseDown(event) {
+    if (event.button === 0) {
+      this._mouseEventHandler.isPointerDown = true;
+      this._mouseEventHandler.isDragging = false;
+      this._mouseEventHandler.pressedButton = event.button;
+      this._mouseEventHandler.downPosition = {
+        x: event.clientX,
+        y: event.clientY,
+      };
+    }
+
     this.events.emit('mousedown', { event });
   }
 
   _onMouseUp(event) {
-    this.events.emit('mouseup', { event });
+    const mouseState = this._mouseEventHandler;
+    const shouldTreatAsClick =
+      mouseState.isPointerDown &&
+      mouseState.pressedButton === 0 &&
+      event.button === 0 &&
+      !mouseState.isDragging;
+    const wasDragging = mouseState.isDragging;
+    const startPosition = mouseState.downPosition ? { ...mouseState.downPosition } : null;
+
+    this.events.emit('mouseup', { event, wasDragging });
+
+    if (wasDragging) {
+      this.events.emit('dragEnd', {
+        event,
+        startPosition,
+        endPosition: { x: event.clientX, y: event.clientY },
+      });
+    }
+
+    this._resetMouseEventHandler();
+
+    if (shouldTreatAsClick) {
+      this._emitClickEvent(event);
+    }
   }
 
   _onResize() {
@@ -422,22 +510,22 @@ export class Viewer {
     }
   }
 
-  // ==================== 鍚庡鐞?====================
+  // ==================== 后处理 ====================
 
-  // ==================== 娓叉煋寰幆 ====================
+  // ==================== 渲染循环 ====================
 
   _animate() {
     if (this._isDisposed) return;
-
-    // this._animationId = requestAnimationFrame(() => this._animate());
-    // this.controls.update();
-    // this._renderFrame();/
+    this._animationId = requestAnimationFrame(() => this._animate());
+    this.controls?.update?.();
+    this.renderer?.render?.(this.scene, this.camera);
   }
 
-  // ==================== 瀵硅薄绠＄悊 ====================
+  // ==================== 对象管理 ====================
 
   /**
-   * 娣诲姞缃戞牸鍒板満鏅?   */
+   * 添加网格到场
+   */
   addMesh(mesh: ViewerMesh, options: Record<string, CoreValue> = {}) {
     const {
       selectable = true,
@@ -468,7 +556,7 @@ export class Viewer {
   }
 
   /**
-   * 绉婚櫎缃戞牸
+   * 移除网格
    */
   removeMesh(mesh) {
     mesh?.parent?.remove?.(mesh);
@@ -483,7 +571,7 @@ export class Viewer {
       this._selectedObject = null;
     }
 
-    // 娓呯悊璧勬簮
+    // 清理资源
     if (mesh.geometry) mesh.geometry.dispose();
     if (mesh.material) {
       if (Array.isArray(mesh.material)) {
@@ -497,22 +585,23 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇鎵€鏈夌綉鏍?   */
+   * 获取所有网格
+   */
   getMeshes() {
     return [...this._meshes];
   }
 
   /**
-   * 鏍规嵁鍚嶇О鏌ユ壘缃戞牸
+   * 根据名称查找网格
    */
   getMeshByName(name) {
     return this._meshes.find((m) => m.name === name);
   }
 
-  // ==================== 妯″瀷鍔犺浇 ====================
+  // ==================== 模型加载 ====================
 
   /**
-   * 鍔犺浇 STL 妯″瀷
+   * 加载 STL 模型
    */
   loadSTL(url: string, options: Record<string, CoreValue> = {}) {
     return new Promise((resolve, reject) => {
@@ -536,7 +625,7 @@ export class Viewer {
           const material = new THREE.MeshStandardMaterial({ color, roughness, metalness });
           const mesh = new THREE.Mesh(geometry, material);
 
-          // 鑷姩缂╂斁
+          // 自动缩放
           if (scale) {
             mesh.scale.setScalar(scale);
           } else {
@@ -568,10 +657,11 @@ export class Viewer {
     });
   }
 
-  // ==================== 鍑犱綍浣撳垱寤?====================
+  // ==================== 几何体创建 ====================
 
   /**
-   * 鍒涘缓鍦嗘煴浣?   */
+   * 创建圆柱
+   */
   createCylinder(options: Record<string, CoreValue> = {}) {
     const {
       radiusTop = 5,
@@ -598,7 +688,8 @@ export class Viewer {
   }
 
   /**
-   * 鍒涘缓绔嬫柟浣?   */
+   * 创建立方
+   */
   createBox(options: Record<string, CoreValue> = {}) {
     const {
       width = 5,
@@ -620,7 +711,7 @@ export class Viewer {
   }
 
   /**
-   * 鍒涘缓鐞冧綋
+   * 创建球体
    */
   createSphere(options: Record<string, CoreValue> = {}) {
     const {
@@ -641,10 +732,10 @@ export class Viewer {
     return this.addMesh(mesh);
   }
 
-  // ==================== 閫夋嫨绠＄悊 ====================
+  // ==================== 选择管理 ====================
 
   /**
-   * 閫変腑瀵硅薄
+   * 选中对象
    */
   select(object) {
     if (this._selectedObject === object) return;
@@ -665,7 +756,7 @@ export class Viewer {
   }
 
   /**
-   * 娓呴櫎閫夋嫨
+   * 清除选择
    */
   clearSelection() {
     if (this._selectedObject) {
@@ -677,16 +768,16 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇閫変腑瀵硅薄
+   * 获取选中对象
    */
   getSelectedObject() {
     return this._selectedObject;
   }
 
-  // ==================== 鐩告満鎺у埗 ====================
+  // ==================== 相机控制 ====================
 
   /**
-   * 閲嶇疆瑙嗗浘
+   * 重置视图
    */
   resetView() {
     this.camera.position.set(30, 30, 60);
@@ -696,7 +787,8 @@ export class Viewer {
   }
 
   /**
-   * 鑱氱劍鍒板璞?   */
+   * 聚焦到对
+   */
   focusOn(object) {
     if (!object) return;
 
@@ -714,16 +806,16 @@ export class Viewer {
   }
 
   /**
-   * 鍚敤/绂佺敤鐩告満鎺у埗
+   * 启用/禁用相机控制
    */
   setControlsEnabled(enabled) {
     this.controls.enabled = enabled;
   }
 
-  // ==================== 鏉愯川鎿嶄綔 ====================
+  // ==================== 材质操作 ====================
 
   /**
-   * 淇敼瀵硅薄棰滆壊
+   * 修改对象颜色
    */
   setObjectColor(object, color) {
     if (!object || !object.material) return;
@@ -740,24 +832,25 @@ export class Viewer {
   }
 
   /**
-   * 璁剧疆瀵硅薄鍙鎬?   */
+   * 设置对象可见
+   */
   setObjectVisible(object, visible) {
     if (!object) return;
     object.visible = visible;
     this.events.emit('visibilityChanged', { object, visible });
   }
 
-  // ==================== 宸ュ叿鏂规硶 ====================
+  // ==================== 工具方法 ====================
 
   /**
-   * 鑾峰彇 canvas 鍏冪礌
+   * 获取 canvas 元素
    */
   getCanvas() {
     return this.renderer.domElement;
   }
 
   /**
-   * 鑾峰彇瀹瑰櫒灏哄
+   * 获取容器尺寸
    */
   getSize() {
     const rect = this.container.getBoundingClientRect();
@@ -765,12 +858,12 @@ export class Viewer {
   }
 
   /**
-   * 鎴浘
+   * 截图
    */
   screenshot(options: Record<string, CoreValue> = {}) {
     const { width, height, type = 'image/png', quality = 1 } = options;
 
-    // 濡傛灉鎸囧畾浜嗗昂瀵革紝涓存椂璋冩暣
+    // 如果指定了尺寸，临时调整
     if (width && height) {
       this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
@@ -787,12 +880,12 @@ export class Viewer {
     return dataUrl;
   }
 
-  // ==================== 鐗瑰緛妫€娴嬬郴缁?====================
+  // ==================== 特征检测系统 ====================
 
   /**
-   * 涓虹綉鏍兼娴嬬壒寰侊紙骞抽潰銆佸渾鏌遍潰绛夛級
-   * @param {THREE.Mesh} mesh - 缃戞牸瀵硅薄
-   * @returns {Promise<Object>} 鐗瑰緛鏁版嵁
+   * 为网格检测特征（平面、圆柱面等）
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @returns {Promise<Object>} 特征数据
    */
   async detectFeatures(mesh) {
     if (!mesh || !mesh.geometry) {
@@ -811,10 +904,10 @@ export class Viewer {
     try {
       const features = await this._featureDetector.preprocessMesh(mesh);
 
-      // 鐢熸垚鐗瑰緛鍛藉悕
+      // 生成特征命名
       const namedFeatures = this._featureNaming.detectAndNameFeatures(mesh, meshId);
 
-      // 鍚堝苟缁撴灉
+      // 合并结果
       const result = {
         meshId,
         meshName: mesh.name,
@@ -822,10 +915,10 @@ export class Viewer {
         namedFeatures,
       };
 
-      // 缂撳瓨缁撴灉
+      // 缓存结果
       this._detectedFeatures.set(meshId, result);
 
-      // 鏇存柊闈㈡嬀鍙栧櫒
+      // 更新面拾取器
       if (this._facePicker) {
         await this._facePicker.setMeshes([mesh]);
       }
@@ -845,9 +938,10 @@ export class Viewer {
   }
 
   /**
-   * 鎵归噺妫€娴嬪涓綉鏍肩殑鐗瑰緛
-   * @param {THREE.Mesh[]} meshes - 缃戞牸鏁扮粍
-   * @returns {Promise<Map>} meshId -> features 鐨勬槧灏?   */
+   * 批量检测多个网格的特征
+   * @param {THREE.Mesh[]} meshes - 网格数组
+   * @returns {Promise<Map>} meshId -> features 的映射
+   */
   async detectFeaturesForMeshes(meshes) {
     const results = new Map();
 
@@ -858,7 +952,7 @@ export class Viewer {
       }
     }
 
-    // 鏇存柊闈㈡嬀鍙栧櫒
+    // 更新面拾取器
     if (this._facePicker && meshes.length > 0) {
       await this._facePicker.setMeshes(meshes);
     }
@@ -867,8 +961,10 @@ export class Viewer {
   }
 
   /**
-   * 鏍规嵁闈㈢储寮曡幏鍙栫壒寰佷俊鎭?   * @param {THREE.Mesh} mesh - 缃戞牸瀵硅薄
-   * @param {number} faceIndex - 闈㈢储寮?   * @returns {Object|null} 鐗瑰緛淇℃伅
+   * 根据面索引获取特征信息
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @param {number} faceIndex - 面索引
+   * @returns {Object|null} 特征信息
    */
   getFeatureByFace(mesh, faceIndex) {
     const meshId = this._featureDetector.generateMeshId(mesh);
@@ -878,13 +974,14 @@ export class Viewer {
       return this._featureNaming.getFeatureByName(featureName);
     }
 
-    // 浠庣壒寰佹娴嬪櫒鑾峰彇
+    // 从特征检测器获取
     return this._featureDetector.getFeatureByFaceIndex(meshId, faceIndex);
   }
 
   /**
-   * 鑾峰彇缃戞牸鐨勬墍鏈夌壒寰?   * @param {THREE.Mesh} mesh - 缃戞牸瀵硅薄
-   * @returns {Object|null} 鐗瑰緛鏁版嵁
+   * 获取网格的所有特
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @returns {Object|null} 特征数据
    */
   getMeshFeatures(mesh) {
     const meshId = this._featureDetector.generateMeshId(mesh);
@@ -892,16 +989,18 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇鐗瑰緛鐨勬墍鏈変笁瑙掑舰绱㈠紩
-   * @param {string} featureName - 鐗瑰緛鍚嶅瓧
-   * @returns {Array} 涓夎褰㈢储寮曟暟缁?   */
+   * 获取特征的所有三角形索引
+   * @param {string} featureName - 特征名字
+   * @returns {Array} 三角形索引数
+   */
   getFeatureTriangles(featureName) {
     return this._featureNaming.getFeatureTriangles(featureName);
   }
 
   /**
-   * 閫夋嫨鏁翠釜鐗瑰緛锛堥€変腑鐗瑰緛鍖呭惈鐨勬墍鏈夐潰锛?   * @param {THREE.Mesh} mesh - 缃戞牸瀵硅薄
-   * @param {string} featureId - 鐗瑰緛ID
+   * 选择整个特征（中特征包含的所有面
+   * @param {THREE.Mesh} mesh - 网格对象
+   * @param {string} featureId - 特征ID
    */
   selectFeature(mesh, featureId) {
     if (!this._facePicker) return;
@@ -911,7 +1010,9 @@ export class Viewer {
   }
 
   /**
-   * 璁剧疆鐗瑰緛闈㈣繃婊ゆā寮?   * @param {boolean} enabled - 鏄惁鍙厑璁搁€変腑璇嗗埆鍑虹殑鐗瑰緛闈?   */
+   * 设置特征面过滤模
+   * @param {boolean} enabled - 是否只允许中识别出的特征
+   */
   setFeatureOnlyMode(enabled) {
     this._featureOnlyMode = enabled;
     console.log('[Viewer] feature-only mode: ' + (enabled ? 'enabled' : 'disabled'));
@@ -919,13 +1020,16 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇鐗瑰緛闈㈣繃婊ゆā寮忕姸鎬?   * @returns {boolean} 鏄惁寮€鍚?   */
+   * 获取特征面过滤模式状态
+   * @returns {boolean} 是否开启
+   */
   isFeatureOnlyMode() {
     return this._featureOnlyMode;
   }
 
   /**
-   * 鍚敤闈㈡嬀鍙栧姛鑳?   */
+   * 启用面拾取功能
+   */
   enableFacePicking() {
     if (this._facePicker) {
       this._facePicker.enable();
@@ -934,7 +1038,8 @@ export class Viewer {
   }
 
   /**
-   * 绂佺敤闈㈡嬀鍙栧姛鑳?   */
+   * 禁用面拾取功能
+   */
   disableFacePicking() {
     if (this._facePicker) {
       this._facePicker.disable();
@@ -943,7 +1048,7 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇闈㈡嬀鍙栧櫒瀹炰緥
+   * 获取面拾取器实例
    * @returns {OptimizedFacePicker|null}
    */
   getFacePicker() {
@@ -951,7 +1056,7 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇鐗瑰緛妫€娴嬪櫒瀹炰緥
+   * 获取特征检测器实例
    * @returns {FeatureDetector}
    */
   getFeatureDetector() {
@@ -959,7 +1064,7 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇鐗瑰緛鍛藉悕绯荤粺瀹炰緥
+   * 获取特征命名系统实例
    * @returns {FeatureBasedNaming}
    */
   getFeatureNaming() {
@@ -967,8 +1072,8 @@ export class Viewer {
   }
 
   /**
-   * 娓呴櫎鐗瑰緛缂撳瓨
-   * @param {THREE.Mesh} mesh - 缃戞牸瀵硅薄锛堝彲閫夛紝涓嶄紶鍒欐竻闄ゆ墍鏈夛級
+   * 清除特征缓存
+   * @param {THREE.Mesh} mesh - 网格对象（可选，不传则清除所有）
    */
   clearFeatureCache(mesh = null) {
     if (mesh) {
@@ -984,7 +1089,8 @@ export class Viewer {
   }
 
   /**
-   * 鑾峰彇鐗瑰緛妫€娴嬬粺璁′俊鎭?   * @returns {Object} 缁熻淇℃伅
+   * 获取特征检测统计信息
+   * @returns {Object} 统计信息
    */
   getFeatureStats() {
     const detectorStats = this._featureDetector.getCacheStats();
@@ -998,7 +1104,7 @@ export class Viewer {
     };
   }
 
-  // ==================== 閿€姣?====================
+  // ==================== 销毁 ====================
 
   dispose() {
     this._isDisposed = true;
@@ -1010,7 +1116,7 @@ export class Viewer {
     this._unbindEvents();
     this.events.clear();
 
-    // 娓呯悊闈㈡嬀鍙栧櫒
+    // 清理面拾取器
     if (this._facePicker) {
       this._facePicker.destroy();
       this._facePicker = null;

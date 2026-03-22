@@ -1,25 +1,31 @@
 /**
- * 模型加载管理�? * 支持多种格式：STL, OBJ, ZIP(OBJ+MTL)
+ * 模型加载管理
+ * 支持多种格式：STL、OBJ、ZIP（OBJ+MTL）
  *
- * 职责�? * 1. 根据文件类型选择合适的 Loader
- * 2. 加载完成后触发特征检�? * 3. 返回标准化的模型数据
+ * 职责：
+ * 1. 根据文件类型选择合适的 Loader
+ * 2. 加载完成后触发特征检测
+ * 3. 返回标准化的模型数据
  */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { IndexedOBJLoader } from './loaders/IndexedOBJLoader';
-// import JSZip from 'jszip'  // 需要时再引�?
+// import JSZip from 'jszip' // 需要时再引入
 /**
  * @typedef {Object} LoadResult
- * @property {THREE.Mesh|THREE.Group} model - 加载的模�? * @property {string} modelId - 模型唯一标识
+ * @property {THREE.Mesh|THREE.Group} model - 加载得到的模型
+ * @property {string} modelId - 模型唯一标识
  * @property {string} format - 文件格式
- * @property {Object} metadata - 元数据（顶点数、面数等�? */
+ * @property {Object} metadata - 元数据（顶点数、面数等）
+ */
 
 /**
  * @typedef {Object} LoadOptions
- * @property {string} [modelId] - 自定义模型ID，不传则自动生成
- * @property {boolean} [detectFeatures=true] - 是否自动检测特�? * @property {boolean} [centerModel=true] - 是否居中模型
+ * @property {string} [modelId] - 自定义模型 ID，不传则自动生成
+ * @property {boolean} [detectFeatures=true] - 是否自动检测特征
+ * @property {boolean} [centerModel=true] - 是否居中模型
  * @property {THREE.Material} [material] - optional material override
  * @property {string} [mtlUrl] - optional MTL file URL for OBJ
  */
@@ -42,11 +48,14 @@ export class LoaderManager {
     this.gltfLoader = new GLTFLoader();
     this.mtlLoader = new MTLLoader();
 
-    // 特征检测器（由 Viewer 注入�?    this.featureDetector = null;
+    // 特征检测器（由 Viewer 注入）
+    this.featureDetector = null;
 
-    // 加载计数器（用于生成 ID�?    this.loadCounter = 0;
+    // 加载计数器（用于生成 ID）
+    this.loadCounter = 0;
 
-    // 已加载模型缓�?    this.loadedModels = new Map(); // modelId -> LoadResult
+    // 已加载模型缓存
+    this.loadedModels = new Map(); // modelId -> LoadResult
 
     // 事件回调
     this.onProgress = null;
@@ -54,14 +63,16 @@ export class LoaderManager {
   }
 
   /**
-   * 设置特征检测器（由 Viewer 调用�?   * @param {FeatureDetector} detector
+   * 设置特征检测器（由 Viewer 调用）
+   * @param {FeatureDetector} detector
    */
   setFeatureDetector(detector: CoreValue) {
     this.featureDetector = detector;
   }
 
   /**
-   * 加载模型（统一入口�?   * @param {string|File|Blob} source - 文件路径、File 对象�?Blob
+   * 加载模型（统一入口）
+   * @param {string|File|Blob} source - 文件路径、File 对象或 Blob
    * @param {LoadOptions} options - 加载选项
    * @returns {Promise<LoadResult>}
    */
@@ -107,7 +118,7 @@ export class LoaderManager {
       this._centerModel(model);
     }
 
-    // 生成元数�?
+    // 生成元数据
     const metadata = this._extractMetadata(model);
 
     // 构建结果
@@ -121,9 +132,9 @@ export class LoaderManager {
     // 缓存
     this.loadedModels.set(modelId, result);
 
-    // 特征检�?
+    // 特征检测
     if (detectFeatures && this.featureDetector) {
-      console.log(`[LoaderManager] 开始特征检�? ${modelId}`);
+      console.log(`[LoaderManager] 开始特征检测: ${modelId}`);
       const detector: CoreValue = this.featureDetector;
       if (typeof detector.detect === 'function') {
         await detector.detect(model, modelId);
@@ -307,7 +318,7 @@ export class LoaderManager {
     });
   }
   /**
-   * 加载 ZIP 格式�?OBJ（包�?MTL 和贴图）
+   * 加载 ZIP 格式的 OBJ（包含 MTL 和贴图）
    * @private
    */
   async _loadZipOBJ(source: string) {
@@ -510,7 +521,8 @@ export class LoaderManager {
   }
 
   /**
-   * 检测文件格�?   * @private
+   * 检测文件格式
+   * @private
    */
   _detectFormat(source: CoreValue) {
     let filename = '';
@@ -549,13 +561,14 @@ export class LoaderManager {
 
     model.position.sub(center);
 
-    // 将模型底部放�?y=0
+    // 将模型底部放到 y=0
     const newBox = new THREE.Box3().setFromObject(model);
     model.position.y -= newBox.min.y;
   }
 
   /**
-   * 提取模型元数�?   * @private
+   * 提取模型元数据
+   * @private
    */
   _extractMetadata(model: CoreValue) {
     let vertexCount = 0;
@@ -621,7 +634,8 @@ export class LoaderManager {
   }
 
   /**
-   * 清理所�?   */
+   * 清理所有缓存
+   */
   dispose() {
     this.loadedModels.clear();
     this.featureDetector = null;

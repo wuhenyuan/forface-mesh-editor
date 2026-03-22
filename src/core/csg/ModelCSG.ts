@@ -4,7 +4,20 @@ import { Brush } from 'three-bvh-csg';
 
 export type ModelBooleanOp = 'union' | 'subtract' | 'intersect' | 'difference';
 
-export type ModelBooleanOpInput = ModelBooleanOp | 'add' | 'addition' | 'merge' | 'substract' | 'subtraction' | 'minus' | 'intersection' | 'diff' | 'xor' | string | null | undefined;
+export type ModelBooleanOpInput =
+  | ModelBooleanOp
+  | 'add'
+  | 'addition'
+  | 'merge'
+  | 'substract'
+  | 'subtraction'
+  | 'minus'
+  | 'intersection'
+  | 'diff'
+  | 'xor'
+  | string
+  | null
+  | undefined;
 
 export function normalizeModelBooleanOp(value: ModelBooleanOpInput): ModelBooleanOp | null {
   if (typeof value !== 'string') return null;

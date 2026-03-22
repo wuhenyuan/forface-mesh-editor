@@ -33,9 +33,13 @@ export default class EditorCore {
       entityHandler: {
         addEntity: (entity: EntityProps, options: Record<string, CoreValue> = {}) =>
           this.addEntity(entity, options),
-        updateEntity: (id: string, patch: Record<string, CoreValue>, options: Record<string, CoreValue> = {}) =>
-          this.updateEntity(id, patch, options),
-        delEntity: (id: string, options: Record<string, CoreValue> = {}) => this.delEntity(id, options),
+        updateEntity: (
+          id: string,
+          patch: Record<string, CoreValue>,
+          options: Record<string, CoreValue> = {}
+        ) => this.updateEntity(id, patch, options),
+        delEntity: (id: string, options: Record<string, CoreValue> = {}) =>
+          this.delEntity(id, options),
       },
     });
     this.sceneManager = new EditorSceneManager({
@@ -190,15 +194,25 @@ export default class EditorCore {
     const hasCSG = Array.isArray(csgGroup?.children) && csgGroup.children.length > 0;
     const model = hasCSG
       ? csgGroup
-      : this.getModelById('originModel') || (visual?.entityGroup as CoreValue) || (visual?.scene as CoreValue);
+      : this.getModelById('originModel') ||
+        (visual?.entityGroup as CoreValue) ||
+        (visual?.scene as CoreValue);
     return visual?.exportScene?.(format, filename, model as ExportSceneTarget, options);
   }
 
-  exportSelected(format: string, filename: string = 'selected', options: Record<string, CoreValue> = {}) {
+  exportSelected(
+    format: string,
+    filename: string = 'selected',
+    options: Record<string, CoreValue> = {}
+  ) {
     return this.documentVisual?.exportSelected?.(format, filename, options);
   }
 
-  exportMerged(format: string, filename: string = 'merged', options: Record<string, CoreValue> = {}) {
+  exportMerged(
+    format: string,
+    filename: string = 'merged',
+    options: Record<string, CoreValue> = {}
+  ) {
     return this.documentVisual?.exportMerged?.(format, filename, options);
   }
 

@@ -51,7 +51,10 @@ export class ModelEntityObject extends EntityObject {
   }
 
   async loadFromEntitySource(
-    loadModel: (source: CoreValue, options?: Record<string, CoreValue>) => Promise<Record<string, CoreValue>>,
+    loadModel: (
+      source: CoreValue,
+      options?: Record<string, CoreValue>
+    ) => Promise<Record<string, CoreValue>>,
     source: CoreValue,
     options: Record<string, CoreValue> = {}
   ) {

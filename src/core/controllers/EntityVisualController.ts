@@ -151,7 +151,10 @@ type SelectableMeshLike = THREE.Object3D & {
 };
 
 type EntityHandler = {
-  addEntity?(entity: EntityProps, options?: EntityActionOptions): MaybePromise<EntityOperationResult>;
+  addEntity?(
+    entity: EntityProps,
+    options?: EntityActionOptions
+  ): MaybePromise<EntityOperationResult>;
   updateEntity?(
     id: string,
     patch: EntityPatchLike,
@@ -171,10 +174,7 @@ export interface EntityVisualControllerOptions {
   isDisposed: () => boolean;
   getMeshes: () => SelectableMeshLike[];
   getObjectSelectionManager: () => SelectionManagerLike | null;
-  addMesh: (
-    mesh: THREE.Object3D,
-    options?: MeshAddOptions
-  ) => THREE.Object3D | void;
+  addMesh: (mesh: THREE.Object3D, options?: MeshAddOptions) => THREE.Object3D | void;
   removeMesh: (mesh: THREE.Object3D) => void;
   ensureTextSystem: () => TextManagerLike | null;
   getTextManager: () => TextManagerLike | null;
@@ -308,83 +308,71 @@ export class EntityVisualController {
       });
     });
 
-    bind(
-      'textContentUpdated',
-      (value?: ControllerValue) => {
-        if (this._isTextEntitySyncSuppressed()) return;
-        const payload = this._asRecord(value);
-        const textObject = this._asTextObject(payload?.textObject);
-        const textId = this._asString(textObject?.id);
-        const newContent = this._asString(payload?.newContent, true);
-        if (!textId || newContent === null) return;
-        this._withTextEntitySyncSuppressed(() => {
-          const result = this._emitEntityUpdate(
-            textId,
-            { content: newContent },
-            { description: '??????' }
-          );
-          this._trackTextEntitySync(result);
-        });
-      }
-    );
+    bind('textContentUpdated', (value?: ControllerValue) => {
+      if (this._isTextEntitySyncSuppressed()) return;
+      const payload = this._asRecord(value);
+      const textObject = this._asTextObject(payload?.textObject);
+      const textId = this._asString(textObject?.id);
+      const newContent = this._asString(payload?.newContent, true);
+      if (!textId || newContent === null) return;
+      this._withTextEntitySyncSuppressed(() => {
+        const result = this._emitEntityUpdate(
+          textId,
+          { content: newContent },
+          { description: '??????' }
+        );
+        this._trackTextEntitySync(result);
+      });
+    });
 
-    bind(
-      'textConfigUpdated',
-      (value?: ControllerValue) => {
-        if (this._isTextEntitySyncSuppressed()) return;
-        const payload = this._asRecord(value);
-        const textObject = this._asTextObject(payload?.textObject);
-        const newConfig = this._asTextConfig(payload?.newConfig);
-        const textId = this._asString(textObject?.id);
-        if (!textId || !newConfig) return;
-        const patch = this._buildTextPatchFromConfig(newConfig, textObject);
-        if (!patch) return;
-        this._withTextEntitySyncSuppressed(() => {
-          const result = this._emitEntityUpdate(textId, patch, { description: '??????' });
-          this._trackTextEntitySync(result);
-        });
-      }
-    );
+    bind('textConfigUpdated', (value?: ControllerValue) => {
+      if (this._isTextEntitySyncSuppressed()) return;
+      const payload = this._asRecord(value);
+      const textObject = this._asTextObject(payload?.textObject);
+      const newConfig = this._asTextConfig(payload?.newConfig);
+      const textId = this._asString(textObject?.id);
+      if (!textId || !newConfig) return;
+      const patch = this._buildTextPatchFromConfig(newConfig, textObject);
+      if (!patch) return;
+      this._withTextEntitySyncSuppressed(() => {
+        const result = this._emitEntityUpdate(textId, patch, { description: '??????' });
+        this._trackTextEntitySync(result);
+      });
+    });
 
-    bind(
-      'textColorUpdated',
-      (value?: ControllerValue) => {
-        if (this._isTextEntitySyncSuppressed()) return;
-        const payload = this._asRecord(value);
-        const textObject = this._asTextObject(payload?.textObject);
-        const nextColor = payload?.newColor;
-        const newColor =
-          typeof nextColor === 'string' || typeof nextColor === 'number' ? nextColor : undefined;
-        const textId = this._asString(textObject?.id);
-        if (!textId) return;
-        const color = this._getTextColor(textObject, newColor);
-        if (color === undefined) return;
-        this._withTextEntitySyncSuppressed(() => {
-          const result = this._emitEntityUpdate(textId, { color }, { description: '??????' });
-          this._trackTextEntitySync(result);
-        });
-      }
-    );
+    bind('textColorUpdated', (value?: ControllerValue) => {
+      if (this._isTextEntitySyncSuppressed()) return;
+      const payload = this._asRecord(value);
+      const textObject = this._asTextObject(payload?.textObject);
+      const nextColor = payload?.newColor;
+      const newColor =
+        typeof nextColor === 'string' || typeof nextColor === 'number' ? nextColor : undefined;
+      const textId = this._asString(textObject?.id);
+      if (!textId) return;
+      const color = this._getTextColor(textObject, newColor);
+      if (color === undefined) return;
+      this._withTextEntitySyncSuppressed(() => {
+        const result = this._emitEntityUpdate(textId, { color }, { description: '??????' });
+        this._trackTextEntitySync(result);
+      });
+    });
 
-    bind(
-      'textModeChanged',
-      (value?: ControllerValue) => {
-        if (this._isTextEntitySyncSuppressed()) return;
-        const payload = this._asRecord(value);
-        const textObject = this._asTextObject(payload?.textObject);
-        const nextMode = this._asString(payload?.newMode);
-        const textId = this._asString(textObject?.id);
-        if (!textId || !nextMode) return;
-        this._withTextEntitySyncSuppressed(() => {
-          const result = this._emitEntityUpdate(
-            textId,
-            { textType: nextMode },
-            { description: '??????' }
-          );
-          this._trackTextEntitySync(result);
-        });
-      }
-    );
+    bind('textModeChanged', (value?: ControllerValue) => {
+      if (this._isTextEntitySyncSuppressed()) return;
+      const payload = this._asRecord(value);
+      const textObject = this._asTextObject(payload?.textObject);
+      const nextMode = this._asString(payload?.newMode);
+      const textId = this._asString(textObject?.id);
+      if (!textId || !nextMode) return;
+      this._withTextEntitySyncSuppressed(() => {
+        const result = this._emitEntityUpdate(
+          textId,
+          { textType: nextMode },
+          { description: '??????' }
+        );
+        this._trackTextEntitySync(result);
+      });
+    });
 
     bind('dragEnd', (value: ControllerValue) => {
       if (this._isTextEntitySyncSuppressed()) return;
@@ -435,7 +423,9 @@ export class EntityVisualController {
     const entityEvents = this._entityManager();
 
     this._documentSubscriptions.push(
-      document.events.on('documentLoaded', (payload?: ControllerValue) => this._onDocumentLoaded(payload))
+      document.events.on('documentLoaded', (payload?: ControllerValue) =>
+        this._onDocumentLoaded(payload)
+      )
     );
     this._documentSubscriptions.push(
       document.events.on('documentCleared', () => this._clearLoadedModels())
@@ -877,11 +867,7 @@ export class EntityVisualController {
     return true;
   }
 
-  private _emitEntityUpdate(
-    id: string,
-    patch: EntityPatchLike,
-    options: EntityActionOptions = {}
-  ) {
+  private _emitEntityUpdate(id: string, patch: EntityPatchLike, options: EntityActionOptions = {}) {
     if (this._entityHandler?.updateEntity) {
       return this._entityHandler.updateEntity(id, patch, options);
     }
@@ -973,14 +959,18 @@ export class EntityVisualController {
   private _toEntityProps(entity: EntityLike): EntityProps {
     const id = typeof entity.id === 'string' && entity.id ? entity.id : undefined;
     const resource =
-      typeof entity.resource === 'string' || entity.resource instanceof Blob || entity.resource instanceof File
+      typeof entity.resource === 'string' ||
+      entity.resource instanceof Blob ||
+      entity.resource instanceof File
         ? entity.resource
         : undefined;
     const position = this._toVector3Tuple(entity.position);
     const rotation = this._toVector3Tuple(entity.rotation);
     const scale = this._toVector3Tuple(entity.scale);
     const color =
-      typeof entity.color === 'string' || typeof entity.color === 'number' ? entity.color : undefined;
+      typeof entity.color === 'string' || typeof entity.color === 'number'
+        ? entity.color
+        : undefined;
     const boolean = typeof entity.boolean === 'string' ? entity.boolean : undefined;
 
     if (entity.type === 'model') {
@@ -1069,4 +1059,3 @@ export class EntityVisualController {
 }
 
 export default EntityVisualController;
-

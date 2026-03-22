@@ -157,12 +157,12 @@ export default class Document {
   }
 
   /**
-   * åŠ è½½æ–‡æ¡£ zip åŒ?
-   * zip åŒ…ç»“æž?
-   * - config.json (é…ç½®æ–‡ä»¶)
-   * - model/ (æ¨¡åž‹æ–‡ä»¶å¤?
-   * - preview/ (é¢„è§ˆæ–‡ä»¶å¤?
-   * @param source - zip æ–‡ä»¶çš?URLã€File å¯¹è±¡æˆ?ArrayBuffer
+   * 020702050503C60030305 zip 0203
+   * zip 020304030306
+   * - config.json (0304050303C60010309)
+   * - model/ (030302066803C6001030902
+   * - preview/ (04670303C6001030902
+   * @param source - zip 03C600103090408URL0001File 020401030303ArrayBuffer
    */
   async loadDocument(source: string | File | ArrayBuffer): Promise<DocumentData> {
     let zipData: ArrayBuffer | Blob;
@@ -301,7 +301,8 @@ export default class Document {
   }
 
   private _normalizeConfigForEntities(config: Record<string, CoreValue>) {
-    const source: Record<string, CoreValue> = config && typeof config === 'object' ? { ...config } : {};
+    const source: Record<string, CoreValue> =
+      config && typeof config === 'object' ? { ...config } : {};
 
     if (!Array.isArray(source.features) && Array.isArray(source.feature)) {
       source.features = source.feature;
@@ -681,7 +682,11 @@ export default class Document {
     return modelPatch;
   }
 
-  addModelSource(key: string, source: DocumentAssetSource, options: Record<string, CoreValue> = {}) {
+  addModelSource(
+    key: string,
+    source: DocumentAssetSource,
+    options: Record<string, CoreValue> = {}
+  ) {
     const entity = new ModelEntity({
       id: key,
       type: 'model',

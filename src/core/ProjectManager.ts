@@ -696,7 +696,10 @@ export class ProjectManager {
     return cleaned.replace(/\\/g, '/').replace(/^\.\//, '');
   }
 
-  async _fetchAsBlob(source: CoreValue, context: { fetchOptions?: RequestInit; modelKey?: string } = {}) {
+  async _fetchAsBlob(
+    source: CoreValue,
+    context: { fetchOptions?: RequestInit; modelKey?: string } = {}
+  ) {
     if (!source) throw new Error('模型路径为空，无法打包');
     if (source instanceof Blob) return source;
     if (typeof source !== 'string') throw new Error('不支持的模型源类型，无法打包');
