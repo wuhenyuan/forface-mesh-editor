@@ -1,6 +1,6 @@
 <template>
   <div class="viewport" ref="container">
-    <!-- 浮动 UI -->
+    <!-- Floating UI -->
     <context-menu @select="handleContextMenuSelect" />
     <color-picker @confirm="handleColorConfirm" />
     <edit-menu
@@ -56,8 +56,6 @@ export default {
 
     let selectedObject = null;
     let transformMode = 'translate';
-    let transformBefore = null;
-    let lastTransformPayload = null;
 
     const snapshotTransform = (object) => {
       if (!object) return null;
@@ -70,13 +68,68 @@ export default {
     };
 
     const isSameTransform = (a, b) => {
-      if (!a || !b) return false;
+      if (!a || !b) return true;
       return (
         a.rotationOrder === b.rotationOrder &&
         a.position?.every((v, i) => v === b.position[i]) &&
         a.rotation?.every((v, i) => v === b.rotation[i]) &&
         a.scale?.every((v, i) => v === b.scale[i])
       );
+    };
+
+    const syncSelectedTransformToStore = () => {
+      if (!selectedObject) {
+        store.clearSelectedObjectTransform?.();
+        return;
+      }
+      store.syncSelectedObjectTransformFromObject?.(selectedObject);
+    };
+
+    const getPrimarySnapshot = (snapshots = []) => {
+      if (!Array.isArray(snapshots) || snapshots.length === 0) return null;
+      const entityKey = selectedObject?.userData?.entityKey;
+      if (entityKey) {
+        const matched = snapshots.find((item) => item?.id === entityKey);
+        if (matched) return matched;
+      }
+      return snapshots[0];
+    };
+
+    const toCommandState = (snapshot, fallbackObject) => {
+      if (!snapshot) return snapshotTransform(fallbackObject);
+      return {
+        position: [...(snapshot.position || [0, 0, 0])],
+        rotation: [...(snapshot.rotation || [0, 0, 0])],
+        rotationOrder: fallbackObject?.rotation?.order || 'XYZ',
+        scale: [...(snapshot.scale || [1, 1, 1])],
+      };
+    };
+
+    const isEditableElement = (target) => {
+      if (!target || typeof target !== 'object') return false;
+      const element = target;
+      if (element.isContentEditable) return true;
+      const tagName = String(element.tagName || '').toLowerCase();
+      return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+    };
+
+    const handleTransformShortcut = (event) => {
+      if (!event || event.defaultPrevented) return;
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isEditableElement(event.target)) return;
+
+      const key = String(event.key || '').toLowerCase();
+      if (key === 'e') {
+        core?.setTransformMode?.('rotate');
+        event.preventDefault();
+        return;
+      }
+
+      if (key === 'r') {
+        core?.setTransformMode?.('scale');
+        event.preventDefault();
+      }
     };
 
     const buildConfigFromOriginPath = (path) => ({
@@ -111,7 +164,6 @@ export default {
       store.setHistorySnapshot?.(core.getHistorySnapshot?.());
     };
 
-    // 初始化
     const initCore = async () => {
       core = new EditorCore(container.value);
 
@@ -132,7 +184,6 @@ export default {
       }
     };
 
-    // 事件绑定
     const bindViewerEvents = () => {
       const emitter = core.emitter;
 
@@ -191,6 +242,7 @@ export default {
 
       emitter.on(EntityEvent.updateEntity, (payload) => {
         store.syncEntityUpdated(payload);
+        syncSelectedTransformToStore();
       });
 
       emitter.on(EntityEvent.delEntity, (payload) => {
@@ -222,6 +274,7 @@ export default {
       emitter.on('objectSelected', ({ object }) => {
         selectedObject = object;
         store.selectObject(object);
+        syncSelectedTransformToStore();
         emit('objectSelected', object);
       });
 
@@ -230,73 +283,89 @@ export default {
           selectedObject = null;
         }
         store.deselectObject();
+        store.clearSelectedObjectTransform?.();
         emit('objectDeselected', object);
       });
 
       emitter.on('objectSelectionCleared', () => {
         selectedObject = null;
         store.deselectObject();
-      });
-
-      emitter.on('objectTransformed', (data) => {
-        lastTransformPayload = data;
+        store.clearSelectedObjectTransform?.();
       });
 
       emitter.on('transformModeChanged', ({ mode }) => {
         transformMode = mode;
       });
 
-      emitter.on('objectDragging', ({ isDragging }) => {
+      emitter.on('transform:start', ({ mode }) => {
+        transformMode = mode || transformMode;
+      });
+
+      emitter.on('transform:preview', (payload) => {
+        const current = getPrimarySnapshot(payload?.targets);
+        if (!current) return;
+        store.setSelectedObjectTransform?.({
+          position: [...(current.position || [0, 0, 0])],
+          rotation: [...(current.rotation || [0, 0, 0])],
+          scale: [...(current.scale || [1, 1, 1])],
+        });
+      });
+
+      emitter.on('transform:commit', (payload) => {
         if (store.isHistoryApplying()) return;
-        if (!selectedObject) return;
 
-        if (isDragging) {
-          transformBefore = snapshotTransform(selectedObject);
+        const afterSnapshot = getPrimarySnapshot(payload?.after);
+        if (!afterSnapshot) return;
+
+        const beforeSnapshot = getPrimarySnapshot(payload?.before);
+        const beforeState = toCommandState(beforeSnapshot, selectedObject);
+        const afterState = toCommandState(afterSnapshot, selectedObject);
+
+        if (isSameTransform(beforeState, afterState)) {
+          syncSelectedTransformToStore();
           return;
         }
 
-        if (!transformBefore) return;
-        const before = transformBefore;
-        const after = snapshotTransform(selectedObject);
-        if (isSameTransform(before, after)) {
-          transformBefore = null;
-          lastTransformPayload = null;
-          return;
-        }
-
-        const entityKey =
-          lastTransformPayload?.object?.userData?.entityKey || selectedObject?.userData?.entityKey;
+        const entityKey = afterSnapshot?.id || selectedObject?.userData?.entityKey;
         const name = selectedObject?.name ? ` ${selectedObject.name}` : '';
-        transformBefore = null;
-        const description = `变换${name} (${transformMode})`;
+        const description = `Transform${name} (${payload?.mode || transformMode})`;
 
         if (entityKey) {
           store
             .updateEntity(
               entityKey,
               {
-                position: after?.position || [0, 0, 0],
-                rotation: after?.rotation || [0, 0, 0],
-                scale: after?.scale || [1, 1, 1],
+                position: afterState?.position || [0, 0, 0],
+                rotation: afterState?.rotation || [0, 0, 0],
+                scale: afterState?.scale || [1, 1, 1],
               },
               { description }
             )
             .catch((err) => {
-              console.error('更新实体变换失败:', err);
+              console.error('Failed to update entity transform:', err);
             });
-        } else {
+        } else if (selectedObject) {
           store
             .executeCommand(
-              new TransformCommand(selectedObject, before, after, {
+              new TransformCommand(selectedObject, beforeState, afterState, {
                 description,
                 document: core?.document,
               })
             )
             .catch((err) => {
-              console.error('记录变换失败:', err);
+              console.error('Failed to record transform command:', err);
             });
         }
-        lastTransformPayload = null;
+
+        store.setSelectedObjectTransform?.({
+          position: [...(afterState?.position || [0, 0, 0])],
+          rotation: [...(afterState?.rotation || [0, 0, 0])],
+          scale: [...(afterState?.scale || [1, 1, 1])],
+        });
+      });
+
+      emitter.on('transform:cancel', () => {
+        syncSelectedTransformToStore();
       });
 
       emitter.on('hover', ({ target, event }) => {
@@ -317,12 +386,16 @@ export default {
         handleDelete(target);
       });
 
+      emitter.on('keydown', ({ event }) => {
+        handleTransformShortcut(event);
+      });
+
       emitter.on('escape', () => {
+        core?.documentVisual?.getObjectSelectionManager?.()?.cancelCurrentTransform?.();
         store.hideAllFloatingUI();
       });
     };
 
-    // 右键菜单处理
     const handleContextMenuSelect = ({ key, target }) => {
       switch (key) {
         case 'editText':
@@ -354,7 +427,7 @@ export default {
           store
             .setViewMode('construct')
             .then(() => core?.enableTextMode?.())
-            .catch((err) => console.error('进入编辑态失败', err));
+            .catch((err) => console.error('Failed to enter construct mode:', err));
           break;
 
         case 'select':
@@ -371,22 +444,21 @@ export default {
       }
     };
 
-    // 颜色选择处理
     const handleColorConfirm = ({ color, target }) => {
       if (!target) return;
 
       if (target.userData?.isText) {
         const textId = target.userData.textId;
-        store.updateEntity(textId, { color }, { description: '更新文字颜色' }).catch((err) => {
-          console.error('更新文字颜色失败:', err);
+        store.updateEntity(textId, { color }, { description: 'Update text color' }).catch((err) => {
+          console.error('Failed to update text color:', err);
         });
         return;
       }
 
       const entityKey = target.userData?.entityKey;
       if (entityKey) {
-        store.updateEntity(entityKey, { color }, { description: '更新对象颜色' }).catch((err) => {
-          console.error('更新对象颜色失败:', err);
+        store.updateEntity(entityKey, { color }, { description: 'Update object color' }).catch((err) => {
+          console.error('Failed to update object color:', err);
         });
         return;
       }
@@ -394,13 +466,12 @@ export default {
       core?.setObjectColor?.(target, color);
     };
 
-    // 编辑菜单处理
     const handleTransformModeChange = ({ mode }) => {
       core?.setTransformMode?.(mode);
     };
 
     const handleDuplicate = (target) => {
-      console.log('复制对象:', target?.name);
+      console.log('Duplicate object:', target?.name);
     };
 
     const handleDelete = (target) => {
@@ -408,14 +479,14 @@ export default {
 
       if (target.userData?.isText) {
         const textId = target.userData.textId;
-        store.delEntity(textId, { description: '删除文字' }).catch((err) => {
-          console.error('删除文字失败:', err);
+        store.delEntity(textId, { description: 'Delete text' }).catch((err) => {
+          console.error('Failed to delete text:', err);
         });
       } else {
         const entityKey = target?.userData?.entityKey;
         if (entityKey) {
           store.delEntity(entityKey).catch((err) => {
-            console.error('删除实体失败:', err);
+            console.error('Failed to delete entity:', err);
           });
         } else {
           core?.removeMesh?.(target);
@@ -425,7 +496,6 @@ export default {
       store.hideEditMenu();
     };
 
-    // 工具切换
     watch(
       () => props.currentTool,
       (newTool, oldTool) => {
@@ -435,14 +505,13 @@ export default {
           store
             .setViewMode('construct')
             .then(() => core?.enableTextMode?.())
-            .catch((err) => console.error('进入编辑态失败', err));
+            .catch((err) => console.error('Failed to enter construct mode:', err));
         } else if (oldTool === 'text') {
           core?.disableTextMode?.();
         }
       }
     );
 
-    // 暴露方法
     watch(
       () => [props.config, props.originPath],
       ([nextConfig, nextOriginPath]) => {
@@ -456,7 +525,6 @@ export default {
 
     expose(getExposedMethods());
 
-    // 生命周期
     onMounted(() => {
       initCore();
     });
@@ -495,3 +563,4 @@ export default {
   display: block;
 }
 </style>
+

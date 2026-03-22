@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 编辑器专Viewer
  * 在基硢 Viewer 上集成面拾取、文字系统物体择等功 */
 import * as THREE from 'three';
@@ -259,7 +259,7 @@ export class EditorViewer extends Viewer {
       this._viewerClickUnsubscribe();
     }
 
-    this._viewerClickUnsubscribe = this.events.on('click', (payload?: ViewerEventPayload) => {
+    this._viewerClickUnsubscribe = this.events.on('click', async (payload?: ViewerEventPayload) => {
       const clickPayload = (payload || {}) as ViewerClickPayload;
       const event = clickPayload.event;
       if (!event) return;
@@ -267,11 +267,14 @@ export class EditorViewer extends Viewer {
       const surfaceTextManager = this._surfaceTextManager as {
         _onCanvasClick?: (mouseEvent: MouseEvent) => Promise<void> | void;
       } | null;
-      const textClickResult = surfaceTextManager?._onCanvasClick?.(event);
-      if (textClickResult && typeof (textClickResult as Promise<void>).then === 'function') {
-        (textClickResult as Promise<void>).catch((error: CoreValue) => {
-          console.error('[EditorViewer] surface text click handling failed', error);
-        });
+      try {
+        await Promise.resolve(surfaceTextManager?._onCanvasClick?.(event));
+      } catch (error) {
+        console.error('[EditorViewer] surface text click handling failed', error);
+      }
+
+      if ((event as CoreValue)?.__surfaceTextHandled) {
+        return;
       }
 
       const objectSelectionManager = this._objectSelectionManager as {
@@ -1142,6 +1145,26 @@ export class EditorViewer extends Viewer {
 
     this._objectSelectionManager.on('transformModeChanged', (mode) => {
       this.events.emit('transformModeChanged', { mode });
+    });
+
+    this._objectSelectionManager.on('transform:start', (payload) => {
+      this.events.emit('transform:start', payload);
+    });
+
+    this._objectSelectionManager.on('transform:preview', (payload) => {
+      this.events.emit('transform:preview', payload);
+    });
+
+    this._objectSelectionManager.on('transform:commit', (payload) => {
+      this.events.emit('transform:commit', payload);
+    });
+
+    this._objectSelectionManager.on('transform:cancel', (payload) => {
+      this.events.emit('transform:cancel', payload);
+    });
+
+    this._objectSelectionManager.on('bbox:updated', (payload) => {
+      this.events.emit('bbox:updated', payload);
     });
   }
 

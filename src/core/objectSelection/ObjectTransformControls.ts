@@ -97,7 +97,7 @@ export class ObjectTransformControls {
     });
 
     // 物体变换中
-    this.transformControls.addEventListener('change', () => {
+    this.transformControls.addEventListener('objectChange', () => {
       if (this.currentObject) {
         this.emit('objectTransformed', {
           object: this.currentObject,

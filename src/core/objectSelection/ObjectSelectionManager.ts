@@ -1,32 +1,63 @@
+import * as THREE from 'three';
 import { ObjectSelector } from './ObjectSelector';
 import { ObjectTransformControls } from './ObjectTransformControls';
 import { ObjectBoundsHelper } from './ObjectBoundsHelper';
+import TransformSession, {
+  type TransformCancelEventPayload,
+  type TransformCommitEventPayload,
+  type TransformMode,
+  type TransformPreviewEventPayload,
+  type TransformSnapshot,
+  type TransformStartEventPayload,
+} from './TransformSession';
+
+type SelectableObject = THREE.Object3D & {
+  userData?: Record<string, CoreValue>;
+};
+
+type BoxLikeObject = SelectableObject & {
+  getWorldBox?: (force?: boolean) => THREE.Box3;
+};
 
 /**
  * 物体选择管理器
- * 统一管理物体选择和变换控制
+ * 统一管理对象选择、变换控制和编辑生命周期
  */
 export class ObjectSelectionManager {
   [key: string]: CoreValue;
+
+  scene: THREE.Scene;
+  camera: THREE.Camera;
+  renderer: THREE.WebGLRenderer;
+  domElement: HTMLElement;
+  objectSelector: ObjectSelector;
+  transformControls: ObjectTransformControls;
+  boundsHelper: ObjectBoundsHelper;
+  transformSession: TransformSession;
+  enabled: boolean;
+  selectedObject: SelectableObject | null;
+  eventListeners: Map<string, Function[]>;
+  config: Record<string, CoreValue>;
+
+  private _tmpBox: THREE.Box3;
+  private _tmpCenter: THREE.Vector3;
+
   constructor(scene, camera, renderer, domElement) {
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
     this.domElement = domElement;
 
-    // 创建子系统
     this.objectSelector = new ObjectSelector(scene, camera, renderer, domElement);
     this.transformControls = new ObjectTransformControls(scene, camera, renderer, domElement);
     this.boundsHelper = new ObjectBoundsHelper(scene, { labelBackground: false });
+    this.transformSession = new TransformSession(scene);
 
-    // 状态
     this.enabled = false;
     this.selectedObject = null;
 
-    // 事件系统
     this.eventListeners = new Map();
 
-    // 配置
     this.config = {
       enableTransformControls: true,
       defaultTransformMode: 'translate',
@@ -38,69 +69,52 @@ export class ObjectSelectionManager {
       },
     };
 
-    // 设置事件监听
+    this._tmpBox = new THREE.Box3();
+    this._tmpCenter = new THREE.Vector3();
+
     this.setupEvents();
   }
 
-  /**
-   * 设置事件监听
-   */
   setupEvents() {
-    // 物体选择事件
-    this.objectSelector.on('objectSelected', (object) => {
+    this.objectSelector.on('objectSelected', (object: SelectableObject) => {
       this.selectedObject = object;
 
-      // 如果启用变换控制器，附加到选中的物体
       if (this.config.enableTransformControls) {
-        this.transformControls.attach(object);
+        this.beginTransformSession([object]);
       }
 
       this.boundsHelper?.attach?.(object);
-
-      console.log('物体选择管理器：物体已选中', object.name || object.uuid);
       this.emit('objectSelected', object);
     });
 
-    this.objectSelector.on('objectDeselected', (object) => {
+    this.objectSelector.on('objectDeselected', (object: SelectableObject) => {
+      this.endTransformSession({ commit: false });
       this.selectedObject = null;
-
-      // 分离变换控制器
-      this.transformControls.detach();
       this.boundsHelper?.detach?.();
-
-      console.log('物体选择管理器：物体已取消选择');
       this.emit('objectDeselected', object);
     });
 
     this.objectSelector.on('selectionCleared', () => {
+      this.endTransformSession({ commit: false });
       this.selectedObject = null;
-      this.transformControls.detach();
       this.boundsHelper?.detach?.();
-
-      console.log('物体选择管理器：选择已清除');
       this.emit('selectionCleared');
     });
 
-    // 变换控制器事件
-    this.transformControls.on('draggingChanged', (isDragging) => {
-      // 转发拖拽状态变化事件（用于禁用/启用相机控制）
+    this.transformControls.on('draggingChanged', (isDragging: boolean) => {
+      if (isDragging) {
+        this.beginDragInteraction();
+      } else {
+        this.endDragInteraction(true);
+      }
       this.emit('draggingChanged', isDragging);
     });
 
-    this.transformControls.on('objectTransformed', (data) => {
-      this.boundsHelper?.update?.(data?.object);
-      this.emit('objectTransformed', data);
+    this.transformControls.on('objectTransformed', () => {
+      this.updateTransformSession();
     });
 
-    this.transformControls.on('dragStart', (data) => {
-      this.emit('dragStart', data);
-    });
-
-    this.transformControls.on('dragEnd', (data) => {
-      this.emit('dragEnd', data);
-    });
-
-    this.transformControls.on('modeChanged', (mode) => {
+    this.transformControls.on('modeChanged', (mode: TransformMode) => {
       this.emit('transformModeChanged', mode);
     });
 
@@ -113,168 +127,227 @@ export class ObjectSelectionManager {
     });
   }
 
-  /**
-   * 启用物体选择管理器
-   */
   enable() {
     if (this.enabled) return;
 
     this.enabled = true;
-
-    // 启用子系统
     this.objectSelector.enable();
     if (this.config.enableTransformControls) {
       this.transformControls.enable();
+      if (this.selectedObject) {
+        this.beginTransformSession([this.selectedObject]);
+      }
     }
 
-    console.log('物体选择管理器已启用');
     this.emit('enabled');
   }
 
-  /**
-   * 禁用物体选择管理器
-   */
   disable() {
     if (!this.enabled) return;
 
     this.enabled = false;
 
-    // 禁用子系统
+    this.endTransformSession({ commit: false });
     this.objectSelector.disable();
     this.transformControls.disable();
 
-    // 清除状态
     this.selectedObject = null;
     this.boundsHelper?.detach?.();
 
-    console.log('物体选择管理器已禁用');
     this.emit('disabled');
   }
 
-  /**
-   * 设置可选择的物体列表
-   * @param {THREE.Object3D[]} objects - 物体数组
-   */
-  setSelectableObjects(objects) {
+  beginTransformSession(targets: SelectableObject[] = []) {
+    if (!this.config.enableTransformControls) {
+      return null;
+    }
+
+    const result = this.transformSession.begin(targets, {
+      mode: this.getTransformMode(),
+    });
+
+    if (!result) {
+      this.transformControls.detach();
+      return null;
+    }
+
+    this.transformControls.attach(result.pivotHandle);
+    this._emitBBoxUpdated();
+    return result;
+  }
+
+  updateTransformSession() {
+    const preview = this.transformSession.updateFromPivot();
+    if (!preview) return null;
+
+    const primaryObject = this.selectedObject;
+    if (primaryObject) {
+      this.boundsHelper?.update?.(primaryObject);
+    }
+
+    this.emit('transform:preview', preview as TransformPreviewEventPayload);
+    this._emitLegacyObjectTransformed(preview);
+    this._emitBBoxUpdated();
+
+    return preview;
+  }
+
+  endTransformSession(options: { commit?: boolean } = {}) {
+    const commit = !!options.commit;
+    if (this.transformSession.hasInteraction()) {
+      this.endDragInteraction(commit);
+    }
+
+    this.transformControls.detach();
+    this.transformSession.end();
+  }
+
+  beginDragInteraction() {
+    const mode = this.getTransformMode();
+    const startPayload = this.transformSession.beginInteraction(mode as TransformMode);
+    if (!startPayload) {
+      return null;
+    }
+
+    this.emit('dragStart', {
+      object: this.selectedObject,
+      mode,
+    });
+
+    this.emit('transform:start', startPayload as TransformStartEventPayload);
+    return startPayload;
+  }
+
+  endDragInteraction(commit = true) {
+    const result = this.transformSession.finishInteraction(commit);
+    if (!result) {
+      return null;
+    }
+
+    if (this.selectedObject) {
+      this.boundsHelper?.update?.(this.selectedObject);
+    }
+
+    this._emitBBoxUpdated();
+
+    if (commit) {
+      this.emit('dragEnd', {
+        object: this.selectedObject,
+        mode: result.mode,
+      });
+
+      this.emit('transform:commit', {
+        mode: result.mode,
+        before: result.before,
+        after: result.after,
+      } as TransformCommitEventPayload);
+
+      const legacyPayload = this._buildLegacyTransformData(result.after[0], result.mode);
+      if (legacyPayload) {
+        this.emit('objectTransformed', legacyPayload);
+      }
+      return result;
+    }
+
+    this.emit('transform:cancel', {
+      mode: result.mode,
+      targetIds: result.targetIds,
+    } as TransformCancelEventPayload);
+
+    const legacyPayload = this._buildLegacyTransformData(result.after[0], result.mode);
+    if (legacyPayload) {
+      this.emit('objectTransformed', legacyPayload);
+    }
+    return result;
+  }
+
+  cancelCurrentTransform() {
+    if (!this.transformSession.hasInteraction()) {
+      return false;
+    }
+
+    this.endDragInteraction(false);
+    return true;
+  }
+
+  getSelectionBox() {
+    return this.transformSession.getSelectionBox(new THREE.Box3());
+  }
+
+  setSelectableObjects(objects: SelectableObject[]) {
     this.objectSelector.setSelectableObjects(objects);
   }
 
-  /**
-   * 添加可选择的物体
-   * @param {THREE.Object3D} object - 物体
-   */
-  addSelectableObject(object) {
+  addSelectableObject(object: SelectableObject) {
     this.objectSelector.addSelectableObject(object);
   }
 
-  /**
-   * 移除可选择的物体
-   * @param {THREE.Object3D} object - 物体
-   */
-  removeSelectableObject(object) {
+  removeSelectableObject(object: SelectableObject) {
     this.objectSelector.removeSelectableObject(object);
   }
 
-  /**
-   * 选择物体
-   * @param {THREE.Object3D} object - 要选择的物体
-   */
-  selectObject(object) {
+  selectObject(object: SelectableObject) {
     this.objectSelector.selectObject(object);
   }
 
-  /**
-   * 清除选择
-   */
   clearSelection() {
     this.objectSelector.clearSelection();
   }
 
-  /**
-   * 获取当前选中的物体
-   * @returns {THREE.Object3D|null} 选中的物体
-   */
   getSelectedObject() {
     return this.selectedObject;
   }
 
-  /**
-   * 设置变换模式
-   * @param {'translate'|'rotate'|'scale'} mode - 变换模式
-   */
-  setTransformMode(mode) {
+  setTransformMode(mode: TransformMode) {
     this.transformControls.setMode(mode);
   }
 
-  /**
-   * 获取当前变换模式
-   * @returns {string} 当前模式
-   */
   getTransformMode() {
-    return this.transformControls.getMode();
+    return this.transformControls.getMode() as TransformMode;
   }
 
-  /**
-   * 启用/禁用变换控制器
-   * @param {boolean} enabled - 是否启用
-   */
-  setTransformControlsEnabled(enabled) {
+  setTransformControlsEnabled(enabled: boolean) {
     this.config.enableTransformControls = enabled;
 
     if (enabled) {
       this.transformControls.enable();
-      // 如果有选中的物体，重新附加
       if (this.selectedObject) {
-        this.transformControls.attach(this.selectedObject);
+        this.beginTransformSession([this.selectedObject]);
       }
-    } else {
-      this.transformControls.disable();
+      return;
     }
+
+    this.endTransformSession({ commit: false });
+    this.transformControls.disable();
   }
 
-  /**
-   * 检查是否正在拖拽
-   * @returns {boolean} 是否正在拖拽
-   */
   isDragging() {
     return this.transformControls.isDragging();
   }
 
-  /**
-   * 设置高亮配置
-   * @param {Object} config - 高亮配置
-   */
-  setHighlightConfig(config) {
+  setHighlightConfig(config: Record<string, CoreValue>) {
     Object.assign(this.config.highlightConfig, config);
     this.objectSelector.setHighlightConfig(this.config.highlightConfig);
   }
 
-  /**
-   * 设置变换控制器配置
-   * @param {Object} config - 配置
-   */
-  setTransformConfig(config) {
+  setTransformConfig(config: Record<string, CoreValue>) {
     if (config.size !== undefined) {
-      this.transformControls.setSize(config.size);
+      this.transformControls.setSize(config.size as number);
     }
 
     if (config.space !== undefined) {
-      this.transformControls.setSpace(config.space);
+      this.transformControls.setSpace(config.space as 'local' | 'world');
     }
 
     if (config.axes !== undefined) {
-      this.transformControls.setAxesVisibility(config.axes);
+      this.transformControls.setAxesVisibility(config.axes as { x?: boolean; y?: boolean; z?: boolean });
     }
 
     if (config.snap !== undefined) {
-      this.transformControls.setSnap(config.snap);
+      this.transformControls.setSnap(config.snap as Record<string, CoreValue>);
     }
   }
 
-  /**
-   * 获取完整状态
-   * @returns {Object} 状态信息
-   */
   getState() {
     return {
       enabled: this.enabled,
@@ -293,42 +366,29 @@ export class ObjectSelectionManager {
     };
   }
 
-  /**
-   * 添加事件监听器
-   * @param {string} eventName - 事件名称
-   * @param {Function} callback - 回调函数
-   */
-  on(eventName, callback) {
+  on(eventName: string, callback: Function) {
     if (!this.eventListeners.has(eventName)) {
       this.eventListeners.set(eventName, []);
     }
-    this.eventListeners.get(eventName).push(callback);
+    this.eventListeners.get(eventName)?.push(callback);
   }
 
-  /**
-   * 移除事件监听器
-   * @param {string} eventName - 事件名称
-   * @param {Function} callback - 回调函数
-   */
-  off(eventName, callback) {
+  off(eventName: string, callback: Function) {
     if (!this.eventListeners.has(eventName)) return;
 
     const listeners = this.eventListeners.get(eventName);
+    if (!listeners) return;
+
     const index = listeners.indexOf(callback);
     if (index !== -1) {
       listeners.splice(index, 1);
     }
   }
 
-  /**
-   * 发出事件
-   * @param {string} eventName - 事件名称
-   * @param {...CoreValue} args - 事件参数
-   */
-  emit(eventName, ...args) {
+  emit(eventName: string, ...args: CoreValue[]) {
     if (!this.eventListeners.has(eventName)) return;
 
-    const listeners = this.eventListeners.get(eventName);
+    const listeners = this.eventListeners.get(eventName) || [];
     listeners.forEach((callback) => {
       try {
         callback(...args);
@@ -338,18 +398,105 @@ export class ObjectSelectionManager {
     });
   }
 
-  /**
-   * 销毁管理器
-   */
   destroy() {
     this.disable();
     this.objectSelector.destroy();
     this.transformControls.destroy();
     this.boundsHelper?.dispose?.();
+    this.transformSession.dispose();
     this.eventListeners.clear();
     this.selectedObject = null;
   }
+
+  private _emitLegacyObjectTransformed(preview: TransformPreviewEventPayload) {
+    const first = preview.targets[0];
+    if (!first) return;
+    const payload = this._buildLegacyTransformData(first, preview.mode);
+    if (payload) {
+      this.emit('objectTransformed', payload);
+    }
+  }
+
+  private _buildLegacyTransformData(snapshot: TransformSnapshot | undefined, mode: TransformMode) {
+    if (!snapshot || !this.selectedObject) {
+      return null;
+    }
+
+    return {
+      object: this.selectedObject,
+      mode,
+      position: new THREE.Vector3(...snapshot.position),
+      rotation: new THREE.Euler(...snapshot.rotation),
+      scale: new THREE.Vector3(...snapshot.scale),
+    };
+  }
+
+  private _emitBBoxUpdated() {
+    if (!this.transformSession.hasSession()) {
+      return;
+    }
+
+    const selectionBox = this.transformSession.getSelectionBox(this._tmpBox);
+    if (selectionBox.isEmpty()) {
+      return;
+    }
+
+    const selectionCenter = selectionBox.getCenter(this._tmpCenter);
+    const targets = this.transformSession.targets.map((targetObject: BoxLikeObject) => {
+      const box = this._resolveObjectWorldBox(targetObject);
+      const center = box.getCenter(new THREE.Vector3());
+      return {
+        id: this._resolveObjectId(targetObject),
+        box: {
+          min: [box.min.x, box.min.y, box.min.z],
+          max: [box.max.x, box.max.y, box.max.z],
+        },
+        anchors: {
+          center: [center.x, center.y, center.z],
+          corners: [] as number[][],
+          faceCenters: [] as number[][],
+          edgeCenters: [] as number[][],
+        },
+      };
+    });
+
+    this.emit('bbox:updated', {
+      targetIds: targets.map((target) => target.id),
+      selection: {
+        min: [selectionBox.min.x, selectionBox.min.y, selectionBox.min.z],
+        max: [selectionBox.max.x, selectionBox.max.y, selectionBox.max.z],
+        anchors: {
+          center: [selectionCenter.x, selectionCenter.y, selectionCenter.z],
+          corners: [] as number[][],
+          faceCenters: [] as number[][],
+          edgeCenters: [] as number[][],
+        },
+      },
+      targets,
+    });
+  }
+
+  private _resolveObjectId(object: SelectableObject) {
+    const entityKey = object?.userData?.entityKey;
+    if (typeof entityKey === 'string' && entityKey.length > 0) {
+      return entityKey;
+    }
+    return object.uuid;
+  }
+
+  private _resolveObjectWorldBox(object: BoxLikeObject) {
+    if (typeof object.getWorldBox === 'function') {
+      const box = object.getWorldBox(false);
+      if (box?.isBox3) {
+        return box.clone();
+      }
+    }
+
+    const box = new THREE.Box3();
+    box.setFromObject(object);
+    return box;
+  }
 }
 
-// 导出所有相关类
 export { ObjectSelector, ObjectTransformControls };
+

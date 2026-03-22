@@ -40,6 +40,8 @@ export class EntityObject extends THREE.Object3D {
   entityId: string;
   entity: EntityLike | null;
   node: THREE.Object3D | null;
+  worldBox: THREE.Box3;
+  worldBoxDirty: boolean;
 
   constructor(entityId: string, entity: EntityLike | null = null) {
     super();
@@ -47,6 +49,8 @@ export class EntityObject extends THREE.Object3D {
     this.entityId = entityId;
     this.entity = entity;
     this.node = null;
+    this.worldBox = new THREE.Box3();
+    this.worldBoxDirty = true;
     this.name = `EntityObject:${entityId}`;
 
     this.userData = {
@@ -91,6 +95,7 @@ export class EntityObject extends THREE.Object3D {
     if (this.node) {
       this.add(this.node);
     }
+    this.markBoxDirty();
     this._syncEntityKey();
     return this.node;
   }
@@ -113,6 +118,26 @@ export class EntityObject extends THREE.Object3D {
     }
 
     this.updateMatrixWorld(true);
+    this.markBoxDirty();
+  }
+
+  markBoxDirty() {
+    this.worldBoxDirty = true;
+  }
+
+  refreshWorldBox(force = false) {
+    if (!force && !this.worldBoxDirty) {
+      return this.worldBox;
+    }
+
+    this.updateMatrixWorld(true);
+    this.worldBox.setFromObject(this);
+    this.worldBoxDirty = false;
+    return this.worldBox;
+  }
+
+  getWorldBox(force = false) {
+    return this.refreshWorldBox(force);
   }
 
   getTransformFromPatch(patch?: Record<string, CoreValue> | null): EntityTransform | null {
@@ -193,6 +218,7 @@ export class EntityObject extends THREE.Object3D {
     }
     this.node = null;
     this.updateMatrixWorld(true);
+    this.markBoxDirty();
   }
 
   private _syncEntityKey() {

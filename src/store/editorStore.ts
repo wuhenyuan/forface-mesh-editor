@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 缂栬緫鍣ㄧ姸鎬佺鐞? * 鍏煎 Vue 2.6+ 鐨勮交閲忕骇鐘舵€佺鐞? */
 import Vue from 'vue';
 type StoreEntity = {
@@ -24,6 +24,7 @@ const state = Vue.observable({
 
   selectedTextObject: null,
   selectedObject: null,
+  selectedObjectTransform: null,
 
   entityMap: {},
 
@@ -75,6 +76,27 @@ const state = Vue.observable({
 const normalizeEntityForStore = (entity: any) => {
   if (!entity || !entity.id) return null;
   return { ...entity };
+};
+
+const buildTransformFromObject = (object: any) => {
+  if (!object) return null;
+  return {
+    position: [object.position?.x || 0, object.position?.y || 0, object.position?.z || 0],
+    rotation: [object.rotation?.x || 0, object.rotation?.y || 0, object.rotation?.z || 0],
+    scale: [object.scale?.x || 1, object.scale?.y || 1, object.scale?.z || 1],
+  };
+};
+
+const normalizeTransformPayload = (payload: any) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const position = Array.isArray(payload.position) ? payload.position : [0, 0, 0];
+  const rotation = Array.isArray(payload.rotation) ? payload.rotation : [0, 0, 0];
+  const scale = Array.isArray(payload.scale) ? payload.scale : [1, 1, 1];
+  return {
+    position: [...position],
+    rotation: [...rotation],
+    scale: [...scale],
+  };
 };
 
 const buildTextList = () => {
@@ -138,10 +160,25 @@ const actions = {
 
   selectObject(object: any) {
     state.selectedObject = object || null;
+    state.selectedObjectTransform = buildTransformFromObject(object);
   },
 
   deselectObject() {
     state.selectedObject = null;
+    state.selectedObjectTransform = null;
+  },
+
+  setSelectedObjectTransform(transform: any) {
+    state.selectedObjectTransform = normalizeTransformPayload(transform);
+  },
+
+  clearSelectedObjectTransform() {
+    state.selectedObjectTransform = null;
+  },
+
+  syncSelectedObjectTransformFromObject(object?: any) {
+    const target = object || state.selectedObject;
+    state.selectedObjectTransform = buildTransformFromObject(target);
   },
 
   selectText(textObject: any) {

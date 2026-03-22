@@ -337,6 +337,7 @@ export default {
     // 从 store 获取数据
     const selectedTextObject = computed(() => store.state.selectedTextObject);
     const selectedObject = computed(() => store.state.selectedObject);
+    const selectedObjectTransform = computed(() => store.state.selectedObjectTransform);
     const textList = computed(() => store.getTextList());
     const selectedTextName = computed(() => store.selectedTextName());
     const isOnCylinder = computed(() => store.isSelectedTextOnCylinder());
@@ -410,7 +411,18 @@ export default {
     watch(
       selectedObject,
       (obj) => {
-        if (!obj) return;
+        if (!obj) {
+          objectForm.position.x = 0;
+          objectForm.position.y = 0;
+          objectForm.position.z = 0;
+          objectForm.rotation.x = 0;
+          objectForm.rotation.y = 0;
+          objectForm.rotation.z = 0;
+          objectForm.scale.x = 1;
+          objectForm.scale.y = 1;
+          objectForm.scale.z = 1;
+          return;
+        }
         objectForm.position.x = obj.position.x;
         objectForm.position.y = obj.position.y;
         objectForm.position.z = obj.position.z;
@@ -422,6 +434,26 @@ export default {
         objectForm.scale.z = obj.scale.z;
       },
       { immediate: true }
+    );
+
+    watch(
+      selectedObjectTransform,
+      (transform) => {
+        if (!transform) return;
+        const [px = 0, py = 0, pz = 0] = transform.position || [];
+        const [rx = 0, ry = 0, rz = 0] = transform.rotation || [];
+        const [sx = 1, sy = 1, sz = 1] = transform.scale || [];
+        objectForm.position.x = px;
+        objectForm.position.y = py;
+        objectForm.position.z = pz;
+        objectForm.rotation.x = rx;
+        objectForm.rotation.y = ry;
+        objectForm.rotation.z = rz;
+        objectForm.scale.x = sx;
+        objectForm.scale.y = sy;
+        objectForm.scale.z = sz;
+      },
+      { immediate: true, deep: true }
     );
 
     // 获取 core 引用
@@ -610,14 +642,16 @@ export default {
       const obj = selectedObject.value;
       const entityKey = obj?.userData?.entityKey;
       if (!entityKey) return;
+      const transformPayload = {
+        position: [objectForm.position.x, objectForm.position.y, objectForm.position.z],
+        rotation: [objectForm.rotation.x, objectForm.rotation.y, objectForm.rotation.z],
+        scale: [objectForm.scale.x, objectForm.scale.y, objectForm.scale.z],
+      };
+      store.setSelectedObjectTransform?.(transformPayload);
       store
         .updateEntity(
           entityKey,
-          {
-            position: [objectForm.position.x, objectForm.position.y, objectForm.position.z],
-            rotation: [objectForm.rotation.x, objectForm.rotation.y, objectForm.rotation.z],
-            scale: [objectForm.scale.x, objectForm.scale.y, objectForm.scale.z],
-          },
+          transformPayload,
           { description: '更新对象变换' }
         )
         .catch((err) => {
@@ -679,18 +713,20 @@ export default {
 }
 .row {
   display: grid;
-  grid-template-columns: 80px 1fr;
+  grid-template-columns: 80px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 6px 0;
 }
 .axis-inputs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  min-width: 0;
 }
 .axis-inputs :deep(.el-input-number) {
   width: 100%;
+  min-width: 0;
 }
 .colors {
   display: flex;

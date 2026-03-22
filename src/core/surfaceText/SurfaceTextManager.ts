@@ -6,6 +6,7 @@ import { surfaceIdentifier } from './SurfaceIdentifier';
 import { TextGeometryGenerator } from './TextGeometryGenerator';
 import { TextInputOverlay } from './TextInputOverlay';
 import { TextTransformControls } from './TextTransformControls';
+import TransformSession from '../objectSelection/TransformSession';
 
 /**
  * 表面文字管理器主控制器
@@ -25,6 +26,8 @@ export class SurfaceTextManager {
     this.inputOverlay = new TextInputOverlay(domElement);
     this.transformControls = new TextTransformControls(scene, camera, renderer);
     this.booleanOperator = new BooleanOperator();
+    this.transformSession = new TransformSession(scene as THREE.Scene);
+    this.textSelectionBoxHelper = null;
 
     // 射线投射器（用于独立的点击检测）
     this.raycaster = new THREE.Raycaster();
@@ -1177,11 +1180,13 @@ export class SurfaceTextManager {
     this.selectedTextId = textId;
     const textObject = this.textObjects.get(textId);
 
-    // 显示变换控制器
-    this.transformControls.attach(textObject.mesh);
+    // 变换中心默认使用文字 bbox center（不改文字原点）
+    this.refreshTextTransformSession(textObject);
 
     // 添加选择高亮效果
     this.addSelectionHighlight(textObject.mesh);
+    this.createTextSelectionBoxHelper(textObject.mesh);
+    this.refreshSelectedTextBoxHelper();
 
     console.log(`文字对象已选中: ${textId}`);
     this.emit('textSelected', textObject);
@@ -1203,9 +1208,11 @@ export class SurfaceTextManager {
 
     // 隐藏变换控制器
     this.transformControls.detach();
+    this.transformSession?.end?.();
 
     // 移除选择高亮效果
     this.removeSelectionHighlight(textObject.mesh);
+    this.removeTextSelectionBoxHelper();
 
     console.log(`文字对象已取消选中: ${this.selectedTextId}`);
     this.emit('textDeselected', textObject);
@@ -1247,6 +1254,66 @@ export class SurfaceTextManager {
       delete mesh.userData.originalMaterial;
       mesh.renderOrder = 0; // 恢复默认渲染顺序
     }
+  }
+
+  getCurrentTransformMode() {
+    const mode = this.transformControls?.getMode?.();
+    return ['translate', 'rotate', 'scale'].includes(mode) ? mode : 'translate';
+  }
+
+  refreshTextTransformSession(textObject = null) {
+    const selectedText =
+      textObject || (this.selectedTextId ? this.textObjects.get(this.selectedTextId) : null);
+    const mesh = selectedText?.mesh;
+    if (!mesh?.parent) {
+      this.transformSession?.end?.();
+      this.transformControls.detach();
+      return null;
+    }
+
+    const result = this.transformSession.begin([mesh], {
+      mode: this.getCurrentTransformMode(),
+    });
+    if (!result?.pivotHandle) {
+      this.transformControls.attach(mesh);
+      return null;
+    }
+
+    this.transformControls.attach(result.pivotHandle);
+    return result;
+  }
+
+  createTextSelectionBoxHelper(mesh) {
+    if (!mesh) return null;
+    this.removeTextSelectionBoxHelper();
+    const helper = new THREE.BoxHelper(mesh, 0x52c41a);
+    helper.name = '__text_selection_box_helper__';
+    helper.userData = {
+      ...(helper.userData || {}),
+      isHelper: true,
+      isTextSelectionHelper: true,
+    };
+    this.scene.add(helper);
+    this.textSelectionBoxHelper = helper;
+    return helper;
+  }
+
+  refreshSelectedTextBoxHelper() {
+    if (!this.textSelectionBoxHelper) return;
+    this.textSelectionBoxHelper.update();
+    this.textSelectionBoxHelper.updateMatrixWorld(true);
+  }
+
+  removeTextSelectionBoxHelper() {
+    const helper = this.textSelectionBoxHelper;
+    if (!helper) return;
+    if (helper.parent) {
+      helper.parent.remove(helper);
+    }
+    helper.geometry?.dispose?.();
+    const materials = Array.isArray(helper.material) ? helper.material : [helper.material];
+    materials.forEach((material) => material?.dispose?.());
+    this.textSelectionBoxHelper = null;
   }
 
   /**
@@ -1429,6 +1496,11 @@ export class SurfaceTextManager {
       textObject.geometry = newGeometry;
       textObject.content = newContent;
       textObject.modified = Date.now();
+      if (this.selectedTextId === textId) {
+        this.refreshTextTransformSession(textObject);
+        this.createTextSelectionBoxHelper(textObject.mesh);
+        this.refreshSelectedTextBoxHelper();
+      }
 
       console.log(`文字内容已更新: ${textId}`, { oldContent, newContent });
       this.emit('textContentUpdated', { textObject, oldContent, newContent });
@@ -1468,6 +1540,11 @@ export class SurfaceTextManager {
       textObject.mesh.geometry = newGeometry;
       textObject.geometry = newGeometry;
       textObject.modified = Date.now();
+      if (this.selectedTextId === textId) {
+        this.refreshTextTransformSession(textObject);
+        this.createTextSelectionBoxHelper(textObject.mesh);
+        this.refreshSelectedTextBoxHelper();
+      }
 
       console.log(`文字配置已更新: ${textId}`, { oldConfig, newConfig: textObject.config });
       this.emit('textConfigUpdated', { textObject, oldConfig, newConfig: textObject.config });
@@ -2159,9 +2236,17 @@ export class SurfaceTextManager {
     this.transformControls.on('change', () => {
       if (this.selectedTextId) {
         const textObject = this.textObjects.get(this.selectedTextId);
+        this.transformSession?.updateFromPivot?.();
+        this.refreshSelectedTextBoxHelper();
         textObject.modified = Date.now();
         this.emit('textTransformed', textObject);
       }
+    });
+
+    this.transformControls.on('objectChange', () => {
+      if (!this.selectedTextId) return;
+      this.transformSession?.updateFromPivot?.();
+      this.refreshSelectedTextBoxHelper();
     });
 
     // 监听拖动开始事件
@@ -2172,10 +2257,13 @@ export class SurfaceTextManager {
         const textObject = this.textObjects.get(this.selectedTextId);
 
         if (isDragging) {
+          this.transformSession?.beginInteraction?.(this.getCurrentTransformMode());
           // 开始拖动
           console.log('开始拖动文字');
           this.emit('dragStart', textObject);
         } else {
+          this.transformSession?.finishInteraction?.(true);
+          this.refreshTextTransformSession(textObject);
           // 结束拖动
           console.log('结束拖动文字');
           this.emit('dragEnd', textObject);
@@ -2392,6 +2480,8 @@ export class SurfaceTextManager {
   async destroy() {
     // 禁用点击监听
     this.disableClickListener();
+    this.removeTextSelectionBoxHelper();
+    this.transformSession?.end?.();
 
     // 禁用文字模式
     this.disableTextMode();
