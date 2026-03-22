@@ -3,7 +3,7 @@
  * 在指定位置显示文字输入框
  */
 export class TextInputOverlay {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor(domElement) {
     this.domElement = domElement;
     this.overlay = null;
@@ -362,7 +362,7 @@ export class TextInputOverlay {
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
-   * @param {...unknown} args - 事件参数
+   * @param {...CoreValue} args - 事件参数
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;

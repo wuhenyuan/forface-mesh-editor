@@ -8,7 +8,7 @@ export type EntityTransform = {
 
 export type ResolveTransformOptions = {
   baseTransform?: EntityTransform | null;
-  patch?: Record<string, any> | null;
+  patch?: Record<string, CoreValue> | null;
   entity?: EntityLike | null;
 };
 
@@ -18,17 +18,17 @@ export type EntityLike = {
   rotation?: number[];
   scale?: number[];
   color?: string | number;
-  boolean?: unknown;
+  boolean?: CoreValue;
   content?: string;
-  resource?: unknown;
-  size?: unknown;
-  depth?: unknown;
-  direction?: unknown;
-  letterSpacing?: unknown;
-  curvingStrength?: unknown;
-  startAngle?: unknown;
-  textType?: unknown;
-  [key: string]: unknown;
+  resource?: CoreValue;
+  size?: CoreValue;
+  depth?: CoreValue;
+  direction?: CoreValue;
+  letterSpacing?: CoreValue;
+  curvingStrength?: CoreValue;
+  startAngle?: CoreValue;
+  textType?: CoreValue;
+  [key: string]: CoreValue;
 };
 
 type ColorMaterial = THREE.Material & {
@@ -68,9 +68,9 @@ export class EntityObject extends THREE.Object3D {
   }
 
   async loadNode(
-    loadModel: (source: unknown, options?: Record<string, any>) => Promise<Record<string, any>>,
-    source: unknown,
-    options: Record<string, any> = {}
+    loadModel: (source: CoreValue, options?: Record<string, CoreValue>) => Promise<Record<string, CoreValue>>,
+    source: CoreValue,
+    options: Record<string, CoreValue> = {}
   ) {
     const result = await loadModel(source, options);
     const model = result?.model as THREE.Object3D | undefined;
@@ -112,7 +112,7 @@ export class EntityObject extends THREE.Object3D {
     this.updateMatrixWorld(true);
   }
 
-  getTransformFromPatch(patch?: Record<string, any> | null): EntityTransform | null {
+  getTransformFromPatch(patch?: Record<string, CoreValue> | null): EntityTransform | null {
     if (!patch) return null;
     if (patch.transform && typeof patch.transform === 'object') {
       return patch.transform as EntityTransform;

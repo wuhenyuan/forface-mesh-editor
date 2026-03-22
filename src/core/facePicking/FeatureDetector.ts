@@ -4,7 +4,7 @@ import * as THREE from 'three';
  * 特征检测器 - 基于原始模型预处理识别平面和圆柱面特征
  */
 export class FeatureDetector {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
 
   constructor() {
     // 特征检测参数
@@ -209,7 +209,7 @@ export class FeatureDetector {
       if (processed.has(i)) continue;
 
       const seedTriangle = triangles[i];
-      const plane: unknown = this.growPlane(triangles, i, processed);
+      const plane: CoreValue = this.growPlane(triangles, i, processed);
 
       if (plane.triangleIndices.length >= this.config.minPlaneTriangles) {
         plane.id = `plane_${planes.length}`;
@@ -329,7 +329,7 @@ export class FeatureDetector {
     for (let i = 0; i < triangles.length; i++) {
       if (processed.has(i)) continue;
 
-      const cylinder: unknown = this.growCylinder(triangles, i, processed);
+      const cylinder: CoreValue = this.growCylinder(triangles, i, processed);
 
       if (cylinder.triangleIndices.length >= this.config.minCylinderTriangles) {
         cylinder.id = `cylinder_${cylinders.length}`;

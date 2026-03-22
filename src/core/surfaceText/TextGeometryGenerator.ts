@@ -9,7 +9,7 @@ import { CSGCylinderText } from './CSGCylinderText';
  * 负责生成3D文字几何体
  */
 export class TextGeometryGenerator {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor() {
     this.fontLoader = new FontLoader();
     this.loadedFonts = new Map(); // 字体缓存
@@ -370,7 +370,7 @@ export class TextGeometryGenerator {
    * @param {Object} config - 配置参数
    * @returns {THREE.BoxGeometry} 备用几何体
    */
-  createFallbackGeometry(text = '', config: Record<string, any> = {}) {
+  createFallbackGeometry(text = '', config: Record<string, CoreValue> = {}) {
     console.warn(`使用备用几何体替代文字: "${text}"`);
 
     // 创建一个简单的盒子几何体作为占位符

@@ -368,4 +368,3 @@ export const useEditorStore = () => ({
 export { state, getters, actions };
 
 export default { state, getters, actions, useEditorStore };
-

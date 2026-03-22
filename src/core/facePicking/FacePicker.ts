@@ -6,7 +6,7 @@ import { EventHandler } from './EventHandler';
 import { debugLogger } from './DebugLogger';
 
 type SelectionMode = 'single' | 'multi';
-type EventCallback = (...args: unknown[]) => void;
+type EventCallback = (...args: CoreValue[]) => void;
 
 type FaceInfo = {
   id?: string;
@@ -15,7 +15,7 @@ type FaceInfo = {
   point?: THREE.Vector3;
   distance?: number;
   area?: number;
-  [key: string]: unknown;
+  [key: string]: CoreValue;
 };
 
 type SelectionSummary = {
@@ -24,7 +24,7 @@ type SelectionSummary = {
   hasSelection: boolean;
   hasHover: boolean;
   faceIds: string[];
-  [key: string]: unknown;
+  [key: string]: CoreValue;
 };
 
 type PerformanceRecord = {
@@ -83,9 +83,12 @@ type PerformanceStats = {
 type RaycastManagerLike = {
   screenToNDC: (clientX: number, clientY: number, rect: DOMRect) => THREE.Vector2;
   intersectFaces: (mousePosition: THREE.Vector2, meshes: THREE.Mesh[]) => FaceInfo | null;
-  intersectFacesWithDepthSorting: (mousePosition: THREE.Vector2, meshes: THREE.Mesh[]) => FaceInfo[];
+  intersectFacesWithDepthSorting: (
+    mousePosition: THREE.Vector2,
+    meshes: THREE.Mesh[]
+  ) => FaceInfo[];
   intersectSingleMesh: (mousePosition: THREE.Vector2, mesh: THREE.Mesh) => FaceInfo | null;
-  buildFaceInfo: (intersection: Record<string, unknown>) => FaceInfo | null;
+  buildFaceInfo: (intersection: Record<string, CoreValue>) => FaceInfo | null;
 };
 
 type SelectionManagerLike = {
@@ -99,8 +102,8 @@ type SelectionManagerLike = {
   undo: () => boolean;
   redo: () => boolean;
   getSelectionMode: () => SelectionMode;
-  on: (eventName: string, callback: (...args: unknown[]) => void) => void;
-  getSelectionStats: () => Record<string, unknown>;
+  on: (eventName: string, callback: (...args: CoreValue[]) => void) => void;
+  getSelectionStats: () => Record<string, CoreValue>;
 };
 
 type HighlightRendererLike = {
@@ -108,9 +111,14 @@ type HighlightRendererLike = {
   removeHighlight: (mesh: THREE.Mesh, faceIndex: number, isHover?: boolean) => boolean;
   hideHoverEffect: (mesh?: THREE.Mesh | null, faceIndex?: number | null) => void;
   showHoverEffect: (mesh: THREE.Mesh, faceIndex: number) => boolean;
-  highlightFace: (mesh: THREE.Mesh, faceIndex: number, color?: number | null, isHover?: boolean) => boolean;
-  updateColors: (colors: Record<string, unknown>) => void;
-  getHighlightStats: () => Record<string, unknown>;
+  highlightFace: (
+    mesh: THREE.Mesh,
+    faceIndex: number,
+    color?: number | null,
+    isHover?: boolean
+  ) => boolean;
+  updateColors: (colors: Record<string, CoreValue>) => void;
+  getHighlightStats: () => Record<string, CoreValue>;
   destroy: () => void;
 };
 
@@ -118,7 +126,7 @@ type EventHandlerLike = {
   enable: () => void;
   disable: () => void;
   setDragThreshold: (threshold: number) => void;
-  getState: () => Record<string, unknown>;
+  getState: () => Record<string, CoreValue>;
 };
 
 export class FacePicker {
@@ -151,10 +159,10 @@ export class FacePicker {
     this.renderer = renderer;
     this.domElement = domElement;
 
-    this.raycastManager = new RaycastManager(camera) as unknown as RaycastManagerLike;
-    this.selectionManager = new SelectionManager() as unknown as SelectionManagerLike;
-    this.highlightRenderer = new HighlightRenderer(scene) as unknown as HighlightRendererLike;
-    this.eventHandler = new EventHandler(this, domElement) as unknown as EventHandlerLike;
+    this.raycastManager = new RaycastManager(camera) as CoreValue as RaycastManagerLike;
+    this.selectionManager = new SelectionManager() as CoreValue as SelectionManagerLike;
+    this.highlightRenderer = new HighlightRenderer(scene) as CoreValue as HighlightRendererLike;
+    this.eventHandler = new EventHandler(this, domElement) as CoreValue as EventHandlerLike;
     this.eventListeners = new Map();
 
     this.enabled = false;
@@ -193,23 +201,21 @@ export class FacePicker {
     this.setupSelectionEvents();
   }
 
-  private _toError(error: unknown): Error {
+  private _toError(error: CoreValue): Error {
     if (error instanceof Error) return error;
     return new Error(typeof error === 'string' ? error : 'Unknown error');
   }
 
-  private _asFaceInfo(value: unknown): FaceInfo | null {
+  private _asFaceInfo(value: CoreValue): FaceInfo | null {
     if (!value || typeof value !== 'object') return null;
     const faceInfo = value as FaceInfo;
     if (!faceInfo.mesh || typeof faceInfo.faceIndex !== 'number') return null;
     return faceInfo;
   }
 
-  private _asFaceInfoArray(value: unknown): FaceInfo[] {
+  private _asFaceInfoArray(value: CoreValue): FaceInfo[] {
     if (!Array.isArray(value)) return [];
-    return value
-      .map((item) => this._asFaceInfo(item))
-      .filter((item): item is FaceInfo => !!item);
+    return value.map((item) => this._asFaceInfo(item)).filter((item): item is FaceInfo => !!item);
   }
 
   enable() {
@@ -250,7 +256,11 @@ export class FacePicker {
     }
   }
 
-  selectFace(faceInfo: FaceInfo | null | undefined, additive = false, originalEvent: MouseEvent | null = null) {
+  selectFace(
+    faceInfo: FaceInfo | null | undefined,
+    additive = false,
+    originalEvent: MouseEvent | null = null
+  ) {
     if (!faceInfo) return;
 
     const monitor = debugLogger.createPerformanceMonitor('selectFace');
@@ -489,7 +499,7 @@ export class FacePicker {
   }
 
   setupSelectionEvents() {
-    this.selectionManager.on('faceAdded', (faceInfo: unknown) => {
+    this.selectionManager.on('faceAdded', (faceInfo: CoreValue) => {
       const face = this._asFaceInfo(faceInfo);
       if (!face) return;
       this.highlightRenderer.highlightFace(face.mesh, face.faceIndex);
@@ -503,32 +513,32 @@ export class FacePicker {
       }
     });
 
-    this.selectionManager.on('faceRemoved', (faceInfo: unknown) => {
+    this.selectionManager.on('faceRemoved', (faceInfo: CoreValue) => {
       const face = this._asFaceInfo(faceInfo);
       if (!face) return;
       this.highlightRenderer.removeHighlight(face.mesh, face.faceIndex);
     });
 
-    this.selectionManager.on('selectionCleared', (clearedFaces: unknown) => {
+    this.selectionManager.on('selectionCleared', (clearedFaces: CoreValue) => {
       this._asFaceInfoArray(clearedFaces).forEach((face) => {
         this.highlightRenderer.removeHighlight(face.mesh, face.faceIndex);
       });
     });
 
-    this.selectionManager.on('multipleFacesAdded', (faceInfos: unknown) => {
+    this.selectionManager.on('multipleFacesAdded', (faceInfos: CoreValue) => {
       this._asFaceInfoArray(faceInfos).forEach((face) => {
         this.highlightRenderer.highlightFace(face.mesh, face.faceIndex);
       });
     });
 
-    this.selectionManager.on('multipleFacesRemoved', (faceInfos: unknown) => {
+    this.selectionManager.on('multipleFacesRemoved', (faceInfos: CoreValue) => {
       this._asFaceInfoArray(faceInfos).forEach((face) => {
         this.highlightRenderer.removeHighlight(face.mesh, face.faceIndex);
       });
     });
   }
 
-  setHighlightColors(colors: Record<string, unknown>) {
+  setHighlightColors(colors: Record<string, CoreValue>) {
     this.highlightRenderer.updateColors(colors);
     const selectedFaces = this.selectionManager.getAll();
     selectedFaces.forEach((face) => {
@@ -555,7 +565,7 @@ export class FacePicker {
     if (index !== -1) listeners.splice(index, 1);
   }
 
-  emit(eventName: string, ...args: unknown[]) {
+  emit(eventName: string, ...args: CoreValue[]) {
     const listeners = this.eventListeners.get(eventName);
     if (!listeners) return;
     listeners.forEach((callback) => {
@@ -649,7 +659,7 @@ export class FacePicker {
     }
   }
 
-  handleError(context: string, error: unknown) {
+  handleError(context: string, error: CoreValue) {
     const parsed = this._toError(error);
 
     this.errorHandler.lastError = {

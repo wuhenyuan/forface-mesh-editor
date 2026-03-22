@@ -98,7 +98,8 @@ export default {
 
     const getLoadConfig = (config, originPath) => {
       if (config && typeof config === 'object') return config;
-      if (typeof originPath === 'string' && originPath) return buildConfigFromOriginPath(originPath);
+      if (typeof originPath === 'string' && originPath)
+        return buildConfigFromOriginPath(originPath);
       return null;
     };
 

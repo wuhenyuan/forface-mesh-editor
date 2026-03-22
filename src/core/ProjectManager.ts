@@ -12,12 +12,12 @@ interface ProjectInfo {
   version: number;
 }
 
-type ProjectManagerCallback = ((event: unknown) => void) | null;
+type ProjectManagerCallback = ((event: CoreValue) => void) | null;
 
 type PackageObjectUrlEntry = string | { url: string; file?: File | Blob };
 
 export class ProjectManager {
-  config: unknown;
+  config: CoreValue;
   projectInfo: ProjectInfo;
   _isDirty: boolean;
   onChange: ProjectManagerCallback;
@@ -55,7 +55,7 @@ export class ProjectManager {
    * @param {Object} options - 项目选项
    * @returns {Object} 项目配置
    */
-  createProject(options: Record<string, any> = {}) {
+  createProject(options: Record<string, CoreValue> = {}) {
     const { name = '未命名项目', originModelPath = '' } = options;
 
     // 重置为默认配置
@@ -91,7 +91,7 @@ export class ProjectManager {
     };
   }
 
-  _getPersistedProjectData(configOverride?: unknown) {
+  _getPersistedProjectData(configOverride?: CoreValue) {
     return {
       projectInfo: { ...this.projectInfo },
       config: serializeConfig(configOverride || this.config),
@@ -156,7 +156,7 @@ export class ProjectManager {
    * @param {Object} data - 项目数据
    * @returns {Object} 加载后的项目数据
    */
-  loadProject(data: unknown, options: Record<string, any> = {}) {
+  loadProject(data: CoreValue, options: Record<string, CoreValue> = {}) {
     const source = data && typeof data === 'object' ? data : null;
     if (!source) throw new Error('无效的项目数据');
 
@@ -221,7 +221,7 @@ export class ProjectManager {
 
       reader.onload = (e) => {
         try {
-          const result = (e as unknown)?.target?.result;
+          const result = (e as CoreValue)?.target?.result;
           if (typeof result !== 'string') throw new Error('无效的项目文件');
           const data = JSON.parse(result);
           const inferredName = file?.name ? this._stripExt(file.name) : undefined;
@@ -254,7 +254,7 @@ export class ProjectManager {
    * @param {string} [options.projectFileName='project.json'] ZIP 内配置文件名
    * @param {RequestInit} [options.fetchOptions] fetch 选项（如 credentials/headers）
    */
-  async exportProjectPackage(options: Record<string, any> = {}) {
+  async exportProjectPackage(options: Record<string, CoreValue> = {}) {
     const {
       filename = this.getProjectName() || 'project',
       includeModels = true,
@@ -331,7 +331,7 @@ export class ProjectManager {
    * - 会把所有引用到的模型（含 *.zip 模型）打包进 zip
    * - project.json 使用 config2 的 models[]/texts[] 结构，并把 url 统一改成相对路径（从 zip 加载）
    */
-  async exportLocalFullPackage(options: Record<string, any> = {}) {
+  async exportLocalFullPackage(options: Record<string, CoreValue> = {}) {
     return await this.exportProjectPackage({
       ...options,
       includeModels: true,
@@ -696,10 +696,7 @@ export class ProjectManager {
     return cleaned.replace(/\\/g, '/').replace(/^\.\//, '');
   }
 
-  async _fetchAsBlob(
-    source: unknown,
-    context: { fetchOptions?: RequestInit; modelKey?: string } = {}
-  ) {
+  async _fetchAsBlob(source: CoreValue, context: { fetchOptions?: RequestInit; modelKey?: string } = {}) {
     if (!source) throw new Error('模型路径为空，无法打包');
     if (source instanceof Blob) return source;
     if (typeof source !== 'string') throw new Error('不支持的模型源类型，无法打包');
@@ -751,7 +748,7 @@ export class ProjectManager {
   _buildConfig2ForPackage({
     packageConfig,
     packagedPathByKey,
-  }: { packageConfig?: unknown; packagedPathByKey?: Map<string, string> } = {}) {
+  }: { packageConfig?: CoreValue; packagedPathByKey?: Map<string, string> } = {}) {
     const cfg = packageConfig && typeof packageConfig === 'object' ? packageConfig : {};
     const metadata = cfg.metadata && typeof cfg.metadata === 'object' ? cfg.metadata : {};
 
@@ -820,7 +817,7 @@ export class ProjectManager {
   _resolvePackageModelKeys(models, includeModels) {
     if (!models || typeof models !== 'object') return [];
 
-    const modelsObj = models as Record<string, any>;
+    const modelsObj = models as Record<string, CoreValue>;
 
     if (includeModels === false) return [];
 

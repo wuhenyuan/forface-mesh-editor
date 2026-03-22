@@ -1,8 +1,8 @@
 import { CompositeCommand } from './CompositeCommand';
 
 export class HistoryManager {
-  [key: string]: unknown;
-  constructor(options: Record<string, any> = {}) {
+  [key: string]: CoreValue;
+  constructor(options: Record<string, CoreValue> = {}) {
     const { maxSize = 50, onChange = null } = options;
 
     this.undoStack = [];
@@ -23,7 +23,7 @@ export class HistoryManager {
     this._onChange(this.getSnapshot());
   }
 
-  setOnChange(handler: ((snapshot: Record<string, any>) => void) | null) {
+  setOnChange(handler: ((snapshot: Record<string, CoreValue>) => void) | null) {
     this._onChange = typeof handler === 'function' ? handler : null;
     this._notify();
   }

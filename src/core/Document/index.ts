@@ -11,15 +11,15 @@ import { normalizeConfig } from '../../../config/config';
 export type { DocumentEventBus } from './EventBus';
 
 export interface DocumentConfig {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
 }
 
 export type DocumentAssetSource = Blob | File | string;
 
 export interface DocumentModelSource {
   source: DocumentAssetSource;
-  loaderOptions?: Record<string, any>;
-  visualOptions?: Record<string, any>;
+  loaderOptions?: Record<string, CoreValue>;
+  visualOptions?: Record<string, CoreValue>;
   transform?: DocumentTransform;
 }
 
@@ -35,8 +35,8 @@ export interface DocumentTransform {
 
 export interface DocumentEntityPatch {
   source?: DocumentAssetSource;
-  loaderOptions?: Record<string, any>;
-  visualOptions?: Record<string, any>;
+  loaderOptions?: Record<string, CoreValue>;
+  visualOptions?: Record<string, CoreValue>;
   transform?: DocumentTransform;
   resource?: DocumentAssetSource;
   position?: [number, number, number];
@@ -47,7 +47,7 @@ export interface DocumentEntityPatch {
   content?: string;
   size?: number;
   depth?: number;
-  meta?: Record<string, any>;
+  meta?: Record<string, CoreValue>;
   boolean?: string;
 }
 
@@ -208,7 +208,7 @@ export default class Document {
     };
   }
 
-  load(config: Record<string, any> = {}): DocumentData {
+  load(config: Record<string, CoreValue> = {}): DocumentData {
     this.clear();
 
     const normalized = this._normalizeConfigForEntities(config);
@@ -254,7 +254,7 @@ export default class Document {
   private async _loadFolder(
     zip: JSZip,
     folderName: string,
-    targetMap: Map<string, unknown>,
+    targetMap: Map<string, CoreValue>,
     wrapSource: boolean
   ): Promise<void> {
     const folderPrefix = `${folderName}/`;
@@ -300,8 +300,8 @@ export default class Document {
     }
   }
 
-  private _normalizeConfigForEntities(config: Record<string, any>) {
-    const source: Record<string, any> = config && typeof config === 'object' ? { ...config } : {};
+  private _normalizeConfigForEntities(config: Record<string, CoreValue>) {
+    const source: Record<string, CoreValue> = config && typeof config === 'object' ? { ...config } : {};
 
     if (!Array.isArray(source.features) && Array.isArray(source.feature)) {
       source.features = source.feature;
@@ -314,24 +314,24 @@ export default class Document {
     return normalizeConfig(source);
   }
 
-  private _normalizeFeatureList(features: unknown[]) {
+  private _normalizeFeatureList(features: CoreValue[]) {
     return features.map((feature, index) => {
       if (!feature || typeof feature !== 'object') return feature;
-      const featureRecord = feature as Record<string, unknown>;
+      const featureRecord = feature as Record<string, CoreValue>;
       if (featureRecord.payload && typeof featureRecord.payload === 'object') return featureRecord;
 
       const kind = featureRecord.kind || featureRecord.type;
       if (kind === 'model') {
-        return this._normalizeModelFeature(featureRecord as Record<string, any>, index);
+        return this._normalizeModelFeature(featureRecord as Record<string, CoreValue>, index);
       }
       if (kind === 'text') {
-        return this._normalizeTextFeature(featureRecord as Record<string, any>, index);
+        return this._normalizeTextFeature(featureRecord as Record<string, CoreValue>, index);
       }
       return featureRecord;
     });
   }
 
-  private _decomposeMatrix(matrix: unknown) {
+  private _decomposeMatrix(matrix: CoreValue) {
     if (!Array.isArray(matrix) || matrix.length !== 16) return null;
     const mat = new THREE.Matrix4().fromArray(matrix);
     const position = new THREE.Vector3();
@@ -346,7 +346,7 @@ export default class Document {
     };
   }
 
-  private _normalizeModelFeature(feature: Record<string, any>, index: number) {
+  private _normalizeModelFeature(feature: Record<string, CoreValue>, index: number) {
     const key =
       (typeof feature.key === 'string' && feature.key) ||
       (typeof feature.id === 'string' && feature.id) ||
@@ -359,7 +359,7 @@ export default class Document {
 
     const transform = this._decomposeMatrix(feature.matrix);
 
-    const config: Record<string, any> = {};
+    const config: Record<string, CoreValue> = {};
     if (transform?.position || Array.isArray(feature.position)) {
       config.position = transform?.position || feature.position;
     }
@@ -383,13 +383,13 @@ export default class Document {
     };
   }
 
-  private _normalizeTextFeature(feature: Record<string, any>, index: number) {
+  private _normalizeTextFeature(feature: Record<string, CoreValue>, index: number) {
     const id =
       (typeof feature.id === 'string' && feature.id) ||
       (typeof feature.key === 'string' && feature.key) ||
       `text_${index + 1}`;
 
-    const payload: Record<string, any> = {};
+    const payload: Record<string, CoreValue> = {};
     const transform = this._decomposeMatrix(feature.matrix);
     if (typeof feature.text === 'string') payload.text = feature.text;
     if (typeof feature.content === 'string') payload.text = feature.content;
@@ -419,18 +419,18 @@ export default class Document {
     };
   }
 
-  private _buildEntitiesFromNormalized(config: Record<string, any>) {
+  private _buildEntitiesFromNormalized(config: Record<string, CoreValue>) {
     const entities: EntityProps[] = [];
 
     const models = config?.models && typeof config.models === 'object' ? config.models : {};
     for (const [key, model] of Object.entries(models)) {
-      const modelRecord = model as Record<string, unknown>;
+      const modelRecord = model as Record<string, CoreValue>;
       const path = typeof modelRecord.path === 'string' ? modelRecord.path : '';
       if (!path) continue;
 
       const modelConfig =
         modelRecord.config && typeof modelRecord.config === 'object'
-          ? (modelRecord.config as Record<string, unknown>)
+          ? (modelRecord.config as Record<string, CoreValue>)
           : {};
 
       const position = this._toVector3(modelConfig.position);
@@ -438,7 +438,7 @@ export default class Document {
       const scale = this._toVector3(modelConfig.scale);
       const meta =
         modelConfig.meta && typeof modelConfig.meta === 'object'
-          ? (modelConfig.meta as Record<string, any>)
+          ? (modelConfig.meta as Record<string, CoreValue>)
           : undefined;
       const booleanOp = typeof modelConfig.boolean === 'string' ? modelConfig.boolean : undefined;
 
@@ -457,15 +457,15 @@ export default class Document {
     const texts = Array.isArray(config?.texts) ? config.texts : [];
     for (const entry of texts) {
       if (!entry || typeof entry !== 'object') continue;
-      const textEntry = entry as Record<string, unknown>;
+      const textEntry = entry as Record<string, CoreValue>;
 
       const id =
         (typeof textEntry.id === 'string' && textEntry.id) ||
         (typeof textEntry.index === 'string' && textEntry.index);
       if (!id) continue;
 
-      const textMode = this._resolveTextMode(textEntry as Record<string, any>);
-      const font = this._resolveTextFont(textEntry as Record<string, any>, textMode);
+      const textMode = this._resolveTextMode(textEntry as Record<string, CoreValue>);
+      const font = this._resolveTextFont(textEntry as Record<string, CoreValue>, textMode);
       const content =
         typeof textEntry.text === 'string'
           ? textEntry.text
@@ -474,9 +474,9 @@ export default class Document {
             : '';
 
       const position = this._toVector3(textEntry.position);
-      const rotation = this._resolveTextRotation(textEntry as Record<string, any>);
+      const rotation = this._resolveTextRotation(textEntry as Record<string, CoreValue>);
       const scale = this._toVector3(textEntry.scale);
-      const meta: Record<string, any> = {};
+      const meta: Record<string, CoreValue> = {};
       if (textEntry.wrap !== undefined) meta.wrap = textEntry.wrap;
       if (textEntry.attachmentSurface !== undefined) {
         meta.attachmentSurface = textEntry.attachmentSurface;
@@ -511,7 +511,7 @@ export default class Document {
     return entities;
   }
 
-  private _resolveTextMode(entry: Record<string, any>) {
+  private _resolveTextMode(entry: Record<string, CoreValue>) {
     const raw =
       (typeof entry.effect === 'string' && entry.effect) ||
       (typeof entry.mode === 'string' && entry.mode) ||
@@ -530,7 +530,7 @@ export default class Document {
     return undefined;
   }
 
-  private _resolveTextFont(entry: Record<string, any>, textMode?: string) {
+  private _resolveTextFont(entry: Record<string, CoreValue>, textMode?: string) {
     if (typeof entry.type === 'string' && entry.type) return entry.type;
     if (typeof entry.font === 'string' && entry.font) return entry.font;
 
@@ -544,7 +544,7 @@ export default class Document {
     return undefined;
   }
 
-  private _resolveTextRotation(entry: Record<string, any>) {
+  private _resolveTextRotation(entry: Record<string, CoreValue>) {
     const fromRotate = this._toVector3(entry.rotate);
     if (fromRotate) return fromRotate;
     const fromRotation = this._toVector3(entry.rotation);
@@ -552,7 +552,7 @@ export default class Document {
     return undefined;
   }
 
-  private _toVector3(value: unknown): [number, number, number] | undefined {
+  private _toVector3(value: CoreValue): [number, number, number] | undefined {
     if (!Array.isArray(value) || value.length < 3) return undefined;
     const [x, y, z] = value;
     if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return undefined;
@@ -571,7 +571,7 @@ export default class Document {
     return value instanceof Blob;
   }
 
-  private _isSourceContainer(value: unknown): value is SourceContainer {
+  private _isSourceContainer(value: CoreValue): value is SourceContainer {
     if (!value || typeof value !== 'object') return false;
     return 'source' in value;
   }
@@ -681,7 +681,7 @@ export default class Document {
     return modelPatch;
   }
 
-  addModelSource(key: string, source: DocumentAssetSource, options: Record<string, any> = {}) {
+  addModelSource(key: string, source: DocumentAssetSource, options: Record<string, CoreValue> = {}) {
     const entity = new ModelEntity({
       id: key,
       type: 'model',
@@ -698,7 +698,7 @@ export default class Document {
   addEntity(
     keyOrEntity: string | EntityProps,
     source?: DocumentAssetSource,
-    options: Record<string, any> = {}
+    options: Record<string, CoreValue> = {}
   ) {
     if (typeof keyOrEntity === 'string') {
       return this.addModelSource(keyOrEntity, source as DocumentAssetSource, options);
@@ -802,7 +802,7 @@ export default class Document {
     this._objectUrls.delete(cacheKey);
   }
 
-  async exportDocument(options: Record<string, any> = {}) {
+  async exportDocument(options: Record<string, CoreValue> = {}) {
     const {
       filename = 'document',
       includeModels = true,
@@ -842,7 +842,7 @@ export default class Document {
   async exportModel(
     objects: THREE.Object3D | THREE.Object3D[],
     format: string,
-    options: Record<string, any> = {}
+    options: Record<string, CoreValue> = {}
   ) {
     return this.exportManager.export(objects, format, options);
   }
@@ -851,7 +851,7 @@ export default class Document {
     objects: THREE.Object3D | THREE.Object3D[],
     format: string,
     filename: string = 'model',
-    options: Record<string, any> = {}
+    options: Record<string, CoreValue> = {}
   ) {
     await this.exportManager.exportAndDownload(objects, format, filename, options);
     this.events.emit('modelExported', { format, filename });
@@ -865,7 +865,7 @@ export default class Document {
     return this.projectManager;
   }
 
-  createProject(options: Record<string, any> = {}) {
+  createProject(options: Record<string, CoreValue> = {}) {
     return this.projectManager.createProject(options);
   }
 
@@ -881,14 +881,14 @@ export default class Document {
     return this.projectManager.exportProjectFile(filename);
   }
 
-  async exportProjectPackage(filename: string, options: Record<string, any> = {}) {
+  async exportProjectPackage(filename: string, options: Record<string, CoreValue> = {}) {
     return await this.projectManager.exportProjectPackage({
       filename,
       ...options,
     });
   }
 
-  async exportLocalFullPackage(filename: string, options: Record<string, any> = {}) {
+  async exportLocalFullPackage(filename: string, options: Record<string, CoreValue> = {}) {
     return await this.projectManager.exportLocalFullPackage({
       filename,
       ...options,

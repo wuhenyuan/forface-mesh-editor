@@ -4,7 +4,9 @@ import { Brush } from 'three-bvh-csg';
 
 export type ModelBooleanOp = 'union' | 'subtract' | 'intersect' | 'difference';
 
-export function normalizeModelBooleanOp(value: unknown): ModelBooleanOp | null {
+export type ModelBooleanOpInput = ModelBooleanOp | 'add' | 'addition' | 'merge' | 'substract' | 'subtraction' | 'minus' | 'intersection' | 'diff' | 'xor' | string | null | undefined;
+
+export function normalizeModelBooleanOp(value: ModelBooleanOpInput): ModelBooleanOp | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
   if (!normalized) return null;
@@ -51,10 +53,15 @@ function ensureAttribute(
   vertexCount: number
 ) {
   if (geometry.getAttribute(name)) return;
-  geometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(vertexCount * itemSize), itemSize));
+  geometry.setAttribute(
+    name,
+    new THREE.BufferAttribute(new Float32Array(vertexCount * itemSize), itemSize)
+  );
 }
 
-function buildSubGeometriesFromMesh(mesh: THREE.Mesh): Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }> {
+function buildSubGeometriesFromMesh(
+  mesh: THREE.Mesh
+): Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }> {
   const sourceGeometry = mesh.geometry as THREE.BufferGeometry | undefined;
   if (!sourceGeometry) return [];
 
@@ -91,7 +98,9 @@ function buildSubGeometriesFromMesh(mesh: THREE.Mesh): Array<{ geometry: THREE.B
   for (const group of groups) {
     const start = typeof group.start === 'number' ? group.start : 0;
     const rawCount = typeof group.count === 'number' ? group.count : vertexCount - start;
-    const count = Number.isFinite(rawCount) ? Math.max(0, Math.min(rawCount, vertexCount - start)) : vertexCount - start;
+    const count = Number.isFinite(rawCount)
+      ? Math.max(0, Math.min(rawCount, vertexCount - start))
+      : vertexCount - start;
     if (count <= 0 || start < 0 || start >= vertexCount) continue;
 
     const materialIndex = typeof group.materialIndex === 'number' ? group.materialIndex : 0;

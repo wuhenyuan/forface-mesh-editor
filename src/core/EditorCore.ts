@@ -8,9 +8,9 @@ import { UpdateEntityCommand } from './history/UpdateEntityCommand';
 import { RemoveEntityCommand } from './history/RemoveEntityCommand';
 import type { EntityProps } from './Document/Entity';
 
-export type EditorCoreEvents = Record<string, any>;
+export type EditorCoreEvents = Record<string, CoreValue>;
 type ExecutableCommand = {
-  execute?: () => unknown;
+  execute?: () => CoreValue;
 };
 type RemoveMeshTarget = Parameters<EditorDocumentVisual['removeMesh']>[0];
 type ExportSceneTarget = Parameters<EditorDocumentVisual['exportScene']>[2];
@@ -22,7 +22,7 @@ export default class EditorCore {
   emitter: CoreEmitter<EditorCoreEvents>;
   sceneManager: EditorSceneManager;
 
-  constructor(dom: HTMLElement, options: Record<string, any> = {}) {
+  constructor(dom: HTMLElement, options: Record<string, CoreValue> = {}) {
     const { history, ...viewerOptions } = options;
     this.emitter = new CoreEmitter<EditorCoreEvents>();
     this.assetsManager = new AssetsManager();
@@ -31,11 +31,11 @@ export default class EditorCore {
       ...viewerOptions,
       events: this.emitter,
       entityHandler: {
-        addEntity: (entity: EntityProps, options: Record<string, any> = {}) =>
+        addEntity: (entity: EntityProps, options: Record<string, CoreValue> = {}) =>
           this.addEntity(entity, options),
-        updateEntity: (id: string, patch: Record<string, any>, options: Record<string, any> = {}) =>
+        updateEntity: (id: string, patch: Record<string, CoreValue>, options: Record<string, CoreValue> = {}) =>
           this.updateEntity(id, patch, options),
-        delEntity: (id: string, options: Record<string, any> = {}) => this.delEntity(id, options),
+        delEntity: (id: string, options: Record<string, CoreValue> = {}) => this.delEntity(id, options),
       },
     });
     this.sceneManager = new EditorSceneManager({
@@ -45,13 +45,13 @@ export default class EditorCore {
 
     const historyManager = this.sceneManager?.history;
     if (historyManager?.setOnChange) {
-      historyManager.setOnChange((snapshot: Record<string, any>) => {
+      historyManager.setOnChange((snapshot: Record<string, CoreValue>) => {
         this.emitter.emit('historyChanged', snapshot);
       });
     }
   }
 
-  async addEntity(entity: EntityProps, options: Record<string, any> = {}) {
+  async addEntity(entity: EntityProps, options: Record<string, CoreValue> = {}) {
     if (!entity) return null;
     const history = this.sceneManager?.history;
     if (!history) {
@@ -64,8 +64,8 @@ export default class EditorCore {
 
   async updateEntity(
     id: string,
-    patch: Record<string, any> = {},
-    options: Record<string, any> = {}
+    patch: Record<string, CoreValue> = {},
+    options: Record<string, CoreValue> = {}
   ) {
     if (!id) return false;
     const history = this.sceneManager?.history;
@@ -77,7 +77,7 @@ export default class EditorCore {
     return true;
   }
 
-  async delEntity(id: string, options: Record<string, any> = {}) {
+  async delEntity(id: string, options: Record<string, CoreValue> = {}) {
     if (!id) return false;
     const history = this.sceneManager?.history;
     if (!history) {
@@ -88,15 +88,15 @@ export default class EditorCore {
     return true;
   }
 
-  async removeEntity(id: string, options: Record<string, any> = {}) {
+  async removeEntity(id: string, options: Record<string, CoreValue> = {}) {
     return this.delEntity(id, options);
   }
 
-  load(config: Record<string, any> = {}) {
+  load(config: Record<string, CoreValue> = {}) {
     return this.document?.load?.(config);
   }
 
-  async executeCommand(command: unknown) {
+  async executeCommand(command: CoreValue) {
     const history = this.sceneManager?.history;
     if (history?.execute) {
       return await history.execute(command);
@@ -148,11 +148,11 @@ export default class EditorCore {
     return this.documentVisual?.disableTextMode?.();
   }
 
-  focusOn(target: unknown) {
+  focusOn(target: CoreValue) {
     return this.documentVisual?.focusOn?.(target);
   }
 
-  screenshot(options: Record<string, any> = {}) {
+  screenshot(options: Record<string, CoreValue> = {}) {
     return this.documentVisual?.screenshot?.(options);
   }
 
@@ -160,19 +160,19 @@ export default class EditorCore {
     return this.documentVisual?.selectText?.(textId);
   }
 
-  selectObject(target: unknown) {
+  selectObject(target: CoreValue) {
     return this.documentVisual?.select?.(target);
   }
 
-  setObjectVisible(target: unknown, visible: boolean) {
+  setObjectVisible(target: CoreValue, visible: boolean) {
     return this.documentVisual?.setObjectVisible?.(target, visible);
   }
 
-  setObjectColor(target: unknown, color: string | number) {
+  setObjectColor(target: CoreValue, color: string | number) {
     return this.documentVisual?.setObjectColor?.(target, color);
   }
 
-  removeMesh(target: unknown) {
+  removeMesh(target: CoreValue) {
     return this.documentVisual?.removeMesh?.(target as RemoveMeshTarget);
   }
 
@@ -184,23 +184,21 @@ export default class EditorCore {
     return this.documentVisual?.setTransformMode?.(mode);
   }
 
-  exportScene(format: string, filename: string = 'scene', options: Record<string, any> = {}) {
+  exportScene(format: string, filename: string = 'scene', options: Record<string, CoreValue> = {}) {
     const visual = this.documentVisual;
-    const csgGroup = visual?.csgGroup as { children?: unknown[] } | null | undefined;
+    const csgGroup = visual?.csgGroup as { children?: CoreValue[] } | null | undefined;
     const hasCSG = Array.isArray(csgGroup?.children) && csgGroup.children.length > 0;
     const model = hasCSG
       ? csgGroup
-      : this.getModelById('originModel') ||
-        (visual?.entityGroup as unknown) ||
-        (visual?.scene as unknown);
+      : this.getModelById('originModel') || (visual?.entityGroup as CoreValue) || (visual?.scene as CoreValue);
     return visual?.exportScene?.(format, filename, model as ExportSceneTarget, options);
   }
 
-  exportSelected(format: string, filename: string = 'selected', options: Record<string, any> = {}) {
+  exportSelected(format: string, filename: string = 'selected', options: Record<string, CoreValue> = {}) {
     return this.documentVisual?.exportSelected?.(format, filename, options);
   }
 
-  exportMerged(format: string, filename: string = 'merged', options: Record<string, any> = {}) {
+  exportMerged(format: string, filename: string = 'merged', options: Record<string, CoreValue> = {}) {
     return this.documentVisual?.exportMerged?.(format, filename, options);
   }
 

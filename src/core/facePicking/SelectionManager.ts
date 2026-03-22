@@ -3,13 +3,13 @@
  * 负责管理面的选择状态，支持单选和多选模式
  */
 export class SelectionManager {
-  selectedFaces: Map<string, unknown>;
+  selectedFaces: Map<string, CoreValue>;
   selectionMode: 'single' | 'multi';
-  hoverFace: unknown;
-  selectionHistory: unknown[];
+  hoverFace: CoreValue;
+  selectionHistory: CoreValue[];
   historyIndex: number;
   maxHistorySize: number;
-  eventCallbacks: Map<string, unknown[]>;
+  eventCallbacks: Map<string, CoreValue[]>;
 
   constructor() {
     // 使用Map存储选中的面，key为面ID，value为面信息
@@ -36,7 +36,7 @@ export class SelectionManager {
    * @param {boolean} recordHistory - 是否记录到历史
    * @returns {boolean} 是否成功添加
    */
-  addFace(faceInfo: unknown, recordHistory: boolean = true) {
+  addFace(faceInfo: CoreValue, recordHistory: boolean = true) {
     if (!faceInfo || !faceInfo.id) {
       console.warn('无效的面信息');
       return false;
@@ -65,7 +65,7 @@ export class SelectionManager {
    * @param {boolean} recordHistory - 是否记录到历史
    * @returns {boolean} 是否成功移除
    */
-  removeFace(faceInfo: unknown, recordHistory: boolean = true) {
+  removeFace(faceInfo: CoreValue, recordHistory: boolean = true) {
     if (!faceInfo || !faceInfo.id) {
       console.warn('无效的面信息');
       return false;
@@ -116,7 +116,7 @@ export class SelectionManager {
    * @param {Object} faceInfo - 面信息对象
    * @returns {boolean} 是否被选中
    */
-  contains(faceInfo: unknown) {
+  contains(faceInfo: CoreValue) {
     if (!faceInfo || !faceInfo.id) {
       return false;
     }
@@ -162,7 +162,7 @@ export class SelectionManager {
    * @param {'single'|'multi'} mode - 选择模式
    * @param {boolean} recordHistory - 是否记录到历史
    */
-  setSelectionMode(mode: unknown, recordHistory: boolean = true) {
+  setSelectionMode(mode: CoreValue, recordHistory: boolean = true) {
     if (mode !== 'single' && mode !== 'multi') {
       console.warn('无效的选择模式，应为 "single" 或 "multi"');
       return;
@@ -219,7 +219,7 @@ export class SelectionManager {
    * 设置悬停的面
    * @param {Object|null} faceInfo - 面信息对象或null
    */
-  setHoverFace(faceInfo: unknown) {
+  setHoverFace(faceInfo: CoreValue) {
     this.hoverFace = faceInfo;
   }
 
@@ -474,7 +474,7 @@ export class SelectionManager {
    * @param {string} eventName - 事件名称
    * @param {Function} callback - 回调函数
    */
-  on(eventName: string, callback: (...args: unknown[]) => void) {
+  on(eventName: string, callback: (...args: CoreValue[]) => void) {
     if (!this.eventCallbacks.has(eventName)) {
       this.eventCallbacks.set(eventName, []);
     }
@@ -486,7 +486,7 @@ export class SelectionManager {
    * @param {string} eventName - 事件名称
    * @param {Function} callback - 回调函数
    */
-  off(eventName: string, callback: (...args: unknown[]) => void) {
+  off(eventName: string, callback: (...args: CoreValue[]) => void) {
     if (!this.eventCallbacks.has(eventName)) return;
 
     const callbacks = this.eventCallbacks.get(eventName);
@@ -499,9 +499,9 @@ export class SelectionManager {
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
-   * @param {...unknown} args - 事件参数
+   * @param {...CoreValue} args - 事件参数
    */
-  emitEvent(eventName: string, ...args: unknown[]) {
+  emitEvent(eventName: string, ...args: CoreValue[]) {
     if (!this.eventCallbacks.has(eventName)) return;
 
     const callbacks = this.eventCallbacks.get(eventName);

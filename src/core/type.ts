@@ -38,7 +38,7 @@ export type RequestData = {
 export type ModelInfo = {
   id: string;
   name?: string;
-  [key: string]: unknown;
+  [key: string]: CoreValue;
 };
 
 export type ModelData = Record<ProductType, ModelInfo[]>;

@@ -10,12 +10,12 @@ import { FeatureDetector } from './facePicking/FeatureDetector';
 import { FeatureBasedNaming } from './facePicking/FeatureBasedNaming';
 
 type ViewerEventBus = {
-  on: (event: string, callback: (...args: unknown[]) => void) => unknown;
-  emit: (event: string, payload?: unknown) => void;
+  on: (event: string, callback: (...args: CoreValue[]) => void) => CoreValue;
+  emit: (event: string, payload?: CoreValue) => void;
   clear: () => void;
 };
 
-type ViewerOptions = Record<string, unknown> & {
+type ViewerOptions = Record<string, CoreValue> & {
   backgroundColor?: number;
   enableShadow?: boolean;
   enableGrid?: boolean;
@@ -26,16 +26,16 @@ type ViewerMesh = THREE.Object3D & {
   material?: THREE.Material | THREE.Material[];
   castShadow?: boolean;
   receiveShadow?: boolean;
-  userData: Record<string, unknown> & { isHelper?: boolean };
+  userData: Record<string, CoreValue> & { isHelper?: boolean };
 };
 
 type FacePickerLike = {
-  on: (eventName: string, callback: (...args: unknown[]) => void) => unknown;
-  setMeshes: (meshes: ViewerMesh[]) => unknown;
-  addMesh?: (mesh: ViewerMesh) => unknown;
-  removeMesh?: (mesh: ViewerMesh) => unknown;
+  on: (eventName: string, callback: (...args: CoreValue[]) => void) => CoreValue;
+  setMeshes: (meshes: ViewerMesh[]) => CoreValue;
+  addMesh?: (mesh: ViewerMesh) => CoreValue;
+  removeMesh?: (mesh: ViewerMesh) => CoreValue;
   selectFeature?: (meshId: string, featureId: string) => void;
-  getPerformanceStats?: () => Record<string, unknown>;
+  getPerformanceStats?: () => Record<string, CoreValue>;
   clearSelection?: () => void;
   enable: () => void;
   disable: () => void;
@@ -43,7 +43,7 @@ type FacePickerLike = {
 };
 
 export class Viewer {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   container: HTMLElement;
   options: ViewerOptions;
   scene: THREE.Scene;
@@ -62,12 +62,12 @@ export class Viewer {
   _raycaster: THREE.Raycaster;
   _mouse: THREE.Vector2;
   _facePicker: FacePickerLike | null;
-  _surfaceTextManager: unknown;
-  _objectSelectionManager: unknown;
+  _surfaceTextManager: CoreValue;
+  _objectSelectionManager: CoreValue;
   _featureDetector: FeatureDetector;
   _featureNaming: FeatureBasedNaming;
   _featureOnlyMode: boolean;
-  _detectedFeatures: Map<string, unknown>;
+  _detectedFeatures: Map<string, CoreValue>;
 
   constructor(container: HTMLElement, options: ViewerOptions = {}) {
     const { events, ...viewerOptions } = options;
@@ -88,13 +88,15 @@ export class Viewer {
     this.entityGroup = null;
     this.csgGroup = null;
 
-    this.events = ((events as ViewerEventBus) || (new EventManager() as unknown as ViewerEventBus));
+    this.events = (events as ViewerEventBus) || (new EventManager() as CoreValue as ViewerEventBus);
 
     this._animationId = null;
     this._isDisposed = false;
 
     // 瀵硅薄绠＄悊
-    this._meshes = []; this._selectableObjects = []; this._selectedObject = null;
+    this._meshes = [];
+    this._selectableObjects = [];
+    this._selectedObject = null;
     this._hoveredObject = null;
 
     // 浜や簰
@@ -108,7 +110,8 @@ export class Viewer {
 
     this._featureDetector = new FeatureDetector();
     this._featureNaming = new FeatureBasedNaming();
-    this._featureOnlyMode = false; this._detectedFeatures = new Map();
+    this._featureOnlyMode = false;
+    this._detectedFeatures = new Map();
 
     this._init();
     this._bindEvents();
@@ -435,7 +438,7 @@ export class Viewer {
 
   /**
    * 娣诲姞缃戞牸鍒板満鏅?   */
-  addMesh(mesh: ViewerMesh, options: Record<string, any> = {}) {
+  addMesh(mesh: ViewerMesh, options: Record<string, CoreValue> = {}) {
     const {
       selectable = true,
       castShadow = true,
@@ -511,7 +514,7 @@ export class Viewer {
   /**
    * 鍔犺浇 STL 妯″瀷
    */
-  loadSTL(url: string, options: Record<string, any> = {}) {
+  loadSTL(url: string, options: Record<string, CoreValue> = {}) {
     return new Promise((resolve, reject) => {
       const loader = new STLLoader();
 
@@ -569,7 +572,7 @@ export class Viewer {
 
   /**
    * 鍒涘缓鍦嗘煴浣?   */
-  createCylinder(options: Record<string, any> = {}) {
+  createCylinder(options: Record<string, CoreValue> = {}) {
     const {
       radiusTop = 5,
       radiusBottom = 5,
@@ -596,7 +599,7 @@ export class Viewer {
 
   /**
    * 鍒涘缓绔嬫柟浣?   */
-  createBox(options: Record<string, any> = {}) {
+  createBox(options: Record<string, CoreValue> = {}) {
     const {
       width = 5,
       height = 5,
@@ -619,7 +622,7 @@ export class Viewer {
   /**
    * 鍒涘缓鐞冧綋
    */
-  createSphere(options: Record<string, any> = {}) {
+  createSphere(options: Record<string, CoreValue> = {}) {
     const {
       radius = 3,
       segments = 64,
@@ -764,7 +767,7 @@ export class Viewer {
   /**
    * 鎴浘
    */
-  screenshot(options: Record<string, any> = {}) {
+  screenshot(options: Record<string, CoreValue> = {}) {
     const { width, height, type = 'image/png', quality = 1 } = options;
 
     // 濡傛灉鎸囧畾浜嗗昂瀵革紝涓存椂璋冩暣

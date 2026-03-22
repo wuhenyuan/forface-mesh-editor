@@ -1,5 +1,5 @@
 export class BaseCommand {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor(type, description = '') {
     this.type = type;
     this.description = description;

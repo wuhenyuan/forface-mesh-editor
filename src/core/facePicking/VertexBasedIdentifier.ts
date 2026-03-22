@@ -20,7 +20,7 @@ export class VertexBasedIdentifier {
    * @param {THREE.BufferGeometry} geometry - 几何体
    * @returns {string} 稳定标识
    */
-  generateVertexBasedId(triangleIndices: number[], geometry: unknown) {
+  generateVertexBasedId(triangleIndices: number[], geometry: CoreValue) {
     // 1. 获取所有顶点索引
     const vertexIndices = this.extractVertexIndices(triangleIndices, geometry);
 
@@ -39,7 +39,7 @@ export class VertexBasedIdentifier {
    * @param {THREE.BufferGeometry} geometry - 几何体
    * @returns {Array} 顶点索引数组
    */
-  extractVertexIndices(triangleIndices: number[], geometry: unknown) {
+  extractVertexIndices(triangleIndices: number[], geometry: CoreValue) {
     const vertexIndices = [];
     const indices = geometry.index;
 

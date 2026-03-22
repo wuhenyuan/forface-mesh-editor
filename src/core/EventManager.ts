@@ -3,8 +3,8 @@
  * 统一管理 Viewer 内部和外部的事件通信
  */
 export class EventManager {
-  private _listeners: Map<string, Set<(...args: unknown[]) => void>>;
-  private _anyListeners: Set<(event: string, data?: unknown) => void>;
+  private _listeners: Map<string, Set<(...args: CoreValue[]) => void>>;
+  private _anyListeners: Set<(event: string, data?: CoreValue) => void>;
 
   constructor() {
     this._listeners = new Map();
@@ -17,7 +17,7 @@ export class EventManager {
    * @param {Function} callback 回调函数
    * @returns {Function} 取消监听的函数
    */
-  on(event: string, callback: (...args: unknown[]) => void) {
+  on(event: string, callback: (...args: CoreValue[]) => void) {
     if (!this._listeners.has(event)) {
       this._listeners.set(event, new Set());
     }
@@ -30,7 +30,7 @@ export class EventManager {
   /**
    * 监听所有事件
    */
-  onAny(callback: (event: string, data?: unknown) => void) {
+  onAny(callback: (event: string, data?: CoreValue) => void) {
     this._anyListeners.add(callback);
     return () => this._anyListeners.delete(callback);
   }
@@ -38,7 +38,7 @@ export class EventManager {
   /**
    * 注册一次性事件监听
    */
-  once(event: string, callback: (...args: unknown[]) => void) {
+  once(event: string, callback: (...args: CoreValue[]) => void) {
     const wrapper = (...args) => {
       this.off(event, wrapper);
       callback(...args);
@@ -49,7 +49,7 @@ export class EventManager {
   /**
    * 取消事件监听
    */
-  off(event: string, callback?: (...args: unknown[]) => void) {
+  off(event: string, callback?: (...args: CoreValue[]) => void) {
     if (!this._listeners.has(event)) return;
 
     if (callback) {
@@ -62,9 +62,9 @@ export class EventManager {
   /**
    * 触发事件
    * @param {string} event 事件名
-   * @param {unknown} data 事件数据
+   * @param {CoreValue} data 事件数据
    */
-  emit(event: string, data?: unknown) {
+  emit(event: string, data?: CoreValue) {
     if (this._anyListeners.size > 0) {
       this._anyListeners.forEach((callback) => {
         try {

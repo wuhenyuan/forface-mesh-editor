@@ -1,9 +1,9 @@
 import mitt, { Emitter, Handler } from 'mitt';
 
-export type CoreEventHandler<T = unknown> = (event: T) => void;
-export type CoreAnyHandler = (event: string, payload?: unknown) => void;
+export type CoreEventHandler<T = CoreValue> = (event: T) => void;
+export type CoreAnyHandler = (event: string, payload?: CoreValue) => void;
 
-export class CoreEmitter<Events extends Record<string, any> = Record<string, any>> {
+export class CoreEmitter<Events extends Record<string, CoreValue> = Record<string, CoreValue>> {
   private _emitter: Emitter<Events>;
   private _anyListeners: Set<CoreAnyHandler>;
 

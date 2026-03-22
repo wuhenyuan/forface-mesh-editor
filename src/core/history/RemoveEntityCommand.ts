@@ -2,17 +2,17 @@ import type Document from '../Document';
 import { BaseCommand } from './BaseCommand';
 import type { EntityProps } from '../Document/Entity';
 
-const cloneEntity = (entity: unknown): EntityProps | null => {
+const cloneEntity = (entity: CoreValue): EntityProps | null => {
   if (!entity) return null;
   const snapshot = { ...entity } as EntityProps;
   if (entity.meta && typeof entity.meta === 'object') {
     snapshot.meta = { ...entity.meta };
   }
   if (entity.loaderOptions && typeof entity.loaderOptions === 'object') {
-    (snapshot as unknown).loaderOptions = { ...entity.loaderOptions };
+    (snapshot as CoreValue).loaderOptions = { ...entity.loaderOptions };
   }
   if (entity.visualOptions && typeof entity.visualOptions === 'object') {
-    (snapshot as unknown).visualOptions = { ...entity.visualOptions };
+    (snapshot as CoreValue).visualOptions = { ...entity.visualOptions };
   }
   return snapshot;
 };
@@ -22,7 +22,7 @@ export class RemoveEntityCommand extends BaseCommand {
   entityId: string | null;
   entitySnapshot: EntityProps | null;
 
-  constructor(document: Document | null, entityId: string, options: Record<string, any> = {}) {
+  constructor(document: Document | null, entityId: string, options: Record<string, CoreValue> = {}) {
     const description = options.description || 'Remove Entity';
     super('ENTITY_REMOVE', description);
 

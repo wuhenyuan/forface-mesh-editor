@@ -37,8 +37,8 @@ export class ExportManager {
   objExporter: OBJExporter;
   gltfExporter: GLTFExporter;
   config: ExportConfig;
-  onProgress: ((...args: unknown[]) => void) | null;
-  onError: ((error: unknown) => void) | null;
+  onProgress: ((...args: CoreValue[]) => void) | null;
+  onError: ((error: CoreValue) => void) | null;
 
   constructor() {
     // 瀵煎嚭鍣ㄥ疄渚?
@@ -112,7 +112,7 @@ export class ExportManager {
 
       console.log(`[ExportManager] 瀵煎嚭瀹屾垚`);
       return result;
-    } catch (error: unknown) {
+    } catch (error: CoreValue) {
       console.error('[ExportManager] 瀵煎嚭澶辫触:', error);
       this.onError?.(error);
       throw error;

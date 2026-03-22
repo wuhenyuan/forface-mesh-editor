@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 export class SurfaceIdentifier {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor() {
     this.meshRegistry = new Map(); // meshId -> mesh
     this.faceRegistry = new Map(); // surfaceId -> faceInfo
@@ -260,8 +260,8 @@ export class SurfaceIdentifier {
    * @returns {Object} 配置数据
    */
   exportConfig() {
-    const meshData: Record<string, any> = {};
-    const faceData: Record<string, any> = {};
+    const meshData: Record<string, CoreValue> = {};
+    const faceData: Record<string, CoreValue> = {};
 
     // 导出网格数据
     this.meshRegistry.forEach((mesh, meshId) => {
@@ -304,14 +304,14 @@ export class SurfaceIdentifier {
     }
 
     // 导入面数据
-    Object.entries((config.faces || {}) as Record<string, any>).forEach(([surfaceId, faceData]) => {
+    Object.entries((config.faces || {}) as Record<string, CoreValue>).forEach(([surfaceId, faceData]) => {
       this.faceRegistry.set(surfaceId, {
-        meshId: (faceData as unknown).meshId,
-        faceIndex: (faceData as unknown).faceIndex,
-        faceHash: (faceData as unknown).faceHash,
-        point: new THREE.Vector3(...((faceData as unknown).point || [])),
-        normal: new THREE.Vector3(...((faceData as unknown).normal || [])),
-        uv: (faceData as unknown).uv ? new THREE.Vector2(...(faceData as unknown).uv) : null,
+        meshId: (faceData as CoreValue).meshId,
+        faceIndex: (faceData as CoreValue).faceIndex,
+        faceHash: (faceData as CoreValue).faceHash,
+        point: new THREE.Vector3(...((faceData as CoreValue).point || [])),
+        normal: new THREE.Vector3(...((faceData as CoreValue).normal || [])),
+        uv: (faceData as CoreValue).uv ? new THREE.Vector2(...(faceData as CoreValue).uv) : null,
       });
     });
   }

@@ -148,7 +148,11 @@ export class HighlightRenderer {
     const uvs: number[] = [];
 
     vertexIndices.forEach((vertexIndex) => {
-      positions.push(position.getX(vertexIndex), position.getY(vertexIndex), position.getZ(vertexIndex));
+      positions.push(
+        position.getX(vertexIndex),
+        position.getY(vertexIndex),
+        position.getZ(vertexIndex)
+      );
       if (normal) {
         normals.push(normal.getX(vertexIndex), normal.getY(vertexIndex), normal.getZ(vertexIndex));
       }

@@ -163,19 +163,19 @@ export class EntityManager {
     }
   }
 
-  on(event: string, callback: (...args: unknown[]) => void) {
+  on(event: string, callback: (...args: CoreValue[]) => void) {
     return this.events.on(event, callback);
   }
 
-  once(event: string, callback: (...args: unknown[]) => void) {
+  once(event: string, callback: (...args: CoreValue[]) => void) {
     return this.events.once(event, callback);
   }
 
-  off(event: string, callback?: (...args: unknown[]) => void) {
+  off(event: string, callback?: (...args: CoreValue[]) => void) {
     return this.events.off(event, callback);
   }
 
-  onAny(callback: (event: string, data?: unknown) => void) {
+  onAny(callback: (event: string, data?: CoreValue) => void) {
     return this.events.onAny(callback);
   }
 

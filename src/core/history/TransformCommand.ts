@@ -27,7 +27,7 @@ function applyTransform(object, state) {
 }
 
 export class TransformCommand extends BaseCommand {
-  constructor(object, beforeState, afterState, options: Record<string, any> = {}) {
+  constructor(object, beforeState, afterState, options: Record<string, CoreValue> = {}) {
     const description = options.description || 'Transform';
     super('TRANSFORM', description);
 

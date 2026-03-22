@@ -7,7 +7,7 @@ type ConsoleMethod = 'debug' | 'info' | 'warn' | 'error';
 type LogEntry = {
   level: LogLevel;
   message: string;
-  data: unknown;
+  data: CoreValue;
   timestamp: number;
   time: string;
 };
@@ -20,19 +20,19 @@ type LogStats = {
 type LogReportItem = {
   message: string;
   timestamp: number;
-  data: unknown;
+  data: CoreValue;
 };
 
 type FaceLike = {
   mesh?: { name?: string };
   faceIndex?: number;
-  point?: unknown;
+  point?: CoreValue;
   distance?: number;
 };
 
 type SelectionChangeLike = {
   selectedCount?: number;
-  mode?: unknown;
+  mode?: CoreValue;
   canUndo?: boolean;
   canRedo?: boolean;
 };
@@ -41,14 +41,14 @@ type MeshValidationLike = {
   isValid?: boolean;
   faceCount?: number;
   geometryType?: string;
-  warnings?: unknown[];
+  warnings?: CoreValue[];
 };
 
 type PerformanceMonitor = {
   name: string;
   startTime: number;
-  end: (context?: Record<string, unknown>) => number;
-  checkpoint: (checkpoint: string, context?: Record<string, unknown>) => void;
+  end: (context?: Record<string, CoreValue>) => number;
+  checkpoint: (checkpoint: string, context?: Record<string, CoreValue>) => void;
 };
 
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -101,7 +101,7 @@ export class DebugLogger {
     }
   }
 
-  log(level: LogLevel, message: string, data: unknown = null) {
+  log(level: LogLevel, message: string, data: CoreValue = null) {
     if (!this.enabled || this.levels[level] < this.currentLevel) {
       return;
     }
@@ -129,23 +129,23 @@ export class DebugLogger {
     }
   }
 
-  debug(message: string, data: unknown = null) {
+  debug(message: string, data: CoreValue = null) {
     this.log('DEBUG', message, data);
   }
 
-  info(message: string, data: unknown = null) {
+  info(message: string, data: CoreValue = null) {
     this.log('INFO', message, data);
   }
 
-  warn(message: string, data: unknown = null) {
+  warn(message: string, data: CoreValue = null) {
     this.log('WARN', message, data);
   }
 
-  error(message: string, data: unknown = null) {
+  error(message: string, data: CoreValue = null) {
     this.log('ERROR', message, data);
   }
 
-  logPerformance(operation: string, duration: number, context: Record<string, unknown> = {}) {
+  logPerformance(operation: string, duration: number, context: Record<string, CoreValue> = {}) {
     this.debug(`Performance: ${operation}`, {
       duration: `${duration.toFixed(2)}ms`,
       ...context,
@@ -170,7 +170,7 @@ export class DebugLogger {
     });
   }
 
-  logError(context: string, error: Error, additionalInfo: Record<string, unknown> = {}) {
+  logError(context: string, error: Error, additionalInfo: Record<string, CoreValue> = {}) {
     this.error(`Error [${context}]: ${error.message}`, {
       stack: error.stack,
       ...additionalInfo,
@@ -275,12 +275,12 @@ export class DebugLogger {
     return {
       name,
       startTime,
-      end: (context: Record<string, unknown> = {}) => {
+      end: (context: Record<string, CoreValue> = {}) => {
         const duration = performance.now() - startTime;
         this.logPerformance(name, duration, context);
         return duration;
       },
-      checkpoint: (checkpoint: string, context: Record<string, unknown> = {}) => {
+      checkpoint: (checkpoint: string, context: Record<string, CoreValue> = {}) => {
         const duration = performance.now() - startTime;
         this.debug(`${name} - ${checkpoint}`, {
           duration: `${duration.toFixed(2)}ms`,

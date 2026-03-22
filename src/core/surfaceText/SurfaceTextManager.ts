@@ -12,7 +12,7 @@ import { TextTransformControls } from './TextTransformControls';
  * 负责协调所有文字相关功能
  */
 export class SurfaceTextManager {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor(scene, camera, renderer, domElement, facePicker = null) {
     this.scene = scene;
     this.camera = camera;
@@ -33,7 +33,7 @@ export class SurfaceTextManager {
     this.targetMeshes = [];
 
     // 文字对象管理
-    this.textObjects = new Map<string, unknown>(); // id -> TextObject
+    this.textObjects = new Map<string, CoreValue>(); // id -> TextObject
     this.selectedTextId = null;
     this.isTextMode = false;
 
@@ -153,9 +153,9 @@ export class SurfaceTextManager {
     this.raycaster.setFromCamera(mouse, this.camera);
 
     // 收集所有可检测的对象：目标网格 + 可见的文字网格
-    const textMeshes = Array.from(this.textObjects.values() as Iterable<unknown>)
-      .map((t: unknown) => t.mesh)
-      .filter((m: unknown) => m.visible);
+    const textMeshes = Array.from(this.textObjects.values() as Iterable<CoreValue>)
+      .map((t: CoreValue) => t.mesh)
+      .filter((m: CoreValue) => m.visible);
     const allMeshes = [...this.targetMeshes, ...textMeshes];
 
     // 执行射线检测
@@ -196,7 +196,7 @@ export class SurfaceTextManager {
       // 1. 检查是否点击了凸起模式的文字对象
       if (faceInfo.mesh.userData && faceInfo.mesh.userData.isTextObject) {
         const textId = faceInfo.mesh.userData.textId;
-        if (event) (event as unknown).__surfaceTextHandled = true;
+        if (event) (event as CoreValue).__surfaceTextHandled = true;
         this.selectText(textId);
         return;
       }
@@ -209,7 +209,7 @@ export class SurfaceTextManager {
         faceInfo.faceIndex
       );
       if (textIdFromEngraved) {
-        if (event) (event as unknown).__surfaceTextHandled = true;
+        if (event) (event as CoreValue).__surfaceTextHandled = true;
         // 点击的是内嵌文字区域，进入编辑模式
         this.enterEditMode(textIdFromEngraved);
         return;
@@ -225,7 +225,7 @@ export class SurfaceTextManager {
       }
 
       // 4. 文字模式下，点击普通表面创建新文字
-      if (event) (event as unknown).__surfaceTextHandled = true;
+      if (event) (event as CoreValue).__surfaceTextHandled = true;
 
       const screenPosition = {
         x: event.clientX,
@@ -563,7 +563,7 @@ export class SurfaceTextManager {
    * @param {Object} options.config - 指定文字配置（会与默认配置合并）
    * @returns {Promise<string>} 文字对象ID
    */
-  async createTextObject(content, faceInfo, options: Record<string, any> = {}) {
+  async createTextObject(content, faceInfo, options: Record<string, CoreValue> = {}) {
     if (this.textObjects.size >= this.config.maxTextObjects) {
       throw new Error(`文字对象数量已达到最大限制: ${this.config.maxTextObjects}`);
     }
@@ -622,7 +622,7 @@ export class SurfaceTextManager {
         if (Array.isArray(transformRotation)) {
           const [x = 0, y = 0, z = 0, order] = transformRotation;
           if (typeof order === 'string') {
-            mesh.rotation.order = order;
+            mesh.rotation.order = order as THREE.EulerOrder;
           }
           mesh.rotation.set(x, y, z);
         }
@@ -1999,7 +1999,7 @@ export class SurfaceTextManager {
    * @returns {Array} 文字对象数组
    */
   getAllTextObjects() {
-    return Array.from(this.textObjects.values() as Iterable<unknown>);
+    return Array.from(this.textObjects.values() as Iterable<CoreValue>);
   }
 
   /**
@@ -2259,7 +2259,7 @@ export class SurfaceTextManager {
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
-   * @param {...unknown} args - 事件参数
+   * @param {...CoreValue} args - 事件参数
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;
@@ -2493,8 +2493,8 @@ export class SurfaceTextManager {
     if (!textIds) return [];
 
     return Array.from(textIds)
-      .map((id) => this.textObjects.get(id) as unknown)
-      .filter((obj): obj is unknown => obj !== undefined);
+      .map((id) => this.textObjects.get(id) as CoreValue)
+      .filter((obj): obj is CoreValue => obj !== undefined);
   }
 
   /**

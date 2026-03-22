@@ -10,7 +10,7 @@ import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 export class BooleanOperator {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor() {
     this.evaluator = null;
     this.isLibraryLoaded = false;
@@ -83,7 +83,7 @@ export class BooleanOperator {
     targetGeometry,
     toolGeometry,
     toolMatrix = null,
-    options: Record<string, any> = {}
+    options: Record<string, CoreValue> = {}
   ) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪');
@@ -260,7 +260,7 @@ export class BooleanOperator {
    * @param {Object} [options] - 选项
    * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async union(geometry1, geometry2, matrix2 = null, options: Record<string, any> = {}) {
+  async union(geometry1, geometry2, matrix2 = null, options: Record<string, CoreValue> = {}) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪');
     }
@@ -322,7 +322,7 @@ export class BooleanOperator {
    * @param {Object} [options] - 选项
    * @returns {Promise<THREE.BufferGeometry>} 操作结果几何体
    */
-  async intersect(geometry1, geometry2, matrix2 = null, options: Record<string, any> = {}) {
+  async intersect(geometry1, geometry2, matrix2 = null, options: Record<string, CoreValue> = {}) {
     if (!this.isReady()) {
       throw new Error('布尔操作库未准备就绪');
     }
@@ -595,7 +595,7 @@ export class BooleanOperator {
     geometry1,
     geometry2,
     matrix2 = null,
-    options: Record<string, any> = {}
+    options: Record<string, CoreValue> = {}
   ) {
     const { useBVH = true, fastOnly = false } = options;
 
@@ -753,7 +753,7 @@ export class BooleanOperator {
    * 设置评估器选项
    * @param {Object} options - 选项
    */
-  setOptions(options: Record<string, any> = {}) {
+  setOptions(options: Record<string, CoreValue> = {}) {
     if (!this.evaluator) return;
 
     // three-bvh-csg Evaluator 的可配置选项

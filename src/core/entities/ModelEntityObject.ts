@@ -1,4 +1,4 @@
-import { ModelBooleanOp, normalizeModelBooleanOp } from '../csg/ModelCSG';
+import { ModelBooleanOp, ModelBooleanOpInput, normalizeModelBooleanOp } from '../csg/ModelCSG';
 import EntityObject, { EntityLike, EntityTransform } from './EntityObject';
 
 type ModelEntityPatchOptions = {
@@ -36,7 +36,7 @@ export class ModelEntityObject extends EntityObject {
     return this;
   }
 
-  setBooleanOp(value: unknown) {
+  setBooleanOp(value: ModelBooleanOpInput) {
     const next = normalizeModelBooleanOp(value) || 'union';
     this.booleanOp = next;
     this.userData = {
@@ -51,14 +51,14 @@ export class ModelEntityObject extends EntityObject {
   }
 
   async loadFromEntitySource(
-    loadModel: (source: unknown, options?: Record<string, any>) => Promise<Record<string, any>>,
-    source: unknown,
-    options: Record<string, any> = {}
+    loadModel: (source: CoreValue, options?: Record<string, CoreValue>) => Promise<Record<string, CoreValue>>,
+    source: CoreValue,
+    options: Record<string, CoreValue> = {}
   ) {
     return this.loadNode(loadModel, source, options);
   }
 
-  applyEntityPatch(patch: Record<string, any> = {}, options: ModelEntityPatchOptions = {}) {
+  applyEntityPatch(patch: Record<string, CoreValue> = {}, options: ModelEntityPatchOptions = {}) {
     const { baseTransform = null, entity } = options;
     if (entity) {
       this.setEntity(entity);

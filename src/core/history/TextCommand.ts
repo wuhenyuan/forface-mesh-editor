@@ -1,7 +1,7 @@
 import { BaseCommand } from './BaseCommand';
 
 export class TextCommand extends BaseCommand {
-  constructor(action, viewer, payload: Record<string, any> = {}) {
+  constructor(action, viewer, payload: Record<string, CoreValue> = {}) {
     const description = payload.description || TextCommand._defaultDescription(action);
     super('TEXT', description);
 

@@ -13,12 +13,20 @@ export type IndexedOBJLoaderParseOptions = {
 function parseRequiredFloat(value: string, lineNumber: number, keyword: string) {
   const parsed = Number.parseFloat(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`[IndexedOBJLoader] Invalid ${keyword} value at line ${lineNumber}: "${value}"`);
+    throw new Error(
+      `[IndexedOBJLoader] Invalid ${keyword} value at line ${lineNumber}: "${value}"`
+    );
   }
   return parsed;
 }
 
-function resolveOBJIndex(rawIndex: number, count: number, lineNumber: number, token: string, kind: string) {
+function resolveOBJIndex(
+  rawIndex: number,
+  count: number,
+  lineNumber: number,
+  token: string,
+  kind: string
+) {
   if (!Number.isInteger(rawIndex) || rawIndex === 0) {
     throw new Error(
       `[IndexedOBJLoader] Invalid ${kind} index at line ${lineNumber}: "${token}" (OBJ indices cannot be 0)`
@@ -46,7 +54,7 @@ export class IndexedOBJLoader {
     url: string,
     onLoad: (group: THREE.Group) => void,
     onProgress?: (event: ProgressEvent<EventTarget>) => void,
-    onError?: (error: unknown) => void,
+    onError?: (error: CoreValue) => void,
     options: IndexedOBJLoaderParseOptions = {}
   ) {
     const fileLoader = new THREE.FileLoader(this.manager);
@@ -196,7 +204,12 @@ export class IndexedOBJLoader {
     return group;
   }
 
-  _parseFaceRef(token: string, positionCount: number, uvCount: number, lineNumber: number): FaceVertexRef {
+  _parseFaceRef(
+    token: string,
+    positionCount: number,
+    uvCount: number,
+    lineNumber: number
+  ): FaceVertexRef {
     const parts = token.split('/');
     if (parts.length === 0 || !parts[0]) {
       throw new Error(`[IndexedOBJLoader] Invalid face token at line ${lineNumber}: "${token}"`);

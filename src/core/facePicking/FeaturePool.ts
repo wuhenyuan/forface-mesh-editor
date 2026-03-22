@@ -6,12 +6,12 @@ import { FeatureDetector } from './FeatureDetector';
  * 提供 O(1) 的特征查找性能
  */
 export class FeaturePool {
-  featureDetector: unknown;
-  meshFeatures: Map<string, unknown>;
-  faceToFeature: Map<string, unknown>;
-  registeredMeshes: Map<string, unknown>;
-  stats: unknown;
-  config: unknown;
+  featureDetector: CoreValue;
+  meshFeatures: Map<string, CoreValue>;
+  faceToFeature: Map<string, CoreValue>;
+  registeredMeshes: Map<string, CoreValue>;
+  stats: CoreValue;
+  config: CoreValue;
   accessOrder: Map<string, number>;
 
   constructor() {
@@ -52,7 +52,7 @@ export class FeaturePool {
    * @param {boolean} autoPreprocess - 是否自动预处理
    * @returns {Promise<string>} 网格ID
    */
-  async registerMesh(mesh: unknown, autoPreprocess: boolean = true) {
+  async registerMesh(mesh: CoreValue, autoPreprocess: boolean = true) {
     const meshId = this.featureDetector.generateMeshId(mesh);
 
     // 检查是否已注册
@@ -124,7 +124,7 @@ export class FeaturePool {
    * @param {string} meshId - 网格ID
    * @param {Object} features - 特征数据
    */
-  cacheFeatures(meshId: string, features: unknown) {
+  cacheFeatures(meshId: string, features: CoreValue) {
     // 检查缓存大小限制
     if (this.config.enableLRU && this.meshFeatures.size >= this.config.maxCacheSize) {
       this.evictLRU();
@@ -147,7 +147,7 @@ export class FeaturePool {
    * @param {string} meshId - 网格ID
    * @param {Object} features - 特征数据
    */
-  buildFastLookupTable(meshId: string, features: unknown) {
+  buildFastLookupTable(meshId: string, features: CoreValue) {
     // 清理旧的查找表项
     const keysToDelete = [];
     for (const key of this.faceToFeature.keys()) {
@@ -425,7 +425,7 @@ export class FeaturePool {
       return this.getMeshFeatures(meshId);
     }
 
-    const allFeatures: Record<string, any> = {};
+    const allFeatures: Record<string, CoreValue> = {};
     for (const [id, features] of this.meshFeatures) {
       allFeatures[id] = features;
     }
@@ -437,7 +437,7 @@ export class FeaturePool {
    * 导入特征数据
    * @param {Object} featuresData - 特征数据
    */
-  importFeatures(featuresData: Record<string, any>) {
+  importFeatures(featuresData: Record<string, CoreValue>) {
     for (const [meshId, features] of Object.entries(featuresData)) {
       this.cacheFeatures(meshId, features);
     }

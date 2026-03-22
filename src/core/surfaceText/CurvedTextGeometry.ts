@@ -8,7 +8,7 @@ import { cylinderSurfaceHelper } from './CylinderSurfaceHelper';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export class CurvedTextGeometry {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor() {
     this.defaultConfig = {
       curveSegments: 12,

@@ -26,7 +26,7 @@ export class TextEntityObject extends EntityObject {
 
   buildConfigFromEntity(entity: EntityLike | null = this.entity) {
     const source: EntityLike = entity || this.entity || {};
-    const config: Record<string, any> = {};
+    const config: Record<string, CoreValue> = {};
     if (source.resource !== undefined) config.font = source.resource;
     if (source.size !== undefined) config.size = source.size;
     if (source.depth !== undefined) config.thickness = source.depth;
@@ -40,7 +40,7 @@ export class TextEntityObject extends EntityObject {
 
   buildCreateOptions(entity: EntityLike | null = this.entity) {
     const source: EntityLike = entity || this.entity || {};
-    const options: Record<string, any> = {};
+    const options: Record<string, CoreValue> = {};
     const id = source.id || this.entityId;
     if (id) {
       options.id = id;
@@ -58,7 +58,7 @@ export class TextEntityObject extends EntityObject {
 
   buildTransformPatch(entity: EntityLike | null = this.entity) {
     const source: EntityLike = entity || this.entity || {};
-    const patch: Record<string, any> = {};
+    const patch: Record<string, CoreValue> = {};
     const transform = this.getTransformFromEntity(source);
     if (transform?.position) patch.position = transform.position;
     if (transform?.rotation) patch.rotation = transform.rotation;

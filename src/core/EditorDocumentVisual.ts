@@ -3,22 +3,35 @@ import Document from './Document';
 import AssetsManager from './AssetsManager';
 import ExportManager from './ExportManager';
 import ProjectManager from './ProjectManager';
-import EntityVisualController from './controllers/EntityVisualController';
+import EntityVisualController, {
+  type EntityVisualControllerOptions,
+} from './controllers/EntityVisualController';
 import { FeatureDetector } from './facePicking/FeatureDetector';
 import * as THREE from 'three';
 
-type EventEmitterLike = {
-  emit: (event: string, payload?: unknown) => void;
+type PrimitiveValue = string | number | boolean | null | undefined;
+type ViewerEventBusLike = {
+  emit: (event: string, payload?: CoreValue) => void;
+  on: (event: string, callback: (...args: CoreValue[]) => void) => () => void;
+};
+type ControllerEvents = EntityVisualControllerOptions['events'];
+type ControllerTextManager = ReturnType<EntityVisualControllerOptions['getTextManager']>;
+type ControllerTextObjectList = ReturnType<EntityVisualControllerOptions['getTextObjects']>;
+type ViewModeTextManager = ControllerTextManager & {
+  setViewMode?: (mode: 'construct' | 'result') => Promise<void>;
 };
 
 type SelectableMeshLike = THREE.Object3D & {
-  userData: Record<string, unknown> & { isHelper?: boolean };
+  userData: Record<string, PrimitiveValue | object> & { isHelper?: boolean };
 };
 
-type TextManagerLike = {
-  on: (event: string, callback: (...args: unknown[]) => void) => void;
-  off: (event: string, callback: (...args: unknown[]) => void) => void;
-  setViewMode?: (mode: 'construct' | 'result') => Promise<unknown>;
+type DocumentVisualOptions = {
+  events?: ViewerEventBusLike;
+  viewMode?: 'construct' | 'result';
+  entityHandler?: EntityVisualControllerOptions['entityHandler'];
+  document?: Document;
+  assetsManager?: AssetsManager;
+  [key: string]: PrimitiveValue | PrimitiveValue[] | object | undefined;
 };
 
 export class EditorDocumentVisual extends EditorViewer {
@@ -32,7 +45,7 @@ export class EditorDocumentVisual extends EditorViewer {
     document: Document,
     assetsManager: AssetsManager,
     container: HTMLElement,
-    options: Record<string, any> = {}
+    options: DocumentVisualOptions = {}
   ) {
     super(container, {
       ...options,
@@ -48,7 +61,7 @@ export class EditorDocumentVisual extends EditorViewer {
     this.exportManager = this._exportManager;
     this.loaderManager = this._loaderManager;
     this._viewModeBusy = false;
-    const events = this.events as EventEmitterLike;
+    const events = this.events as ControllerEvents;
 
     this.assetsManager.onProgress = (progress) => {
       events.emit('loadProgress', progress);
@@ -60,19 +73,19 @@ export class EditorDocumentVisual extends EditorViewer {
     this._entityVisual = new EntityVisualController({
       document: this.document,
       assetsManager: this.assetsManager,
-      events: this.events as unknown,
+      events: events,
       scene: this.scene as THREE.Scene,
       csgGroup: (this.csgGroup as THREE.Group | null) || null,
       entityGroup: (this.entityGroup as THREE.Group | null) || null,
       getViewMode: () => this.viewMode,
       isDisposed: () => !!this._isDisposed,
-      getMeshes: () => ((this._meshes as SelectableMeshLike[]) || []),
-      getObjectSelectionManager: () => (this._objectSelectionManager as unknown) || null,
+      getMeshes: () => (this._meshes as SelectableMeshLike[]) || [],
+      getObjectSelectionManager: () => this._objectSelectionManager || null,
       addMesh: (mesh, meshOptions = {}) => this.addMesh(mesh, meshOptions),
       removeMesh: (mesh) => this.removeMesh(mesh),
-      ensureTextSystem: () => (this.initTextSystem() as unknown as TextManagerLike | null),
-      getTextManager: () => (this.getTextManager?.() as unknown as TextManagerLike | null),
-      getTextObjects: () => (this.getTextObjects?.() as unknown as Array<Record<string, unknown>>) || [],
+      ensureTextSystem: () => this.initTextSystem() as ControllerTextManager,
+      getTextManager: () => this.getTextManager?.() as ControllerTextManager,
+      getTextObjects: () => (this.getTextObjects?.() as ControllerTextObjectList) || [],
       restoreText: (snapshot) => this.restoreText(snapshot),
       deleteText: (textId) => this.deleteText(textId),
       updateTextConfig: (textId, patch) => this.updateTextConfig(textId, patch),
@@ -85,11 +98,13 @@ export class EditorDocumentVisual extends EditorViewer {
 
   _initCoreSubsystems() {
     const optionsRecord =
-      this.options && typeof this.options === 'object' ? (this.options as Record<string, unknown>) : {};
+      this.options && typeof this.options === 'object'
+        ? (this.options as DocumentVisualOptions)
+        : {};
     const doc = optionsRecord.document as Document | undefined;
     const assetsManager = optionsRecord.assetsManager as AssetsManager | undefined;
     const useDocumentManagers = !!doc;
-    const events = this.events as EventEmitterLike;
+    const events = this.events as ControllerEvents;
 
     this._featureDetector = new FeatureDetector();
 
@@ -148,8 +163,9 @@ export class EditorDocumentVisual extends EditorViewer {
 
   initTextSystem() {
     const manager = super.initTextSystem();
-    this._entityVisual.bindTextEntityEvents(manager as unknown as TextManagerLike | null);
-    (manager as unknown as TextManagerLike | null)?.setViewMode?.(this.viewMode).catch?.(() => {});
+    const textManager = manager as ViewModeTextManager;
+    this._entityVisual.bindTextEntityEvents(textManager);
+    textManager?.setViewMode?.(this.viewMode).catch?.(() => {});
     return manager;
   }
 
@@ -160,9 +176,9 @@ export class EditorDocumentVisual extends EditorViewer {
 
     this._viewModeBusy = true;
     try {
-      const surfaceTextManager = this._surfaceTextManager as
-        | { setViewMode?: (nextMode: 'construct' | 'result') => Promise<unknown> }
-        | null;
+      const surfaceTextManager = this._surfaceTextManager as {
+        setViewMode?: (nextMode: 'construct' | 'result') => Promise<void>;
+      } | null;
       if (mode === 'result') {
         this.disableTextMode();
         this.enableObjectSelection();
@@ -174,7 +190,7 @@ export class EditorDocumentVisual extends EditorViewer {
 
       this.viewMode = mode;
       this._entityVisual.syncCSGVisibilityAndSelection();
-      (this.events as EventEmitterLike).emit('viewModeChanged', { mode });
+      (this.events as ControllerEvents).emit('viewModeChanged', { mode });
     } finally {
       this._viewModeBusy = false;
     }

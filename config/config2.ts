@@ -45,7 +45,7 @@ const config: Record<string, any> = {
       boolean: 'substract',
       color: '#ff00ff',
       position: [5, 20, 0],
-      rotate: [0, Math.PI/ 2, 0],
+      rotate: [0, Math.PI / 2, 0],
       scale: [1, 1, 1],
       wrap: 'surface Project',
     },

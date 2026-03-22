@@ -4,9 +4,9 @@ import * as THREE from 'three';
  * 选中物体的包围盒辅助显示（包围盒 + 长宽高标注）
  */
 export class ObjectBoundsHelper {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
 
-  constructor(scene: THREE.Scene, options: Record<string, any> = {}) {
+  constructor(scene: THREE.Scene, options: Record<string, CoreValue> = {}) {
     this.scene = scene;
     this.options = {
       color: 0x00ff00,

@@ -1,11 +1,16 @@
 import * as THREE from 'three';
 import { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
-import { createBrushFromObject, normalizeModelBooleanOp, type ModelBooleanOp } from './ModelCSG';
+import {
+  createBrushFromObject,
+  normalizeModelBooleanOp,
+  type ModelBooleanOp,
+  type ModelBooleanOpInput,
+} from './ModelCSG';
 
 type BooleanSource = {
   key: string;
   object: THREE.Object3D;
-  op?: unknown;
+  op?: ModelBooleanOpInput;
 };
 
 type ModelBooleanControllerOptions = {
@@ -17,7 +22,7 @@ type ModelBooleanControllerOptions = {
   setSelectableObjects?: (objects: THREE.Object3D[]) => void;
   isBlocked?: () => boolean;
   isDisposed?: () => boolean;
-  onError?: (error: unknown) => void;
+  onError?: (error: Error) => void;
 };
 
 export class ModelBooleanController {
@@ -29,7 +34,7 @@ export class ModelBooleanController {
   private _setSelectableObjects?: (objects: THREE.Object3D[]) => void;
   private _isBlocked?: () => boolean;
   private _isDisposed?: () => boolean;
-  private _onError?: (error: unknown) => void;
+  private _onError?: (error: Error) => void;
   private _resultMesh: THREE.Mesh | null;
   private _updateToken: number;
   private _scheduledToken: ReturnType<typeof setTimeout> | null;
@@ -61,7 +66,7 @@ export class ModelBooleanController {
     this._scheduledToken = setTimeout(() => {
       this._scheduledToken = null;
       this._update(token).catch((error) => {
-        this._onError?.(error);
+        this._onError?.(this._toError(error));
       });
     }, 0);
   }
@@ -180,9 +185,7 @@ export class ModelBooleanController {
 
       const rawMaterials = current.material;
       const clonedMaterials = Array.isArray(rawMaterials)
-        ? rawMaterials.map(
-            (material) => material?.clone?.() || new THREE.MeshStandardMaterial()
-          )
+        ? rawMaterials.map((material) => material?.clone?.() || new THREE.MeshStandardMaterial())
         : rawMaterials?.clone?.() || new THREE.MeshStandardMaterial();
 
       const resultMesh = new THREE.Mesh(current.geometry, clonedMaterials);
@@ -207,6 +210,11 @@ export class ModelBooleanController {
         this.scheduleUpdate();
       }
     }
+  }
+
+  private _toError(error: Error | string): Error {
+    if (error instanceof Error) return error;
+    return new Error(typeof error === 'string' ? error : 'CSG update failed');
   }
 }
 

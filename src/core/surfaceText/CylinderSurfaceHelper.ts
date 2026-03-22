@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 export class CylinderSurfaceHelper {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor() {
     this.tolerance = 0.001; // 几何体检测容差
   }
@@ -901,7 +901,7 @@ export class CylinderSurfaceHelper {
    * @param {Object} options - 选项
    * @returns {Array} 文字路径点数组
    */
-  generateTextPath(text, startPoint, cylinderInfo, options: Record<string, any> = {}) {
+  generateTextPath(text, startPoint, cylinderInfo, options: Record<string, CoreValue> = {}) {
     const {
       fontSize = 1,
       letterSpacing = 0.1,

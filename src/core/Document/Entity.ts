@@ -14,15 +14,15 @@ export interface BaseEntityProps {
   rotation?: EntityVector3;
   scale?: EntityVector3;
   color?: EntityColor;
-  meta?: Record<string, any>;
+  meta?: Record<string, CoreValue>;
   boolean?: string;
 }
 
 export interface ModelEntityProps extends BaseEntityProps {
   type: 'model';
   resource: EntityResource;
-  loaderOptions?: Record<string, any>;
-  visualOptions?: Record<string, any>;
+  loaderOptions?: Record<string, CoreValue>;
+  visualOptions?: Record<string, CoreValue>;
 }
 
 export interface TextEntityProps extends BaseEntityProps {
@@ -55,7 +55,7 @@ export class Entity {
   rotation?: EntityVector3;
   scale?: EntityVector3;
   color?: EntityColor;
-  meta?: Record<string, any>;
+  meta?: Record<string, CoreValue>;
   boolean?: string;
 
   constructor(props: BaseEntityProps) {
@@ -78,8 +78,8 @@ export class Entity {
 export class ModelEntity extends Entity {
   declare type: 'model';
   declare resource: EntityResource;
-  loaderOptions?: Record<string, any>;
-  visualOptions?: Record<string, any>;
+  loaderOptions?: Record<string, CoreValue>;
+  visualOptions?: Record<string, CoreValue>;
 
   constructor(props: ModelEntityProps) {
     super(props);

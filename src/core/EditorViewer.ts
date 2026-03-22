@@ -11,28 +11,133 @@ import { ExportManager } from './ExportManager';
 import { ProjectManager } from './ProjectManager';
 import { FeatureDetector } from './facePicking/FeatureDetector';
 
+type PrimitiveValue = string | number | boolean | null | undefined;
+type OptionValue = PrimitiveValue | PrimitiveValue[] | THREE.Material;
+type LooseRecord = Record<string, OptionValue>;
+type TextMode = 'raised' | 'engraved' | string;
+type ModelSource = string | File | Blob;
+
+type ProjectConfigLike = {
+  models?: {
+    origin?: { path?: string };
+    base?: { path?: string };
+  };
+  originModelPath?: string;
+  baseModelPath?: string;
+  texts?: Array<Record<string, PrimitiveValue | number[]>>;
+};
+
+type ProjectDataLike = {
+  config?: ProjectConfigLike;
+};
+
+type ViewerEventPayload =
+  | PrimitiveValue
+  | THREE.Object3D
+  | THREE.Vector2
+  | THREE.Vector3
+  | THREE.Euler
+  | THREE.Intersection
+  | Record<string, PrimitiveValue | number[] | THREE.Object3D | object | null>
+  | Array<Record<string, PrimitiveValue | number[]>>;
+
+type DetectFeatureOptions = Record<string, PrimitiveValue>;
+
+type FeatureLike = {
+  id?: string;
+  type?: string;
+  [key: string]: PrimitiveValue | number[] | object | null | undefined;
+};
+
+type FeatureDetectionResult = {
+  meshId?: string;
+  triangleCount?: number;
+  planes?: FeatureLike[];
+  cylinders?: FeatureLike[];
+  namedFeatures?: FeatureLike[];
+  [key: string]:
+    | PrimitiveValue
+    | FeatureLike[]
+    | Map<number, FeatureLike>
+    | Record<string, PrimitiveValue>
+    | undefined;
+};
+
+type LoadModelOptions = {
+  addToScene?: boolean;
+  detectFeatures?: boolean;
+  modelId?: string;
+  centerModel?: boolean;
+  material?: THREE.Material | null;
+  mtlUrl?: string;
+  name?: string;
+};
+
+type AddMeshOptions = {
+  selectable?: boolean;
+  castShadow?: boolean;
+  receiveShadow?: boolean;
+  group?: 'entity' | 'scene' | 'csg';
+};
+
+type ExportOptions = Parameters<ExportManager['export']>[2];
+
+type CreateProjectOptions = {
+  name?: string;
+  originModelPath?: string;
+};
+
+type ProjectPackageOptions = {
+  includeModels?: boolean | string[];
+  format?: 'v3' | 'config2';
+  projectFileName?: string;
+  fetchOptions?: RequestInit;
+};
+
+type EditorViewerOptions = {
+  backgroundColor?: number;
+  enableShadow?: boolean;
+  enableGrid?: boolean;
+  events?: ViewerEventBus;
+  [key: string]: PrimitiveValue | PrimitiveValue[] | object | undefined;
+};
+
 type ViewerEventBus = {
-  emit: (event: string, payload?: unknown) => void;
-  on: (event: string, callback: (...args: unknown[]) => void) => unknown;
+  emit: (event: string, payload?: ViewerEventPayload) => void;
+  on: (event: string, callback: (payload?: ViewerEventPayload) => void) => () => void;
 };
 
 type FeatureDetectorLike = FeatureDetector & {
-  detect?: (model: unknown, modelId?: string, options?: Record<string, any>) => Promise<unknown>;
-  getFeatureAtIntersection?: (modelId: string, intersection: unknown) => unknown;
-  getModelFeatures?: (modelId: string) => unknown;
-  getTextableSurfaces?: (modelId: string, options?: Record<string, any>) => unknown[];
+  detect?: (
+    model: THREE.Object3D,
+    modelId?: string,
+    options?: DetectFeatureOptions
+  ) => Promise<FeatureDetectionResult | null>;
+  getFeatureAtIntersection?: (
+    modelId: string,
+    intersection: THREE.Intersection
+  ) => FeatureLike | null;
+  getModelFeatures?: (modelId: string) => FeatureDetectionResult | null;
+  getTextableSurfaces?: (modelId: string, options?: DetectFeatureOptions) => FeatureLike[];
 };
 
-type EditorTextObject = Record<string, unknown> & {
+type TextObjectConfig = {
+  font?: string;
+  size?: number;
+  thickness?: number;
+  direction?: string;
+  letterSpacing?: number;
+  curvingStrength?: number;
+  startAngle?: number;
+  color?: string | number;
+};
+
+type EditorTextObject = {
   id?: string;
   displayName?: string;
   content?: string;
-  config?: Record<string, unknown> & {
-    font?: string;
-    size?: number;
-    thickness?: number;
-  };
-  mode?: unknown;
+  config?: TextObjectConfig;
+  mode?: TextMode;
   material?: {
     color?: {
       getHexString?: () => string;
@@ -46,7 +151,7 @@ type EditorTextObject = Record<string, unknown> & {
 };
 
 type EditorViewerMesh = THREE.Object3D & {
-  userData: Record<string, unknown> & { isHelper?: boolean };
+  userData: Record<string, PrimitiveValue | number[] | object> & { isHelper?: boolean };
 };
 
 export class EditorViewer extends Viewer {
@@ -63,7 +168,7 @@ export class EditorViewer extends Viewer {
   _facePickingEnabled: boolean;
   _objectSelectionEnabled: boolean;
 
-  constructor(container: HTMLElement, options: Record<string, any> = {}) {
+  constructor(container: HTMLElement, options: EditorViewerOptions = {}) {
     super(container, options);
 
     this._loaderManager = null;
@@ -147,7 +252,7 @@ export class EditorViewer extends Viewer {
    * 鍔犺浇妯″瀷锛堢粺涓€鍏ュ彛锛?   * @param {string|File|Blob} source - 鏂囦欢璺緞鎴栨枃浠跺璞?   * @param {Object} options - 鍔犺浇閫夐」
    * @returns {Promise<Object>} 鍔犺浇缁撴灉
    */
-  async loadModel(source: unknown, options: Record<string, any> = {}) {
+  async loadModel(source: ModelSource, options: LoadModelOptions = {}) {
     const { addToScene = true, detectFeatures = false, ...loaderOptions } = options;
 
     try {
@@ -198,7 +303,7 @@ export class EditorViewer extends Viewer {
   async exportModel(
     objects: THREE.Object3D | THREE.Object3D[],
     format: string,
-    options: Record<string, any> = {}
+    options: ExportOptions = {}
   ) {
     return this._exportManager.export(objects, format, options);
   }
@@ -213,7 +318,7 @@ export class EditorViewer extends Viewer {
     objects: THREE.Object3D | THREE.Object3D[],
     format: string,
     filename: string = 'model',
-    options: Record<string, any> = {}
+    options: ExportOptions = {}
   ) {
     await this._exportManager.exportAndDownload(objects, format, filename, options);
     this.events.emit('modelExported', { format, filename });
@@ -227,7 +332,7 @@ export class EditorViewer extends Viewer {
     format: string,
     filename: string = 'scene',
     model: THREE.Object3D | THREE.Object3D[] | undefined = undefined,
-    options: Record<string, any> = {}
+    options: ExportOptions = {}
   ) {
     const target = model ?? this.scene;
     const exportOptions = {
@@ -236,7 +341,11 @@ export class EditorViewer extends Viewer {
     };
     const blob = (target as THREE.Scene).isScene
       ? await this._exportManager.exportScene(target as THREE.Scene, format, exportOptions)
-      : await this._exportManager.export(target as THREE.Object3D | THREE.Object3D[], format, exportOptions);
+      : await this._exportManager.export(
+          target as THREE.Object3D | THREE.Object3D[],
+          format,
+          exportOptions
+        );
     this._exportManager._downloadBlob(
       blob,
       `${filename}.${this._exportManager._getExtension(format)}`
@@ -251,7 +360,7 @@ export class EditorViewer extends Viewer {
   async exportSelected(
     format: string,
     filename: string = 'selected',
-    options: Record<string, any> = {}
+    options: ExportOptions = {}
   ) {
     const selected = this.getSelectedObject();
     if (!selected) {
@@ -270,7 +379,7 @@ export class EditorViewer extends Viewer {
   async exportMerged(
     format: string,
     filename: string = 'merged',
-    options: Record<string, any> = {}
+    options: ExportOptions = {}
   ) {
     const meshes = this._meshes.filter(
       (m): m is THREE.Mesh => (m as THREE.Mesh).isMesh && !m.userData.isHelper
@@ -316,7 +425,7 @@ export class EditorViewer extends Viewer {
    * 鍒涘缓鏂伴」鐩?   * @param {Object} options - 椤圭洰閫夐」
    * @returns {Object} 椤圭洰鏁版嵁
    */
-  createProject(options: Record<string, any> = {}) {
+  createProject(options: CreateProjectOptions = {}) {
     // 娓呯悊褰撳墠鍦烘櫙
     this._clearScene();
 
@@ -330,7 +439,7 @@ export class EditorViewer extends Viewer {
    * 淇濆瓨椤圭洰鍒版湰鍦?   * @param {string} key - 瀛樺偍閿悕锛堝彲閫夛級
    * @returns {boolean} 鏄惁鎴愬姛
    */
-  saveProject(key) {
+  saveProject(key?: string) {
     // 鍚屾褰撳墠鐘舵€佸埌椤圭洰閰嶇疆
     this._syncStateToProject();
 
@@ -354,7 +463,7 @@ export class EditorViewer extends Viewer {
   /**
    * 瀵煎嚭椤圭洰鏂囦欢
    * @param {string} filename - 鏂囦欢鍚?   */
-  exportProjectFile(filename) {
+  exportProjectFile(filename?: string) {
     this._syncStateToProject();
     this._projectManager.exportProjectFile(filename || this._projectManager.getProjectName());
   }
@@ -363,7 +472,7 @@ export class EditorViewer extends Viewer {
    * 瀵煎嚭椤圭洰 ZIP 鍖咃紙project.json + models/*锛?   * @param {string} filename
    * @param {Object} options 閫忎紶鍒?ProjectManager.exportProjectPackage
    */
-  async exportProjectPackage(filename: string, options: Record<string, any> = {}) {
+  async exportProjectPackage(filename: string, options: ProjectPackageOptions = {}) {
     this._syncStateToProject();
     return await this._projectManager.exportProjectPackage({
       filename: filename || this._projectManager.getProjectName(),
@@ -376,7 +485,7 @@ export class EditorViewer extends Viewer {
    * @param {string} filename
    * @param {Object} options 閫忎紶鍒?ProjectManager.exportLocalFullPackage
    */
-  async exportLocalFullPackage(filename: string, options: Record<string, any> = {}) {
+  async exportLocalFullPackage(filename: string, options: ProjectPackageOptions = {}) {
     this._syncStateToProject();
     return await this._projectManager.exportLocalFullPackage({
       filename: filename || this._projectManager.getProjectName(),
@@ -389,7 +498,7 @@ export class EditorViewer extends Viewer {
    * @param {File} file - JSON 鏂囦欢
    * @returns {Promise<Object>} 椤圭洰鏁版嵁
    */
-  async importProjectFile(file) {
+  async importProjectFile(file: File) {
     const data = await this._projectManager.importProjectFile(file);
     await this._restoreProjectState(data);
     return data;
@@ -407,7 +516,7 @@ export class EditorViewer extends Viewer {
    * 鍒犻櫎鏈湴椤圭洰
    * @param {string} key - 瀛樺偍閿悕
    */
-  deleteLocalProject(key) {
+  deleteLocalProject(key: string) {
     this._projectManager.deleteLocalProject(key);
   }
 
@@ -423,7 +532,7 @@ export class EditorViewer extends Viewer {
    * 璁剧疆椤圭洰鍚嶇О
    * @param {string} name
    */
-  setProjectName(name) {
+  setProjectName(name: string) {
     this._projectManager.setProjectName(name);
   }
 
@@ -459,7 +568,7 @@ export class EditorViewer extends Viewer {
     }
 
     // 鍚屾鏂囧瓧閰嶇疆
-    const projectConfig = this._projectManager.config as { texts: Array<Record<string, unknown>> };
+    const projectConfig = this._projectManager.config as { texts: Array<Record<string, PrimitiveValue | number[]>> };
     projectConfig.texts = [];
     this._textObjects.forEach((textObj) => {
       const textColor = textObj.material?.color?.getHexString?.();
@@ -485,7 +594,7 @@ export class EditorViewer extends Viewer {
   /**
    * 浠庨」鐩暟鎹仮澶嶅満鏅姸鎬?   * @private
    */
-  async _restoreProjectState(projectData) {
+  async _restoreProjectState(projectData: ProjectDataLike) {
     const config = projectData.config;
 
     // 娓呯悊褰撳墠鍦烘櫙
@@ -549,7 +658,11 @@ export class EditorViewer extends Viewer {
    * @param {string} modelId - 妯″瀷ID
    * @param {Object} options - 妫€娴嬮€夐」
    */
-  async detectFeatures(model: unknown, modelId?: string, options: Record<string, any> = {}) {
+  async detectFeatures(
+    model: THREE.Object3D,
+    modelId?: string,
+    options: DetectFeatureOptions = {}
+  ) {
     const detector = this._featureDetector as FeatureDetectorLike | null;
     if (detector?.detect) {
       return await detector.detect(model, modelId, options);
@@ -563,7 +676,7 @@ export class EditorViewer extends Viewer {
    * @param {string} modelId - 妯″瀷ID
    * @param {THREE.Intersection} intersection - 灏勭嚎浜ょ偣
    */
-  getFeatureAtIntersection(modelId, intersection) {
+  getFeatureAtIntersection(modelId: string, intersection: THREE.Intersection) {
     const detector = this._featureDetector as FeatureDetectorLike | null;
     return detector?.getFeatureAtIntersection?.(modelId, intersection) ?? null;
   }
@@ -571,7 +684,7 @@ export class EditorViewer extends Viewer {
   /**
    * 鑾峰彇妯″瀷鐨勬墍鏈夌壒寰?   * @param {string} modelId - 妯″瀷ID
    */
-  getModelFeatures(modelId) {
+  getModelFeatures(modelId: string) {
     const detector = this._featureDetector as FeatureDetectorLike | null;
     return detector?.getModelFeatures?.(modelId) ?? null;
   }
@@ -580,7 +693,7 @@ export class EditorViewer extends Viewer {
    * 鑾峰彇閫傚悎娣诲姞鏂囧瓧鐨勮〃闈?   * @param {string} modelId - 妯″瀷ID
    * @param {Object} options - 绛涢€夐€夐」
    */
-  getTextableSurfaces(modelId: string, options: Record<string, any> = {}) {
+  getTextableSurfaces(modelId: string, options: DetectFeatureOptions = {}) {
     const detector = this._featureDetector as FeatureDetectorLike | null;
     return detector?.getTextableSurfaces?.(modelId, options) ?? [];
   }
@@ -772,18 +885,16 @@ export class EditorViewer extends Viewer {
       this.events.emit('textModeDisabled');
     });
 
-    const transformControls = this._surfaceTextManager.transformControls as
-      | {
-          on?: (eventName: string, callback: (isDragging: boolean) => void) => void;
-          addEventListener?: (eventName: string, callback: (event: { value: boolean }) => void) => void;
-          controls?: {
-            addEventListener?: (
-              eventName: string,
-              callback: (event: { value: boolean }) => void
-            ) => void;
-          };
-        }
-      | null;
+    const transformControls = this._surfaceTextManager.transformControls as {
+      on?: (eventName: string, callback: (isDragging: boolean) => void) => void;
+      addEventListener?: (eventName: string, callback: (event: { value: boolean }) => void) => void;
+      controls?: {
+        addEventListener?: (
+          eventName: string,
+          callback: (event: { value: boolean }) => void
+        ) => void;
+      };
+    } | null;
     if (transformControls) {
       if (typeof transformControls.on === 'function') {
         transformControls.on('dragging-changed', (isDragging) => {
@@ -825,7 +936,7 @@ export class EditorViewer extends Viewer {
   /**
    * 鍒涘缓鏂囧瓧
    */
-  async createText(content, faceInfo) {
+  async createText(content: string, faceInfo: Record<string, PrimitiveValue | object>) {
     if (!this._surfaceTextManager) {
       this.initTextSystem();
     }
@@ -835,14 +946,14 @@ export class EditorViewer extends Viewer {
   /**
    * 鏇存柊鏂囧瓧鍐呭
    */
-  async updateTextContent(textId, content) {
+  async updateTextContent(textId: string, content: string) {
     return this._surfaceTextManager?.updateTextContent(textId, content);
   }
 
   /**
    * 鏇存柊鏂囧瓧棰滆壊
    */
-  updateTextColor(textId, color) {
+  updateTextColor(textId: string, color: string | number) {
     const colorHex = typeof color === 'string' ? parseInt(color.replace('#', ''), 16) : color;
     this._surfaceTextManager?.updateTextColor(textId, colorHex);
   }
@@ -850,32 +961,32 @@ export class EditorViewer extends Viewer {
   /**
    * 鏇存柊鏂囧瓧閰嶇疆
    */
-  async updateTextConfig(textId, config) {
+  async updateTextConfig(textId: string, config: TextObjectConfig) {
     return this._surfaceTextManager?.updateTextConfig(textId, config);
   }
 
   /**
    * 鍒囨崲鏂囧瓧妯″紡锛堝嚫璧?鍐呭祵锛?   */
-  async switchTextMode(textId, mode) {
+  async switchTextMode(textId: string, mode: TextMode) {
     return this._surfaceTextManager?.switchTextMode(textId, mode);
   }
 
   /**
    * 鍒犻櫎鏂囧瓧
    */
-  async deleteText(textId) {
+  async deleteText(textId: string) {
     return await this._surfaceTextManager?.deleteText(textId);
   }
 
   /**
    * 鑾峰彇鏂囧瓧蹇収锛堢敤浜庢挙閿€/閲嶅仛锛?   */
-  getTextSnapshot(textId) {
+  getTextSnapshot(textId: string) {
     return this._surfaceTextManager?.getTextSnapshot?.(textId) || null;
   }
 
   /**
    * 浠庡揩鐓ф仮澶嶆枃瀛楋紙鐢ㄤ簬鎾ら攢/閲嶅仛锛?   */
-  async restoreText(snapshot) {
+  async restoreText(snapshot: Record<string, PrimitiveValue | number[] | object>) {
     if (!this._surfaceTextManager) {
       this.initTextSystem();
     }
@@ -885,7 +996,7 @@ export class EditorViewer extends Viewer {
   /**
    * 閫夋嫨鏂囧瓧
    */
-  selectText(textId) {
+  selectText(textId: string) {
     this._surfaceTextManager?.selectText(textId);
   }
 
@@ -940,7 +1051,7 @@ export class EditorViewer extends Viewer {
   _setupObjectSelectionEvents() {
     if (!this._objectSelectionManager) return;
     const outlineHelpers = this as {
-      setOutlineSelection?: (object: unknown) => void;
+      setOutlineSelection?: (object: THREE.Object3D) => void;
       clearOutlineSelection?: () => void;
     };
 
@@ -1003,7 +1114,7 @@ export class EditorViewer extends Viewer {
   /**
    * 璁剧疆鍙樻崲妯″紡
    */
-  setTransformMode(mode) {
+  setTransformMode(mode: 'translate' | 'rotate' | 'scale') {
     this._objectSelectionManager?.setTransformMode(mode);
   }
 
@@ -1017,7 +1128,7 @@ export class EditorViewer extends Viewer {
 
   /**
    * 娣诲姞缃戞牸鏃跺悓姝ュ埌瀛愮郴缁?   */
-  addMesh(mesh: EditorViewerMesh, options: Record<string, any> = {}) {
+  addMesh(mesh: EditorViewerMesh, options: AddMeshOptions = {}) {
     const result = super.addMesh(mesh, options);
 
     // 鍚屾鍒伴潰鎷惧彇

@@ -24,16 +24,16 @@ type MousePositionInfo = {
 };
 
 type FacePickerLike = {
-  emit: (eventName: string, ...args: unknown[]) => void;
+  emit: (eventName: string, ...args: CoreValue[]) => void;
   handleMouseMove?: (event: MouseEvent) => void;
   handleClick?: (event: MouseEvent) => void;
   handleKeyDown?: (event: KeyboardEvent) => void;
   clearSelection?: () => void;
   undo?: () => boolean;
   redo?: () => boolean;
-  getSelectedFaces?: () => unknown[];
-  getSelectionStats?: () => unknown;
-  getHighlightStats?: () => unknown;
+  getSelectedFaces?: () => CoreValue[];
+  getSelectionStats?: () => CoreValue;
+  getHighlightStats?: () => CoreValue;
 };
 
 type EventHandlerState = {

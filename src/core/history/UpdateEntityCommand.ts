@@ -2,14 +2,14 @@ import type Document from '../Document';
 import { BaseCommand } from './BaseCommand';
 import type { EntityPatch } from '../Document/Entity';
 
-const cloneValue = (value: unknown) => {
+const cloneValue = (value: CoreValue) => {
   if (Array.isArray(value)) return value.slice();
   if (value && typeof value === 'object') return { ...value };
   return value;
 };
 
-const normalizeEntityPatch = (patch: Record<string, any> = {}) => {
-  const next: Record<string, any> = {};
+const normalizeEntityPatch = (patch: Record<string, CoreValue> = {}) => {
+  const next: Record<string, CoreValue> = {};
 
   if (patch.resource !== undefined) next.resource = patch.resource;
   if (patch.source !== undefined) next.resource = patch.source;
@@ -45,8 +45,8 @@ export class UpdateEntityCommand extends BaseCommand {
   constructor(
     document: Document | null,
     entityId: string,
-    patch: Record<string, any> = {},
-    options: Record<string, any> = {}
+    patch: Record<string, CoreValue> = {},
+    options: Record<string, CoreValue> = {}
   ) {
     const description = options.description || 'Update Entity';
     super('ENTITY_UPDATE', description);
@@ -75,9 +75,9 @@ export class UpdateEntityCommand extends BaseCommand {
     const entity = this.document.entityManager.getEntity(this.entityId);
     if (!entity) return null;
 
-    const before: Record<string, any> = {};
+    const before: Record<string, CoreValue> = {};
     Object.keys(this.patch || {}).forEach((key) => {
-      before[key] = cloneValue((entity as unknown)[key]);
+      before[key] = cloneValue((entity as CoreValue)[key]);
     });
     return before as EntityPatch;
   }

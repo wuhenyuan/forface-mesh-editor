@@ -7,7 +7,7 @@ export class AddEntityCommand extends BaseCommand {
   entity: EntityProps | null;
   entityId: string | null;
 
-  constructor(document: Document | null, entity: EntityProps, options: Record<string, any> = {}) {
+  constructor(document: Document | null, entity: EntityProps, options: Record<string, CoreValue> = {}) {
     const description = options.description || 'Add Entity';
     super('ENTITY_ADD', description);
 
@@ -22,7 +22,14 @@ export class AddEntityCommand extends BaseCommand {
   async execute() {
     if (!this.document || !this.entity) return;
     const created = this.document.addEntity(this.entity);
-    this.entityId = created?.id || this.entityId;
+    if (
+      created &&
+      typeof created === 'object' &&
+      'id' in created &&
+      typeof created.id === 'string'
+    ) {
+      this.entityId = created.id;
+    }
   }
 
   async undo() {

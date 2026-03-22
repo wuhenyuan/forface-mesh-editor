@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 export class FeatureBasedIdentifier {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor() {
     this.features = new Map(); // featureId -> Feature
     this.meshFeatures = new Map(); // meshId -> Feature[]

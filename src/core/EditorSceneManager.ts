@@ -25,7 +25,9 @@ export class EditorSceneManager {
       (viewer.initObjectSelection?.() as ObjectSelectionManager | null) ||
       (viewer.getObjectSelectionManager?.() as ObjectSelectionManager | null) ||
       null;
-    const selector = this.selector as (ObjectSelectionManager & { objectSelector?: ObjectSelector }) | null;
+    const selector = this.selector as
+      | (ObjectSelectionManager & { objectSelector?: ObjectSelector })
+      | null;
     this.highlighter = selector?.objectSelector || null;
   }
 

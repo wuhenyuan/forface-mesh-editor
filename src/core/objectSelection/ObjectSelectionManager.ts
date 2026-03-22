@@ -7,7 +7,7 @@ import { ObjectBoundsHelper } from './ObjectBoundsHelper';
  * 统一管理物体选择和变换控制
  */
 export class ObjectSelectionManager {
-  [key: string]: unknown;
+  [key: string]: CoreValue;
   constructor(scene, camera, renderer, domElement) {
     this.scene = scene;
     this.camera = camera;
@@ -323,7 +323,7 @@ export class ObjectSelectionManager {
   /**
    * 发出事件
    * @param {string} eventName - 事件名称
-   * @param {...unknown} args - 事件参数
+   * @param {...CoreValue} args - 事件参数
    */
   emit(eventName, ...args) {
     if (!this.eventListeners.has(eventName)) return;
