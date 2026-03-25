@@ -34,6 +34,9 @@ type TaskRecord = TaskCallbacks & {
 export class EditorTaskWorkerBridge {
   private static _shared: EditorTaskWorkerBridge | null = null;
 
+  /**
+   * 返回全局共享的 bridge 单例。
+   */
   static getShared() {
     if (!EditorTaskWorkerBridge._shared) {
       EditorTaskWorkerBridge._shared = new EditorTaskWorkerBridge();
@@ -45,6 +48,9 @@ export class EditorTaskWorkerBridge {
   private _tasks: Map<string, TaskRecord>;
   private _taskCounter: number;
 
+  /**
+   * 创建 worker 实例，并建立统一的消息入口。
+   */
   private constructor() {
     this._worker = new EditorTaskWorker();
     this._tasks = new Map();
@@ -54,11 +60,17 @@ export class EditorTaskWorkerBridge {
     };
   }
 
+  /**
+   * 生成唯一任务 ID。
+   */
   createTaskId(prefix: TaskKind) {
     this._taskCounter += 1;
     return `${prefix}_${Date.now()}_${this._taskCounter}`;
   }
 
+  /**
+   * 发起布尔 worker 任务。
+   */
   runBooleanTask(
     payload: BooleanTaskPayload,
     options: TaskCallbacks & { taskId?: string; transferables?: Transferable[] } = {}
@@ -75,6 +87,9 @@ export class EditorTaskWorkerBridge {
     );
   }
 
+  /**
+   * 发起导出压缩 worker 任务。
+   */
   runExportZipTask(
     payload: ExportZipTaskPayload,
     options: TaskCallbacks & { taskId?: string; transferables?: Transferable[] } = {}
@@ -91,6 +106,9 @@ export class EditorTaskWorkerBridge {
     );
   }
 
+  /**
+   * 取消指定任务。
+   */
   cancelTask(taskId: string) {
     const record = this._tasks.get(taskId);
     if (record?.timer) {
@@ -103,10 +121,16 @@ export class EditorTaskWorkerBridge {
     } satisfies WorkerRequest);
   }
 
+  /**
+   * 请求 worker 清空缓存。
+   */
   clearCache() {
     this._worker.postMessage({ type: 'clearCache' } satisfies WorkerRequest);
   }
 
+  /**
+   * 读取 worker 当前队列、缓存和历史统计信息。
+   */
   async getStats() {
     return await new Promise<Extract<WorkerResponse, { type: 'stats' }>['payload']>((resolve) => {
       const handleMessage = (event: MessageEvent<WorkerResponse>) => {
@@ -119,12 +143,17 @@ export class EditorTaskWorkerBridge {
     });
   }
 
+  /**
+   * 统一提交任务到 worker，并登记主线程侧的任务状态。
+   */
   private _runTask<T extends BooleanTaskResult | ExportZipTaskResult>(
     request: Extract<WorkerRequest, { type: 'boolean' | 'exportZip' }>,
     kind: TaskKind,
     options: TaskCallbacks & { transferables?: Transferable[] } = {}
   ) {
     return awaitable<T>((resolve, reject) => {
+      // 先在主线程登记任务记录，再 postMessage 给 worker。
+      // 这样即使 worker 很快返回 progress / result，也能立即按 taskId 找到对应回调。
       this._tasks.set(request.taskId, {
         id: request.taskId,
         kind,
@@ -145,11 +174,15 @@ export class EditorTaskWorkerBridge {
     });
   }
 
+  /**
+   * 处理 worker 返回的进度、结果与错误消息。
+   */
   private _handleMessage(message: WorkerResponse) {
     if (message.type === 'stats') {
       return;
     }
 
+    // 除 stats 外，所有 worker 消息都会按 taskId 汇总到这里统一分发。
     const task = this._tasks.get(message.taskId);
     if (!task) {
       return;
@@ -175,13 +208,23 @@ export class EditorTaskWorkerBridge {
     task.reject(new Error(message.error || 'Worker task failed'));
   }
 
+  /**
+   * 汇总并处理单次任务进度。
+   */
   private _handleProgress(task: TaskRecord, progress: WorkerTaskProgress) {
+    // 进度在 bridge 层保持单调递增；
+    // worker 真进度和 bridge 自己补出来的模拟进度都会先汇总到这里。
     task.lastProgress = Math.max(task.lastProgress, progress.progress || 0);
     this._syncSimulation(task, progress.detail || {});
     this._emitProgress(task, progress);
   }
 
+  /**
+   * 根据 worker 给出的估算信息，在主线程补出平滑进度。
+   */
   private _syncSimulation(task: TaskRecord, detail: WorkerProgressDetail) {
+    // worker 在耗时阶段会给出“预计耗时 + 本阶段最高可推进到哪里”。
+    // bridge 利用这两个值在主线程补一段平滑进度，避免 UI 长时间卡在某个百分比不动。
     const estimatedMs = Number(detail.simulatedMs || 0);
     const ceiling = Number(detail.simulatedCeilingProgress || 0);
     const phaseName = typeof detail.phaseName === 'string' ? String(detail.phaseName) : null;
@@ -239,7 +282,12 @@ export class EditorTaskWorkerBridge {
     }, 40);
   }
 
+  /**
+   * 按 UI 友好的粒度向外发出进度事件。
+   */
   private _emitProgress(task: TaskRecord, progress: WorkerTaskProgress) {
+    // UI 侧不需要每个细粒度 tick；
+    // 这里只在“阶段变化 / 百分比跨整数桶 / 完成”时往外发一次，减少重渲染。
     const currentBucket = Math.floor(Math.max(0, Math.min(progress.progress || 0, 1)) * 100);
     const previousBucket = Math.floor(Math.max(task.lastEmittedProgress, 0) * 100);
     const phaseChanged = task.lastEmittedPhase !== progress.phase;
@@ -265,6 +313,9 @@ export class EditorTaskWorkerBridge {
   }
 }
 
+/**
+ * 用同步风格封装 Promise 构造，便于桥接任务回调。
+ */
 function awaitable<T>(
   executor: (resolve: (value: T) => void, reject: (reason?: unknown) => void) => void
 ) {

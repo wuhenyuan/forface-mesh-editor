@@ -33,26 +33,41 @@ export class BooleanOperator {
   private _callbacks: BooleanCallbacks;
   private _activeTaskId: string | null;
 
+  /**
+   * 初始化布尔操作器，并绑定主线程侧的进度与错误回调。
+   */
   constructor(callbacks: BooleanCallbacks = {}) {
     this._bridge = EditorTaskWorkerBridge.getShared();
     this._callbacks = callbacks;
     this._activeTaskId = null;
   }
 
+  /**
+   * 返回当前操作器是否可用。
+   */
   isReady() {
     return true;
   }
 
+  /**
+   * 更新进度与错误回调。
+   */
   setCallbacks(callbacks: BooleanCallbacks = {}) {
     this._callbacks = callbacks;
   }
 
+  /**
+   * 执行减法布尔，并补齐宿主与工具区域的材质信息。
+   */
   async subtract(
     targetGeometry: THREE.BufferGeometry,
     toolGeometry: THREE.BufferGeometry,
     toolMatrix: THREE.Matrix4 | null = null,
     options: BooleanOperationOptions = {}
   ): Promise<BooleanOperationResult> {
+    // 布尔减法返回后，结果通常会拆成“宿主区域 + 工具切出的区域”两套材质。
+    // 因此在真正发给 worker 之前，先在主线程准备好材质及其实体标记，
+    // 这样结果回写到场景后，点击命中、区域着色、实体追踪都还能成立。
     const targetMaterial = this._buildTargetMaterial(options);
     const toolMaterial = this._buildToolMaterial(options);
 
@@ -95,6 +110,9 @@ export class BooleanOperator {
     };
   }
 
+  /**
+   * 执行并集布尔。
+   */
   async union(
     geometry1: THREE.BufferGeometry,
     geometry2: THREE.BufferGeometry,
@@ -105,6 +123,9 @@ export class BooleanOperator {
     return result.geometry;
   }
 
+  /**
+   * 执行交集布尔。
+   */
   async intersect(
     geometry1: THREE.BufferGeometry,
     geometry2: THREE.BufferGeometry,
@@ -121,6 +142,9 @@ export class BooleanOperator {
     return result.geometry;
   }
 
+  /**
+   * 按顺序对一组操作执行批量布尔运算。
+   */
   async batchOperation(baseGeometry: THREE.BufferGeometry, operations: BatchOperation[] = []) {
     let currentGeometry = baseGeometry.clone();
 
@@ -141,6 +165,9 @@ export class BooleanOperator {
     return currentGeometry;
   }
 
+  /**
+   * 校验几何体是否满足布尔运算的最小要求。
+   */
   validateGeometry(geometry: THREE.BufferGeometry) {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -183,6 +210,9 @@ export class BooleanOperator {
     };
   }
 
+  /**
+   * 对几何体做最基础的标准化处理，便于后续布尔运算。
+   */
   optimizeGeometry(geometry: THREE.BufferGeometry) {
     if (!geometry) return geometry;
     const optimized = geometry.clone();
@@ -195,6 +225,9 @@ export class BooleanOperator {
     return optimized;
   }
 
+  /**
+   * 返回当前布尔实现的运行时能力信息。
+   */
   getStats() {
     return {
       libraryLoaded: true,
@@ -204,8 +237,14 @@ export class BooleanOperator {
     };
   }
 
+  /**
+   * 预留的配置入口，当前实现不需要额外配置。
+   */
   setOptions(_options: Record<string, CoreValue> = {}) {}
 
+  /**
+   * 取消当前正在执行的 worker 任务。
+   */
   cancelActiveTask() {
     if (this._activeTaskId) {
       this._bridge.cancelTask(this._activeTaskId);
@@ -213,11 +252,17 @@ export class BooleanOperator {
     }
   }
 
+  /**
+   * 销毁操作器，并清理活动任务与回调引用。
+   */
   destroy() {
     this.cancelActiveTask();
     this._callbacks = {};
   }
 
+  /**
+   * 统一执行二元布尔运算，并负责主线程与 worker 之间的数据往返。
+   */
   private async _runBinaryOperation(
     operation: 'subtract' | 'union' | 'intersect',
     geometryA: THREE.BufferGeometry,
@@ -228,6 +273,11 @@ export class BooleanOperator {
       materialsB?: THREE.Material[];
     } = {}
   ): Promise<BooleanOperationResult> {
+    // 这一层是主线程侧真正的布尔入口：
+    // 1. 校验输入几何；
+    // 2. 序列化成 worker 可传输的 source；
+    // 3. 通过 bridge 发起异步任务；
+    // 4. 把 worker 返回的纯数据还原成 three 运行时对象。
     const validationA = this.validateGeometry(geometryA);
     const validationB = this.validateGeometry(geometryB);
     if (!validationA.isValid) {
@@ -237,6 +287,8 @@ export class BooleanOperator {
       throw new Error(validationB.errors[0] || 'Invalid geometry B');
     }
 
+    // worker 线程不能直接消费当前线程里的 BufferGeometry / Material 实例，
+    // 所以这里先把几何、矩阵、材质全部压成可结构化克隆的数据。
     const sources = serializeBinaryBooleanSources(geometryA, geometryB, operation, {
       sourceAId:
         this._asString(options.targetEntityKey) ||
@@ -262,6 +314,8 @@ export class BooleanOperator {
     this._activeTaskId = taskId;
 
     try {
+      // 从这里开始正式切到“主线程 -> worker”链路。
+      // bridge 负责管理 taskId、进度平滑、取消与消息分发，operator 只关心输入输出。
       const result = await this._bridge.runBooleanTask(
         { sources },
         {
@@ -274,6 +328,7 @@ export class BooleanOperator {
         }
       );
 
+      // worker 返回的是序列化后的结果，回到主线程后再还原成真正的 three 对象。
       const geometry = hydrateBufferGeometry(result.geometry);
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
@@ -300,6 +355,9 @@ export class BooleanOperator {
     }
   }
 
+  /**
+   * 构建宿主区域默认材质，必要时克隆调用方传入的材质。
+   */
   private _buildTargetMaterial(options: BooleanOperationOptions) {
     const provided = (options.targetMaterial || options.baseMaterial) as THREE.Material | null;
     if (provided?.clone) {
@@ -311,6 +369,9 @@ export class BooleanOperator {
     });
   }
 
+  /**
+   * 构建工具区域默认材质，必要时克隆调用方传入的材质。
+   */
   private _buildToolMaterial(options: BooleanOperationOptions) {
     const provided = (options.toolMaterial || options.engravedMaterial) as THREE.Material | null;
     if (provided?.clone) {
@@ -322,10 +383,16 @@ export class BooleanOperator {
     });
   }
 
+  /**
+   * 把动态值安全转换为非空字符串。
+   */
   private _asString(value: CoreValue) {
     return typeof value === 'string' && value ? value : null;
   }
 
+  /**
+   * 把动态值转换为可参与版本签名的字符串或数字。
+   */
   private _asVersion(value: CoreValue) {
     if (typeof value === 'string' && value) return value;
     if (typeof value === 'number' && Number.isFinite(value)) return value;

@@ -94,11 +94,13 @@ class LruCache<K, V> {
   private _maxEntries: number;
   private _onEvict?: (key: K, value: V) => void;
 
+  // 初始化一个带淘汰回调的简单 LRU 缓存。
   constructor(maxEntries: number, onEvict?: (key: K, value: V) => void) {
     this._maxEntries = Math.max(1, maxEntries);
     this._onEvict = onEvict;
   }
 
+  // 读取缓存并刷新最近访问顺序。
   get(key: K) {
     if (!this._map.has(key)) {
       this._misses += 1;
@@ -112,10 +114,12 @@ class LruCache<K, V> {
     return value;
   }
 
+  // 只读取缓存，不更新最近访问顺序。
   peek(key: K) {
     return this._map.get(key) || null;
   }
 
+  // 写入缓存，并在超限时淘汰最旧项。
   set(key: K, value: V) {
     if (this._map.has(key)) {
       const previous = this._map.get(key) as V;
@@ -135,6 +139,7 @@ class LruCache<K, V> {
     }
   }
 
+  // 清空缓存，并对每个条目执行淘汰回调。
   clear() {
     for (const [key, value] of this._map.entries()) {
       this._onEvict?.(key, value);
@@ -142,6 +147,7 @@ class LruCache<K, V> {
     this._map.clear();
   }
 
+  // 返回当前缓存命中统计。
   stats() {
     return {
       size: this._map.size,
@@ -156,10 +162,12 @@ class SampleHistory<T> {
   private _samples: T[] = [];
   private _limit: number;
 
+  // 初始化固定长度的样本历史。
   constructor(limit: number) {
     this._limit = Math.max(1, limit);
   }
 
+  // 写入一条样本，并在超限时移除最旧记录。
   add(sample: T) {
     this._samples.push(sample);
     while (this._samples.length > this._limit) {
@@ -167,10 +175,12 @@ class SampleHistory<T> {
     }
   }
 
+  // 返回当前样本快照。
   values() {
     return [...this._samples];
   }
 
+  // 返回当前样本数量。
   get size() {
     return this._samples.length;
   }
@@ -214,6 +224,7 @@ const workerScope = self as unknown as {
   postMessage: (message: WorkerResponse, transfer?: Transferable[]) => void;
 };
 
+// worker 的统一消息入口，负责取消任务、清缓存、读取统计和排队执行任务。
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
 
@@ -272,6 +283,7 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   void pumpQueue();
 };
 
+// 如果当前没有活动任务，就从队列中取下一项开始执行。
 async function pumpQueue() {
   if (activeTaskId || queue.length === 0) {
     return;
@@ -310,7 +322,11 @@ async function pumpQueue() {
   }
 }
 
+// 处理布尔任务，并按固定阶段回传进度、结果和缓存命中信息。
 async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, control: TaskControl) {
+  // 布尔任务在 worker 中固定走这几个阶段：
+  // prepare -> build-cache -> csg-core -> rebuild-result -> transfer。
+  // 主线程看到的阶段文案、缓存命中信息和大部分进度细节都从这里发出。
   const totalStart = performance.now();
   assertNotCancelled(control);
 
@@ -328,6 +344,8 @@ async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, co
   await flushEventLoop();
   assertNotCancelled(control);
 
+  // 先把每个输入 source 统一整理成 Brush 缓存条目。
+  // 这一步会完成几何还原、矩阵应用、材质恢复，以及索引/法线等标准化处理。
   const preparedSources = sources.map((source) => prepareBooleanSource(source));
   const sourceCacheHits = preparedSources.filter((source) => source.cacheHit).length;
   postProgress(
@@ -344,6 +362,8 @@ async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, co
     }
   );
 
+  // 如果整条布尔链的最终缓存 key 已命中，说明“输入集合 + 顺序 + 操作类型”完全一致，
+  // 可以直接跳过 csg-core，进入结果序列化与回传。
   const resultCacheKey = buildBooleanResultCacheKey(sources, preparedSources);
   const cachedResult = resultCache.get(resultCacheKey);
   if (cachedResult) {
@@ -387,6 +407,8 @@ async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, co
     return;
   }
 
+  // 真正求值前，先只基于缓存状态、三角面数和包围盒关系做一次轻量估算，
+  // 用来驱动主线程的模拟进度与耗时预测。
   const evaluationPlan = planBooleanEvaluation(preparedSources, sources);
   const {
     triA,
@@ -425,6 +447,8 @@ async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, co
   await flushEventLoop();
   assertNotCancelled(control);
 
+  // 从这里开始才会真正调用 CSG evaluator。
+  // evaluateBooleanSources 会按 source 顺序把整条布尔链折叠成最终结果。
   const coreStart = performance.now();
   const evaluation = evaluateBooleanSources(preparedSources, sources, control);
   const coreMs = performance.now() - coreStart;
@@ -471,6 +495,8 @@ async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, co
     },
   });
 
+  // 把真实耗时样本记下来，下一次估算 estimatedCoreMs 时会参考这些历史数据，
+  // 让进度条更贴近当前设备的实际性能。
   booleanHistory.add({
     op: opType,
     triA,
@@ -485,6 +511,7 @@ async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, co
 
   assertNotCancelled(control);
 
+  // 最后一段只负责把结果序列化并通过 transferables 送回主线程。
   postProgress(taskId, 'transfer', 1, {
     taskType: 'boolean',
     phaseName: 'transfer',
@@ -505,6 +532,7 @@ async function handleBooleanTask(taskId: string, payload: BooleanTaskPayload, co
   );
 }
 
+// 处理导出 ZIP 任务，并把导出与压缩拆成多阶段进度。
 async function handleExportZipTask(
   taskId: string,
   payload: ExportZipTaskPayload,
@@ -665,7 +693,10 @@ async function handleExportZipTask(
   );
 }
 
+// 把序列化 source 转成可直接参与布尔运算的缓存条目。
 function prepareBooleanSource(source: SerializedBooleanSource): PreparedSource {
+  // geometryCache 缓的是“单个 source -> 可直接参与 CSG 的 Brush”。
+  // 只要源几何、矩阵和材质签名没变化，就不需要重复 hydrate / prepareGeometry。
   const cacheKey = buildPreparedSourceKey(source);
   const cached = geometryCache.get(cacheKey);
   if (cached) {
@@ -680,7 +711,12 @@ function prepareBooleanSource(source: SerializedBooleanSource): PreparedSource {
   };
 }
 
+// 根据 source 构建一个标准化的 Brush 缓存条目。
 function buildSourceBrushEntry(source: SerializedBooleanSource, cacheKey: string): CachedBrushEntry {
+  // source 有两种形态：
+  // 1. 已经合并好的单份 geometry；
+  // 2. 由多个 mesh 片段组成的对象集合。
+  // 不管输入是哪一种，这里最终都会归一成同一种 Brush 条目。
   let geometry: THREE.BufferGeometry | null = null;
   let materialDescriptors: SerializedMaterialData[] = [];
 
@@ -731,7 +767,10 @@ function buildSourceBrushEntry(source: SerializedBooleanSource, cacheKey: string
   return createCachedBrushEntry(cacheKey, brush, { cloneMaterials: false });
 }
 
+// 把多材质 mesh 拆成多个子几何，便于后续合并和保留材质边界。
 function buildSubGeometriesFromMesh(mesh: SerializedMeshData) {
+  // 多材质 mesh 需要先按 group 切成多个小 geometry，
+  // 后面 merge 成 source geometry 时才能尽量保留材质边界信息。
   const worldGeometry = hydrateBufferGeometry(mesh.geometry);
   worldGeometry.applyMatrix4(hydrateMatrix4(mesh.matrixWorld));
 
@@ -774,11 +813,14 @@ function buildSubGeometriesFromMesh(mesh: SerializedMeshData) {
   return results;
 }
 
+// 按 source 顺序执行整条布尔链，并尽量复用中间结果缓存。
 function evaluateBooleanSources(
   preparedSources: PreparedSource[],
   sourceDefs: SerializedBooleanSource[],
   control: TaskControl
 ) {
+  // currentEntry 始终表示“截至当前步骤的中间结果”。
+  // 之后每一步都会把 currentEntry 与下一个 source 再做一次布尔运算。
   const operationMap: Record<BooleanOperationType, number> = {
     union: ADDITION,
     subtract: SUBTRACTION,
@@ -795,6 +837,8 @@ function evaluateBooleanSources(
     assertNotCancelled(control);
     const nextSource = preparedSources[index];
     const op = sourceDefs[index]?.op || 'union';
+    // stepKey 精确标识“上一步链结果 + 本步操作 + 当前 source”。
+    // 命中后可以直接复用中间结果，而不必从头重算前面的步骤。
     const stepKey = buildBooleanChainStepKey(currentChainKey, op, nextSource.cacheKey);
     const cachedStep = resultCache.get(stepKey);
     if (cachedStep) {
@@ -804,6 +848,7 @@ function evaluateBooleanSources(
       continue;
     }
 
+    // 只有未命中 step cache 时，才真正执行这一步的 three-bvh-csg 求值。
     const resultBrush = evaluator.evaluate(
       currentEntry.brush,
       nextSource.brush,
@@ -831,11 +876,14 @@ function evaluateBooleanSources(
   };
 }
 
+// 对 Brush 做统一标准化后包装成可缓存条目。
 function createCachedBrushEntry(
   cacheKey: string,
   brush: Brush,
   options: { cloneMaterials?: boolean } = {}
 ) {
+  // 无论缓存的是原始 source 还是中间布尔结果，
+  // 在写入缓存前都先做一次统一标准化，保证下一步可以直接继续参与运算。
   const geometry = brush.geometry;
   if (!geometry.index) {
     const position = geometry.getAttribute('position');
@@ -864,6 +912,7 @@ function createCachedBrushEntry(
   };
 }
 
+// 把缓存条目转换成可跨线程传输的布尔结果对象。
 function buildBooleanTaskResult(
   entry: CachedBrushEntry,
   options: {
@@ -872,6 +921,8 @@ function buildBooleanTaskResult(
     metrics: BooleanTaskResult['metrics'];
   }
 ): BooleanTaskResult {
+  // worker 返回给主线程的必须是可结构化克隆的数据，
+  // 不能直接把 Brush / Material 运行时实例跨线程传出去。
   return {
     geometry: serializeBufferGeometry(entry.brush.geometry),
     materials: serializeResultMaterials(entry.brush.material),
@@ -881,6 +932,7 @@ function buildBooleanTaskResult(
   };
 }
 
+// 汇总整条布尔链的基础指标，供缓存命中和估算阶段复用。
 function buildBooleanAggregateMetrics(
   preparedSources: Array<{ triCount: number; bbox: THREE.Box3 }>,
   sourceDefs: SerializedBooleanSource[],
@@ -905,10 +957,14 @@ function buildBooleanAggregateMetrics(
   };
 }
 
+// 只做轻量预测，不真正执行 CSG，用来估算后续求值成本。
 function planBooleanEvaluation(
   preparedSources: PreparedSource[],
   sourceDefs: SerializedBooleanSource[]
 ): BooleanEvaluationPlan {
+  // 估算阶段不会真的做 CSG。
+  // 它只是沿着同一条布尔链检查哪些中间结果已经命中缓存，
+  // 再结合三角面数、包围盒重叠度和共面风险预测剩余核心耗时。
   const totalSteps = Math.max(0, preparedSources.length - 1);
   if (totalSteps === 0) {
     const aggregate = buildBooleanAggregateMetrics(preparedSources, sourceDefs, 20);
@@ -989,6 +1045,7 @@ function planBooleanEvaluation(
   };
 }
 
+// 从已有 source 或缓存结果中提取估算阶段所需的最小状态。
 function buildEstimatedState(source: { triCount: number; bbox: THREE.Box3 }) {
   return {
     triCount: source.triCount,
@@ -996,6 +1053,7 @@ function buildEstimatedState(source: { triCount: number; bbox: THREE.Box3 }) {
   };
 }
 
+// 计算单步布尔估算所需的三角面数、重叠率和共面风险。
 function buildBooleanStepMetrics(
   sourceA: { triCount: number; bbox: THREE.Box3 },
   sourceB: { triCount: number; bbox: THREE.Box3 },
@@ -1010,6 +1068,7 @@ function buildBooleanStepMetrics(
   };
 }
 
+// 基于启发式规则预测当前步完成后的结果状态。
 function estimateBooleanResultState(
   sourceA: { triCount: number; bbox: THREE.Box3 },
   sourceB: { triCount: number; bbox: THREE.Box3 },
@@ -1022,6 +1081,7 @@ function estimateBooleanResultState(
   };
 }
 
+// 估算不同布尔类型下结果几何的大致三角面数量。
 function estimateResultTriCount(
   triA: number,
   triB: number,
@@ -1042,6 +1102,7 @@ function estimateResultTriCount(
   }
 }
 
+// 估算不同布尔类型下结果包围盒的大致范围。
 function estimateResultBbox(boxA: THREE.Box3, boxB: THREE.Box3, opType: BooleanOperationType) {
   if (opType === 'intersect') {
     return boxA.clone().intersect(boxB);
@@ -1054,42 +1115,50 @@ function estimateResultBbox(boxA: THREE.Box3, boxB: THREE.Box3, opType: BooleanO
   return boxA.clone().union(boxB);
 }
 
+// 把材质数组压成 Brush 可接受的单材质或多材质形式。
 function materialListToBrushMaterial(materials: THREE.Material[]) {
   return materials.length <= 1 ? materials[0] || hydrateMaterialDescriptor(defaultMaterial()) : materials;
 }
 
+// 克隆一组材质，避免缓存条目之间共享可变材质实例。
 function cloneMaterialList(material: THREE.Material | THREE.Material[]) {
   const materials = Array.isArray(material) ? material : [material];
   return materials.filter(Boolean).map((item) => item.clone());
 }
 
+// 统一释放单材质或材质数组。
 function disposeMaterialList(material: THREE.Material | THREE.Material[] | null | undefined) {
   const materials = Array.isArray(material) ? material : [material];
   materials.filter(Boolean).forEach((item) => item.dispose());
 }
 
+// 释放缓存中的 Brush、几何和材质资源。
 function disposeCachedBrushEntry(_key: string, entry: CachedBrushEntry) {
   entry.brush.disposeCacheData?.();
   disposeMaterialList(entry.brush.material);
   entry.brush.geometry?.dispose?.();
 }
 
+// 清空 worker 内部的几何缓存和结果缓存。
 function clearWorkerCaches() {
   geometryCache.clear();
   resultCache.clear();
 }
 
+// 统计几何体的三角面数量。
 function getGeometryTriCount(geometry: THREE.BufferGeometry) {
   return geometry.index
     ? Math.floor(geometry.index.count / 3)
     : Math.floor((geometry.getAttribute('position')?.count || 0) / 3);
 }
 
+// 把结果材质序列化成可回传主线程的描述对象。
 function serializeResultMaterials(material: THREE.Material | THREE.Material[]) {
   const materials = Array.isArray(material) ? material : [material];
   return materials.filter(Boolean).map((item) => serializeMaterialDescriptor(item));
 }
 
+// 为单个 source 生成稳定缓存 key。
 function buildPreparedSourceKey(source: SerializedBooleanSource) {
   if (typeof source.cacheKey === 'string' && source.cacheKey) {
     return `${source.id}:${normalizeVersionKey(source.version)}:${source.cacheKey}`;
@@ -1107,10 +1176,12 @@ function buildPreparedSourceKey(source: SerializedBooleanSource) {
   return `${source.id}:${normalizeVersionKey(source.version)}:${meshKey}`;
 }
 
+// 生成布尔链起点的 key。
 function buildBooleanChainSeedKey(sourceKey: string) {
   return `seed:${sourceKey}`;
 }
 
+// 生成某一步中间结果的缓存 key。
 function buildBooleanChainStepKey(
   previousKey: string,
   op: BooleanOperationType,
@@ -1119,6 +1190,7 @@ function buildBooleanChainStepKey(
   return `${previousKey}::${op}:${sourceKey}`;
 }
 
+// 根据整条 source 链构建最终结果缓存 key。
 function buildBooleanResultCacheKey(
   sources: SerializedBooleanSource[],
   preparedSources: PreparedSource[]
@@ -1138,11 +1210,13 @@ function buildBooleanResultCacheKey(
   return key;
 }
 
+// 统一版本字段的序列化格式。
 function normalizeVersionKey(version: string | number | undefined) {
   if (version === undefined || version === null) return 'v0';
   return `v:${String(version)}`;
 }
 
+// 为材质列表生成稳定哈希，用于 source 缓存签名。
 function hashMaterialList(materials: SerializedMaterialData[] | null | undefined) {
   if (!materials?.length) return 'm0';
   const signature = materials
@@ -1168,6 +1242,7 @@ function hashMaterialList(materials: SerializedMaterialData[] | null | undefined
   return `m:${hashString(signature)}`;
 }
 
+// 为序列化几何生成轻量哈希。
 function hashGeometry(geometry: SerializedGeometryData) {
   const position = geometry.attributes?.position?.array;
   const normal = geometry.attributes?.normal?.array;
@@ -1182,11 +1257,13 @@ function hashGeometry(geometry: SerializedGeometryData) {
   ].join('-');
 }
 
+// 为矩阵生成哈希；空矩阵按单位矩阵处理。
 function hashMatrix(matrix: Float32Array | ArrayLike<number> | null | undefined) {
   if (!matrix) return 'identity';
   return hashArray(Array.from(matrix));
 }
 
+// 对数值数组做采样哈希，降低缓存 key 计算成本。
 function hashArray(array: ArrayLike<number> | null | undefined) {
   if (!array || typeof array.length !== 'number') return '0';
   const length = array.length;
@@ -1201,6 +1278,7 @@ function hashArray(array: ArrayLike<number> | null | undefined) {
   return (hash >>> 0).toString(36);
 }
 
+// 对字符串生成 FNV 风格哈希。
 function hashString(value: string) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -1211,6 +1289,7 @@ function hashString(value: string) {
   return (hash >>> 0).toString(36);
 }
 
+// 从 BufferAttribute 中切出一段子属性，供 group 拆分使用。
 function sliceBufferAttribute(attribute: THREE.BufferAttribute, start: number, count: number) {
   const itemSize = attribute.itemSize;
   const begin = start * itemSize;
@@ -1219,6 +1298,7 @@ function sliceBufferAttribute(attribute: THREE.BufferAttribute, start: number, c
   return new THREE.BufferAttribute(array, itemSize, attribute.normalized);
 }
 
+// 估算两个包围盒的重叠比例。
 function estimateBboxOverlapRatio(boxA?: THREE.Box3 | null, boxB?: THREE.Box3 | null) {
   if (!boxA || !boxB) return 0;
   const intersection = boxA.clone().intersect(boxB);
@@ -1234,12 +1314,14 @@ function estimateBboxOverlapRatio(boxA?: THREE.Box3 | null, boxB?: THREE.Box3 | 
   return Math.max(0, Math.min(intersectionVolume / minVolume, 1));
 }
 
+// 把多个包围盒合并成一个总包围盒。
 function mergeBoxes(boxes: THREE.Box3[]) {
   const merged = new THREE.Box3();
   boxes.forEach((box) => merged.union(box));
   return merged;
 }
 
+// 根据尺寸和中心接近程度估算潜在共面风险。
 function estimateCoplanarRisk(preparedSources: Array<{ bbox: THREE.Box3 }>) {
   if (preparedSources.length < 2) return 0;
   const boxA = preparedSources[0].bbox;
@@ -1258,11 +1340,13 @@ function estimateCoplanarRisk(preparedSources: Array<{ bbox: THREE.Box3 }>) {
   return Math.max(0, Math.min(aligned * centered, 1));
 }
 
+// 计算两个标量在同一轴上的相对差异。
 function relativeAxisDifference(a: number, b: number) {
   const max = Math.max(Math.abs(a), Math.abs(b), 1e-6);
   return Math.abs(a - b) / max;
 }
 
+// 基于面数、重叠率、共面风险和历史样本估算布尔核心耗时。
 function estimateBooleanCoreMs(input: {
   triA: number;
   triB: number;
@@ -1296,6 +1380,7 @@ function estimateBooleanCoreMs(input: {
   return Math.max(20, base * multiplier);
 }
 
+// 汇总导出对象的基础统计信息。
 function collectExportStats(objects: SerializedMeshData[]): ExportStats {
   return objects.reduce<ExportStats>(
     (stats, mesh) => {
@@ -1325,6 +1410,7 @@ function collectExportStats(objects: SerializedMeshData[]): ExportStats {
   );
 }
 
+// 估算导出 OBJ 阶段的耗时。
 function estimateExportObjMs(stats: ExportStats) {
   const work =
     stats.vertexCount * 1 +
@@ -1343,6 +1429,7 @@ function estimateExportObjMs(stats: ExportStats) {
   return Math.max(30, base * multiplier);
 }
 
+// 估算 ZIP 压缩阶段的耗时。
 function estimateZipMs(payload: ExportZipTaskPayload, stats: ExportStats) {
   const totalBytes = estimateExportBytes(payload);
   const mb = totalBytes / 1024 / 1024;
@@ -1364,6 +1451,7 @@ function estimateZipMs(payload: ExportZipTaskPayload, stats: ExportStats) {
   return Math.max(30, mb * msPerMB * levelMul * fileMul);
 }
 
+// 估算导出结果的总字节数。
 function estimateExportBytes(payload: ExportZipTaskPayload, objText?: string, mtlText?: string) {
   const encoder = new TextEncoder();
   const objBytes = objText ? encoder.encode(objText).byteLength : estimateObjBytes(payload.objects);
@@ -1372,6 +1460,7 @@ function estimateExportBytes(payload: ExportZipTaskPayload, objText?: string, mt
   return objBytes + mtlBytes + textureBytes;
 }
 
+// 估算 OBJ 文本的体积。
 function estimateObjBytes(objects: SerializedMeshData[]) {
   return objects.reduce((sum, mesh) => {
     const position = mesh.geometry.attributes?.position;
@@ -1384,10 +1473,12 @@ function estimateObjBytes(objects: SerializedMeshData[]) {
   }, 0);
 }
 
+// 估算 MTL 文本的体积。
 function estimateMtlBytes(objects: SerializedMeshData[]) {
   return objects.reduce((sum, mesh) => sum + mesh.materials.length * 180, 0);
 }
 
+// 把序列化 mesh 列表还原成可供 OBJExporter 使用的临时场景。
 function buildExportSceneFromPayload(objects: SerializedMeshData[]) {
   const scene = new THREE.Scene();
   objects.forEach((meshData) => {
@@ -1406,6 +1497,7 @@ function buildExportSceneFromPayload(objects: SerializedMeshData[]) {
   return scene;
 }
 
+// 根据导出对象生成 MTL 文件内容。
 function generateMTL(objects: SerializedMeshData[]) {
   const lines = ['# MTL file exported by EditorTaskWorker'];
   const materials = new Map<string, SerializedMaterialData>();
@@ -1443,11 +1535,13 @@ function generateMTL(objects: SerializedMeshData[]) {
   return lines.join('\n');
 }
 
+// 约束 ZIP 压缩级别到合法范围内。
 function clampCompressionLevel(value?: number) {
   const numeric = Number.isFinite(value) ? Math.round(value as number) : 6;
   return Math.min(9, Math.max(1, numeric));
 }
 
+// 生成默认材质描述，用于缺省材质场景。
 function defaultMaterial(): SerializedMaterialData {
   return {
     id: 'default_material',
@@ -1460,6 +1554,7 @@ function defaultMaterial(): SerializedMaterialData {
   };
 }
 
+// 向主线程发送节流后的任务进度消息。
 function postProgress(
   taskId: string,
   phase: 'prepare' | 'build-cache' | 'csg-core' | 'rebuild-result' | 'transfer' | 'collect' | 'estimate' | 'export-obj' | 'zip' | 'finalize',
@@ -1467,6 +1562,8 @@ function postProgress(
   detail: WorkerProgressDetail = {},
   message?: string
 ) {
+  // worker 内部可能在极短时间内产生大量细粒度进度。
+  // 这里统一做节流，避免主线程收到过密消息后造成 UI 抖动或渲染压力。
   const now = performance.now();
   const last = lastProgressReport.get(taskId);
   const normalizedProgress = Math.max(0, Math.min(progress, 1));
@@ -1497,10 +1594,12 @@ function postProgress(
   } satisfies WorkerResponse);
 }
 
+// 主动让出一个事件循环，让取消和进度消息有机会先被处理。
 async function flushEventLoop() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// 如果任务已被标记取消，则立即中断当前执行链。
 function assertNotCancelled(control: TaskControl) {
   if (control.cancelled) {
     throw new Error('cancelled');

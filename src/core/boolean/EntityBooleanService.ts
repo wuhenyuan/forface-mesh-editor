@@ -43,6 +43,9 @@ export class EntityBooleanService {
   private _onProgress: ((progress: WorkerTaskProgress) => void) | null;
   private _onError: ((error: Error) => void) | null;
 
+  /**
+   * 初始化实体布尔服务，并把底层 operator 回调接到当前 service。
+   */
   constructor(options: EntityBooleanServiceOptions = {}) {
     this._onProgress = options.onProgress || null;
     this._onError = options.onError || null;
@@ -66,6 +69,9 @@ export class EntityBooleanService {
     });
   }
 
+  /**
+   * 更新布尔进度上报函数。
+   */
   setProgressReporter(callback: ((progress: WorkerTaskProgress) => void) | null = null) {
     this._onProgress = callback;
     this._operator.setCallbacks({
@@ -78,6 +84,9 @@ export class EntityBooleanService {
     });
   }
 
+  /**
+   * 更新布尔错误上报函数。
+   */
   setErrorReporter(callback: ((error: Error) => void) | null = null) {
     this._onError = callback;
     this._operator.setCallbacks({
@@ -108,6 +117,10 @@ export class EntityBooleanService {
       targetObject?: THREE.Object3D | null;
     } = {}
   ) {
+    // 业务层传进来的信息可能来自不同对象：
+    // 目标侧通常是被雕刻的 mesh，工具侧通常是文字实体本身。
+    // 这里先把这些来源统一收敛成一份稳定 metadata，后面的 operator / worker /
+    // 命中链路都只认这一套字段，不再关心上层对象长什么样。
     const targetEntityKey =
       metadata.targetEntityKey || this.getEntityKeyFromObject(metadata.targetObject || null) || null;
     const toolEntityKey = metadata.toolEntityKey || metadata.regionOwnerEntityId || null;
@@ -129,6 +142,8 @@ export class EntityBooleanService {
     toolGeometry: THREE.BufferGeometry,
     options: EntityBooleanSubtractOptions = {}
   ) {
+    // service 层不处理线程、缓存和序列化细节，
+    // 这里只负责把“谁减谁”的业务语义压成一次标准减法调用。
     const metadata = this.buildSubtractMetadata(options);
     return this._operator.subtract(targetGeometry, toolGeometry, options.toolMatrix || null, {
       ...metadata,

@@ -57,6 +57,9 @@ type ColorMaterial = THREE.Material & {
 export class SurfaceTextPreviewService {
   private _options: SurfaceTextPreviewServiceOptions;
 
+  /**
+   * 初始化文字布尔预览服务。
+   */
   constructor(options: SurfaceTextPreviewServiceOptions) {
     this._options = options;
   }
@@ -97,6 +100,8 @@ export class SurfaceTextPreviewService {
    * 3. 最后执行布尔减法并写回 three 对象。
    */
   async applyEngravingMode(textObject: SurfaceTextObject) {
+    // 第一次进入雕刻预览时，先把目标模型的原始状态快照下来。
+    // 后续拖拽、重算、切换模式都会从这份原始几何重新重放布尔链。
     this._ensureOriginalTargetState(textObject);
 
     const baseGeometry = textObject.originalTargetGeometry?.clone();
@@ -109,6 +114,9 @@ export class SurfaceTextPreviewService {
     });
 
     try {
+      // 这里正式进入通用布尔链路：
+      // PreviewService 只负责提供 base/tool geometry 和实体 metadata，
+      // 真正的序列化、worker 调度、缓存命中都在更下层完成。
       const result = await this._options.booleanService.subtract(baseGeometry, toolGeometry, {
         ...this.buildSubtractEntityMetadata(textObject),
         targetMaterial: textObject.originalTargetMaterial,
@@ -330,6 +338,8 @@ export class SurfaceTextPreviewService {
     let currentGeometry = baseGeometry;
     try {
       for (const textObject of sourceTextObjects) {
+        // 多文字雕刻的本质就是把“上一步布尔结果”继续作为下一步的宿主几何，
+        // 按顺序把整条减法链重放一遍。
         const toolGeometry = this._createBooleanToolGeometry(textObject, {
           offsetCylinder,
         });
@@ -384,6 +394,8 @@ export class SurfaceTextPreviewService {
     textObject: SurfaceTextObject,
     options: { offsetCylinder: boolean }
   ) {
+    // worker 侧不理解场景树和控制器状态，
+    // 所以这里要先把文字几何整理成“目标模型局部坐标系里的工具几何”。
     const geometry = textObject.geometry.clone();
     const isCylinderText = textObject.surfaceInfo?.surfaceType === 'cylinder';
 
@@ -420,6 +432,8 @@ export class SurfaceTextPreviewService {
     materials: THREE.Material[] | undefined,
     textObject: SurfaceTextObject
   ) {
+    // 到这里说明布尔链已经完成，接下来只做结果回写：
+    // 替换目标几何、补齐材质 metadata，并把雕刻文字自身隐藏。
     targetMesh.geometry.dispose();
     targetMesh.geometry = geometry;
 
