@@ -163,11 +163,7 @@ export class SurfaceTextSelectionController {
     const result = this._transformSession.begin([selectionTarget], {
       mode: this.getCurrentTransformMode(),
     });
-    if (result?.pivotHandle) {
-      this.transformControls.attach(result.pivotHandle);
-    } else {
-      this.transformControls.attach(selectionTarget);
-    }
+    this.transformControls.attach(result?.attachTarget || result?.pivotHandle || selectionTarget);
 
     this._addSelectionHighlight(textObject.mesh || null);
     if (textObject.mesh) {

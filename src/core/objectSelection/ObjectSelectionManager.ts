@@ -171,7 +171,7 @@ export class ObjectSelectionManager {
       return null;
     }
 
-    this.transformControls.attach(result.pivotHandle);
+    this.transformControls.attach(result.attachTarget);
     this._emitBBoxUpdated();
     return result;
   }
@@ -236,11 +236,7 @@ export class ObjectSelectionManager {
         mode: result.mode,
       });
 
-      this.emit('transform:commit', {
-        mode: result.mode,
-        before: result.before,
-        after: result.after,
-      } as TransformCommitEventPayload);
+      this.emit('transform:commit', result as TransformCommitEventPayload);
 
       const legacyPayload = this._buildLegacyTransformData(result.after[0], result.mode);
       if (legacyPayload) {
@@ -249,10 +245,16 @@ export class ObjectSelectionManager {
       return result;
     }
 
-    this.emit('transform:cancel', {
-      mode: result.mode,
-      targetIds: result.targetIds,
-    } as TransformCancelEventPayload);
+    this.emit(
+      'transform:cancel',
+      {
+        mode: result.mode,
+        strategy: result.strategy,
+        target: result.target,
+        targetIds: result.targetIds,
+        targetObjects: result.targetObjects,
+      } as TransformCancelEventPayload
+    );
 
     const legacyPayload = this._buildLegacyTransformData(result.after[0], result.mode);
     if (legacyPayload) {

@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 
+type BoxAwareObject = THREE.Object3D & {
+  getWorldBox?: (force?: boolean) => THREE.Box3;
+};
+
 /**
  * 选中物体的包围盒辅助显示（包围盒 + 长宽高标注）
  */
@@ -80,7 +84,13 @@ export class ObjectBoundsHelper {
     const target = object || this._currentObject;
     if (!target) return;
 
-    this._box.setFromObject(target);
+    const boxAwareTarget = target as BoxAwareObject;
+    if (typeof boxAwareTarget.getWorldBox === 'function') {
+      this._box.copy(boxAwareTarget.getWorldBox(true));
+    } else {
+      this._box.setFromObject(target);
+    }
+
     if (this._box.isEmpty()) return;
 
     const size = this._box.getSize(this._tmpSize);

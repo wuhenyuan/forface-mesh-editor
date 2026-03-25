@@ -58,7 +58,9 @@ export class ModelEntityObject extends EntityObject {
     source: CoreValue,
     options: Record<string, CoreValue> = {}
   ) {
-    return this.loadNode(loadModel, source, options);
+    const result = await this.loadNode(loadModel, source, options);
+    this.centerContentAtOrigin();
+    return result;
   }
 
   applyEntityPatch(patch: Record<string, CoreValue> = {}, options: ModelEntityPatchOptions = {}) {

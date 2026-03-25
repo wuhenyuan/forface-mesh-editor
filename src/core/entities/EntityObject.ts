@@ -37,12 +37,53 @@ type ColorMaterial = THREE.Material & {
   needsUpdate?: boolean;
 };
 
-export class EntityObject extends THREE.Object3D {
+type GeometryObject = THREE.Object3D & {
+  geometry?: THREE.BufferGeometry;
+};
+
+function expandWorldBoxFromObject(
+  object: THREE.Object3D | null | undefined,
+  target: THREE.Box3,
+  tmpBox: THREE.Box3
+) {
+  if (!object || object.userData?.isHelper) {
+    return target;
+  }
+
+  object.updateMatrixWorld(true);
+
+  const geometry = (object as GeometryObject).geometry;
+  if (geometry) {
+    if (!geometry.boundingBox) {
+      geometry.computeBoundingBox();
+    }
+    if (geometry.boundingBox) {
+      target.union(tmpBox.copy(geometry.boundingBox).applyMatrix4(object.matrixWorld));
+    }
+  }
+
+  object.children.forEach((child) => {
+    expandWorldBoxFromObject(child, target, tmpBox);
+  });
+
+  return target;
+}
+
+function containsHelperObject(object: THREE.Object3D | null | undefined): boolean {
+  if (!object) return false;
+  if (object.userData?.isHelper) return true;
+  return object.children.some((child) => containsHelperObject(child));
+}
+
+export class EntityObject extends THREE.Group {
   entityId: string;
   entity: EntityLike | null;
+  contentGroup: THREE.Group;
   node: THREE.Object3D | null;
   worldBox: THREE.Box3;
   worldBoxDirty: boolean;
+
+  private _tmpWorldBox: THREE.Box3;
 
   constructor(entityId: string, entity: EntityLike | null = null) {
     super();
@@ -52,6 +93,7 @@ export class EntityObject extends THREE.Object3D {
     this.node = null;
     this.worldBox = new THREE.Box3();
     this.worldBoxDirty = true;
+    this._tmpWorldBox = new THREE.Box3();
     this.name = `EntityObject:${entityId}`;
 
     this.userData = {
@@ -59,6 +101,17 @@ export class EntityObject extends THREE.Object3D {
       entityKey: entityId,
       isEntityObject: true,
     };
+
+    this.contentGroup = new THREE.Group();
+    this.contentGroup.name = `EntityContent:${entityId}`;
+    this.contentGroup.userData = {
+      ...(this.contentGroup.userData || {}),
+      entityKey: entityId,
+      isEntityContentGroup: true,
+    };
+    this.add(this.contentGroup);
+
+    this._syncEntityKey();
   }
 
   setEntity(entity: EntityLike | null) {
@@ -89,16 +142,52 @@ export class EntityObject extends THREE.Object3D {
   }
 
   attachNode(node?: THREE.Object3D | null) {
-    if (this.node && this.node.parent === this) {
-      this.remove(this.node);
+    if (this.node?.parent === this.contentGroup) {
+      this.contentGroup.remove(this.node);
     }
+
     this.node = node || null;
     if (this.node) {
-      this.add(this.node);
+      this.contentGroup.add(this.node);
     }
+
     this.markBoxDirty();
     this._syncEntityKey();
     return this.node;
+  }
+
+  resetContentOffset() {
+    this.contentGroup.position.set(0, 0, 0);
+    this.contentGroup.quaternion.identity();
+    this.contentGroup.scale.set(1, 1, 1);
+    this.contentGroup.updateMatrixWorld(true);
+    this.markBoxDirty();
+    return this.contentGroup;
+  }
+
+  centerContentAtOrigin() {
+    const boxSource = this.getWorldBoxSource();
+    if (!boxSource) return null;
+
+    this.resetContentOffset();
+    this.updateMatrixWorld(true);
+
+    const contentBox = this._computeContentWorldBox(new THREE.Box3());
+    if (contentBox.isEmpty()) {
+      return null;
+    }
+
+    const worldCenter = contentBox.getCenter(new THREE.Vector3());
+    const localCenter = this.worldToLocal(worldCenter.clone());
+    this.contentGroup.position.sub(localCenter);
+    this.contentGroup.updateMatrixWorld(true);
+    this.markBoxDirty();
+    this.refreshWorldBox(true);
+    return localCenter;
+  }
+
+  getWorldBoxSource() {
+    return this.contentGroup || this.node || null;
   }
 
   applyTransform(transform?: EntityTransform | null) {
@@ -132,7 +221,8 @@ export class EntityObject extends THREE.Object3D {
     }
 
     this.updateMatrixWorld(true);
-    this.worldBox.setFromObject(this);
+    this.worldBox.makeEmpty();
+    this._computeContentWorldBox(this.worldBox);
     this.worldBoxDirty = false;
     return this.worldBox;
   }
@@ -214,8 +304,8 @@ export class EntityObject extends THREE.Object3D {
       materials.forEach((material) => material?.dispose?.());
     });
 
-    if (node.parent === this) {
-      this.remove(node);
+    if (node.parent === this.contentGroup) {
+      this.contentGroup.remove(node);
     }
     this.node = null;
     this.updateMatrixWorld(true);
@@ -229,6 +319,13 @@ export class EntityObject extends THREE.Object3D {
       entityKey: key,
       isEntityObject: true,
     };
+
+    this.contentGroup.userData = {
+      ...(this.contentGroup.userData || {}),
+      entityKey: key,
+      isEntityContentGroup: true,
+    };
+
     this.traverse((object: THREE.Object3D) => {
       object.userData = object.userData || {};
       object.userData.entityKey = key;
@@ -243,6 +340,22 @@ export class EntityObject extends THREE.Object3D {
         { overwrite: false }
       );
     });
+  }
+
+  private _computeContentWorldBox(target: THREE.Box3) {
+    target.makeEmpty();
+
+    const boxSource = this.getWorldBoxSource();
+    if (!boxSource) {
+      return target;
+    }
+
+    if (containsHelperObject(boxSource)) {
+      expandWorldBoxFromObject(boxSource, target, this._tmpWorldBox);
+      return target;
+    }
+
+    return target.setFromObject(boxSource);
   }
 }
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 export type TransformMode = 'translate' | 'rotate' | 'scale';
+export type TransformStrategy = 'direct' | 'pivot';
 
 type SessionObject = THREE.Object3D & {
   entityId?: string;
@@ -14,17 +15,14 @@ type InteractionTargetState = {
   id: string;
   object: SessionObject;
   startWorldMatrix: THREE.Matrix4;
-  startWorldPosition: THREE.Vector3;
-  startWorldQuaternion: THREE.Quaternion;
-  startWorldScale: THREE.Vector3;
-  offsetToPivot: THREE.Vector3;
-  isCenteredToPivot: boolean;
 };
 
 type TransformInteraction = {
   mode: TransformMode;
-  startPivotWorldMatrix: THREE.Matrix4;
-  startPivotWorldMatrixInverse: THREE.Matrix4;
+  strategy: TransformStrategy;
+  controlObject: THREE.Object3D;
+  startControlWorldMatrix: THREE.Matrix4;
+  startControlWorldMatrixInverse: THREE.Matrix4;
   targetStates: InteractionTargetState[];
   beforeSnapshots: TransformSnapshot[];
 };
@@ -38,60 +36,81 @@ export type TransformSnapshot = {
 
 export type TransformStartEventPayload = {
   mode: TransformMode;
+  strategy: TransformStrategy;
+  target: THREE.Object3D | null;
   targetIds: string[];
+  controlWorldPosition: [number, number, number];
   pivotWorldPosition: [number, number, number];
 };
 
 export type TransformPreviewEventPayload = {
   mode: TransformMode;
+  strategy: TransformStrategy;
+  target: THREE.Object3D | null;
+  targetObjects: THREE.Object3D[];
   targets: TransformSnapshot[];
 };
 
 export type TransformCommitEventPayload = {
   mode: TransformMode;
+  strategy: TransformStrategy;
+  target: THREE.Object3D | null;
+  targetIds: string[];
+  targetObjects: THREE.Object3D[];
   before: TransformSnapshot[];
   after: TransformSnapshot[];
 };
 
 export type TransformCancelEventPayload = {
   mode: TransformMode;
+  strategy: TransformStrategy;
+  target: THREE.Object3D | null;
   targetIds: string[];
+  targetObjects: THREE.Object3D[];
 };
 
 export type TransformSessionBeginResult = {
-  pivotHandle: THREE.Object3D;
+  strategy: TransformStrategy;
+  attachTarget: THREE.Object3D;
+  pivotHandle: THREE.Object3D | null;
+  target: THREE.Object3D | null;
   targetIds: string[];
   selectionBox: THREE.Box3;
+  controlWorldPosition: [number, number, number];
   pivotWorldPosition: [number, number, number];
 };
 
 export type TransformInteractionResult = {
   mode: TransformMode;
+  strategy: TransformStrategy;
+  target: THREE.Object3D | null;
   targetIds: string[];
+  targetObjects: THREE.Object3D[];
   before: TransformSnapshot[];
   after: TransformSnapshot[];
 };
 
 export type TransformSessionBeginOptions = {
   mode?: TransformMode;
+  strategy?: 'auto' | TransformStrategy;
 };
 
 export class TransformSession {
   scene: THREE.Scene;
   targets: SessionObject[];
   pivotHandle: THREE.Object3D | null;
+  attachTarget: THREE.Object3D | null;
   selectionBox: THREE.Box3;
   pivotCenterWorld: THREE.Vector3;
   interaction: TransformInteraction | null;
   lastMode: TransformMode;
+  strategy: TransformStrategy;
 
   private _tmpBox: THREE.Box3;
   private _tmpVec3: THREE.Vector3;
   private _tmpVec32: THREE.Vector3;
   private _tmpQuat: THREE.Quaternion;
-  private _tmpQuat2: THREE.Quaternion;
   private _tmpScale: THREE.Vector3;
-  private _tmpScale2: THREE.Vector3;
   private _tmpMatrix: THREE.Matrix4;
   private _tmpMatrix2: THREE.Matrix4;
   private _tmpMatrix3: THREE.Matrix4;
@@ -100,25 +119,25 @@ export class TransformSession {
     this.scene = scene;
     this.targets = [];
     this.pivotHandle = null;
+    this.attachTarget = null;
     this.selectionBox = new THREE.Box3();
     this.pivotCenterWorld = new THREE.Vector3();
     this.interaction = null;
     this.lastMode = 'translate';
+    this.strategy = 'direct';
 
     this._tmpBox = new THREE.Box3();
     this._tmpVec3 = new THREE.Vector3();
     this._tmpVec32 = new THREE.Vector3();
     this._tmpQuat = new THREE.Quaternion();
-    this._tmpQuat2 = new THREE.Quaternion();
     this._tmpScale = new THREE.Vector3();
-    this._tmpScale2 = new THREE.Vector3();
     this._tmpMatrix = new THREE.Matrix4();
     this._tmpMatrix2 = new THREE.Matrix4();
     this._tmpMatrix3 = new THREE.Matrix4();
   }
 
   hasSession() {
-    return !!this.pivotHandle && this.targets.length > 0;
+    return !!this.attachTarget && this.targets.length > 0;
   }
 
   hasInteraction() {
@@ -143,74 +162,89 @@ export class TransformSession {
 
     this.targets = validTargets;
     this.lastMode = options.mode || 'translate';
-
-    const pivotHandle = new THREE.Object3D();
-    pivotHandle.name = '__pivot_handle__';
-    pivotHandle.userData = {
-      ...(pivotHandle.userData || {}),
-      isHelper: true,
-      isTransformPivotHandle: true,
-    };
+    this.strategy = this._resolveStrategy(validTargets, options.strategy);
 
     this._refreshSelectionBoxFromTargets();
 
-    const firstTarget = this.targets[0];
-    firstTarget.updateMatrixWorld(true);
-    firstTarget.matrixWorld.decompose(this._tmpVec3, this._tmpQuat, this._tmpScale);
+    let pivotHandle: THREE.Object3D | null = null;
+    let attachTarget: THREE.Object3D = validTargets[0];
+    let controlWorldPosition = new THREE.Vector3();
 
-    const pivotCenter = this.selectionBox.isEmpty()
-      ? this._tmpVec3.clone()
-      : this.selectionBox.getCenter(this._tmpVec32);
+    if (this.strategy === 'pivot') {
+      const firstTarget = validTargets[0];
+      firstTarget.updateMatrixWorld(true);
+      firstTarget.matrixWorld.decompose(this._tmpVec3, this._tmpQuat, this._tmpScale);
 
-    this.pivotCenterWorld.copy(pivotCenter);
-    pivotHandle.position.copy(pivotCenter);
-    pivotHandle.quaternion.copy(this._tmpQuat);
-    pivotHandle.scale.set(1, 1, 1);
-    pivotHandle.updateMatrixWorld(true);
+      const pivotCenter = this.selectionBox.isEmpty()
+        ? this._tmpVec3.clone()
+        : this.selectionBox.getCenter(this._tmpVec32).clone();
 
-    this.scene.add(pivotHandle);
-    this.pivotHandle = pivotHandle;
+      pivotHandle = new THREE.Object3D();
+      pivotHandle.name = '__pivot_handle__';
+      pivotHandle.userData = {
+        ...(pivotHandle.userData || {}),
+        isHelper: true,
+        isTransformPivotHandle: true,
+      };
+      pivotHandle.position.copy(pivotCenter);
+      pivotHandle.quaternion.copy(this._tmpQuat);
+      pivotHandle.scale.set(1, 1, 1);
+      pivotHandle.updateMatrixWorld(true);
+      this.scene.add(pivotHandle);
+
+      attachTarget = pivotHandle;
+      controlWorldPosition.copy(pivotCenter);
+      this.pivotHandle = pivotHandle;
+    } else {
+      attachTarget.updateMatrixWorld(true);
+      controlWorldPosition.setFromMatrixPosition(attachTarget.matrixWorld);
+      this.pivotHandle = null;
+    }
+
+    this.attachTarget = attachTarget;
 
     return {
+      strategy: this.strategy,
+      attachTarget,
       pivotHandle,
+      target: validTargets[0] || null,
       targetIds: this.getTargetIds(),
       selectionBox: this.selectionBox.clone(),
-      pivotWorldPosition: [pivotCenter.x, pivotCenter.y, pivotCenter.z],
+      controlWorldPosition: [
+        controlWorldPosition.x,
+        controlWorldPosition.y,
+        controlWorldPosition.z,
+      ],
+      pivotWorldPosition: [
+        controlWorldPosition.x,
+        controlWorldPosition.y,
+        controlWorldPosition.z,
+      ],
     } as TransformSessionBeginResult;
   }
 
   beginInteraction(mode: TransformMode) {
-    if (!this.hasSession() || !this.pivotHandle) {
+    const controlObject = this.attachTarget;
+    if (!this.hasSession() || !controlObject) {
       return null;
     }
 
     this.lastMode = mode;
 
-    this.pivotHandle.updateMatrixWorld(true);
-    const startPivotWorldMatrix = this._tmpMatrix.copy(this.pivotHandle.matrixWorld).clone();
-    const startPivotWorldMatrixInverse = this._tmpMatrix2.copy(startPivotWorldMatrix).invert().clone();
-    const pivotWorldPosition = this._tmpVec3.setFromMatrixPosition(startPivotWorldMatrix).clone();
+    controlObject.updateMatrixWorld(true);
+    const startControlWorldMatrix = this._tmpMatrix.copy(controlObject.matrixWorld).clone();
+    const startControlWorldMatrixInverse = this._tmpMatrix2
+      .copy(startControlWorldMatrix)
+      .invert()
+      .clone();
+    const controlWorldPosition = this._tmpVec3.setFromMatrixPosition(startControlWorldMatrix).clone();
 
     const targetStates = this.targets.map((target) => {
       target.updateMatrixWorld(true);
-      const startWorldMatrix = target.matrixWorld.clone();
-      startWorldMatrix.decompose(this._tmpVec32, this._tmpQuat2, this._tmpScale2);
-
-      const startWorldPosition = this._tmpVec32.clone();
-      const startWorldQuaternion = this._tmpQuat2.clone();
-      const startWorldScale = this._tmpScale2.clone();
-      const offsetToPivot = startWorldPosition.clone().sub(pivotWorldPosition);
-      const isCenteredToPivot = offsetToPivot.lengthSq() <= 1e-10;
-
       return {
         id: this._getTargetId(target),
         object: target,
-        startWorldMatrix,
-        startWorldPosition,
-        startWorldQuaternion,
-        startWorldScale,
-        offsetToPivot,
-        isCenteredToPivot,
+        startWorldMatrix: target.matrixWorld.clone(),
       } as InteractionTargetState;
     });
 
@@ -218,43 +252,63 @@ export class TransformSession {
 
     this.interaction = {
       mode,
-      startPivotWorldMatrix,
-      startPivotWorldMatrixInverse,
+      strategy: this.strategy,
+      controlObject,
+      startControlWorldMatrix,
+      startControlWorldMatrixInverse,
       targetStates,
       beforeSnapshots,
     };
 
     return {
       mode,
+      strategy: this.strategy,
+      target: this.targets[0] || null,
       targetIds: targetStates.map((state) => state.id),
-      pivotWorldPosition: [pivotWorldPosition.x, pivotWorldPosition.y, pivotWorldPosition.z],
+      controlWorldPosition: [
+        controlWorldPosition.x,
+        controlWorldPosition.y,
+        controlWorldPosition.z,
+      ],
+      pivotWorldPosition: [
+        controlWorldPosition.x,
+        controlWorldPosition.y,
+        controlWorldPosition.z,
+      ],
     } as TransformStartEventPayload;
   }
 
   updateFromPivot() {
     const interaction = this.interaction;
-    const pivotHandle = this.pivotHandle;
-    if (!interaction || !pivotHandle) {
+    if (!interaction) {
       return null;
     }
 
-    pivotHandle.updateMatrixWorld(true);
+    if (interaction.strategy === 'pivot') {
+      interaction.controlObject.updateMatrixWorld(true);
+      const deltaWorld = this._tmpMatrix
+        .copy(interaction.controlObject.matrixWorld)
+        .multiply(interaction.startControlWorldMatrixInverse);
 
-    const deltaWorld = this._tmpMatrix
-      .copy(pivotHandle.matrixWorld)
-      .multiply(interaction.startPivotWorldMatrixInverse);
-
-    interaction.targetStates.forEach((targetState) => {
-      const object = targetState.object;
-      const newTargetWorld = this._tmpMatrix2.multiplyMatrices(deltaWorld, targetState.startWorldMatrix);
-      this._applyWorldMatrixToObject(object, newTargetWorld);
-      this._markAndRefreshBox(object);
-    });
+      interaction.targetStates.forEach((targetState) => {
+        const newTargetWorld = this._tmpMatrix2.multiplyMatrices(deltaWorld, targetState.startWorldMatrix);
+        this._applyWorldMatrixToObject(targetState.object, newTargetWorld);
+        this._markAndRefreshBox(targetState.object);
+      });
+    } else {
+      interaction.targetStates.forEach((targetState) => {
+        targetState.object.updateMatrixWorld(true);
+        this._markAndRefreshBox(targetState.object);
+      });
+    }
 
     this._refreshSelectionBoxFromTargets();
 
     return {
       mode: interaction.mode,
+      strategy: interaction.strategy,
+      target: this.targets[0] || null,
+      targetObjects: [...this.targets],
       targets: interaction.targetStates.map((targetState) =>
         this._snapshotObject(targetState.object, targetState.id)
       ),
@@ -272,8 +326,9 @@ export class TransformSession {
         this._applyWorldMatrixToObject(targetState.object, targetState.startWorldMatrix);
         this._markAndRefreshBox(targetState.object);
       });
-      if (this.pivotHandle) {
-        this._applyWorldMatrixToObject(this.pivotHandle, interaction.startPivotWorldMatrix);
+
+      if (interaction.strategy === 'pivot') {
+        this._applyWorldMatrixToObject(interaction.controlObject, interaction.startControlWorldMatrix);
       }
     } else {
       interaction.targetStates.forEach((targetState) => {
@@ -285,7 +340,10 @@ export class TransformSession {
 
     const result = {
       mode: interaction.mode,
+      strategy: interaction.strategy,
+      target: this.targets[0] || null,
       targetIds: interaction.targetStates.map((state) => state.id),
+      targetObjects: [...this.targets],
       before: interaction.beforeSnapshots.map((snapshot) => ({ ...snapshot })),
       after: interaction.targetStates.map((targetState) =>
         this._snapshotObject(targetState.object, targetState.id)
@@ -305,12 +363,29 @@ export class TransformSession {
 
     this.targets = [];
     this.pivotHandle = null;
+    this.attachTarget = null;
     this.selectionBox.makeEmpty();
     this.pivotCenterWorld.set(0, 0, 0);
+    this.strategy = 'direct';
   }
 
   dispose() {
     this.end();
+  }
+
+  private _resolveStrategy(
+    targets: SessionObject[],
+    requestedStrategy: TransformSessionBeginOptions['strategy'] = 'auto'
+  ) {
+    if (requestedStrategy === 'pivot') {
+      return 'pivot';
+    }
+
+    if (requestedStrategy === 'direct') {
+      return targets.length === 1 ? 'direct' : 'pivot';
+    }
+
+    return targets.length === 1 ? 'direct' : 'pivot';
   }
 
   private _snapshotObject(object: SessionObject, id = this._getTargetId(object)) {
@@ -343,6 +418,7 @@ export class TransformSession {
         selectionBox.union(targetBox);
         return;
       }
+
       target.updateMatrixWorld(true);
       this._tmpVec3.setFromMatrixPosition(target.matrixWorld);
       selectionBox.expandByPoint(this._tmpVec3);
@@ -372,7 +448,7 @@ export class TransformSession {
     }
   }
 
-  private _applyWorldMatrixToObject(object: SessionObject, worldMatrix: THREE.Matrix4) {
+  private _applyWorldMatrixToObject(object: SessionObject | THREE.Object3D, worldMatrix: THREE.Matrix4) {
     const localMatrix = this._tmpMatrix3.copy(worldMatrix);
 
     if (object.parent) {
@@ -390,4 +466,3 @@ export class TransformSession {
 }
 
 export default TransformSession;
-
